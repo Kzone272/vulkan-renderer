@@ -6,15 +6,7 @@ project(VulkanTutorial
   LANGUAGES CXX
 )
 
-include(FetchContent)
-
-FetchContent_Declare(
-  eigen3
-  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG 3.4.0
-)
-FetchContent_MakeAvailable(eigen3)
-
-find_package(Eigen3 CONFIG REQUIRED)
+find_package(Eigen3 CONFIG 3.4.0 REQUIRED)
+find_package(SDL2 CONFIG 2.26.2 REQUIRED)
 
 add_subdirectory(src)
