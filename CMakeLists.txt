@@ -6,7 +6,7 @@ project(VulkanTutorial
   LANGUAGES CXX
 )
 
-find_package(Eigen3 CONFIG 3.4.0 REQUIRED)
-find_package(SDL2 CONFIG 2.26.2 REQUIRED)
+find_package(Eigen3 3.4.0 REQUIRED)
+find_package(SDL2 2.26.2 REQUIRED)
 
 add_subdirectory(src)

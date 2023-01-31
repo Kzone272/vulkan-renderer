@@ -1,7 +1,6 @@
 #include <iostream>
 
 #include <SDL2/SDL.h>
-#undef main
 
 #include "utils.h"
 
