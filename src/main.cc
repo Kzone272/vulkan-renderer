@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <SDL2/SDL.h>
+#undef main // this is needed in Windows
 
 #include "utils.h"
 
