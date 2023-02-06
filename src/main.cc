@@ -2,14 +2,26 @@
 
 #include <SDL2/SDL.h>
 #undef main // this is needed in Windows
+#include <vulkan/vulkan.h>
 
 #include "utils.h"
 
+using std::cout;
+using std::endl;
+
+void vulkan_test() {
+    uint32_t extensionCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+    cout << extensionCount << " extensions supported" << endl;
+}
+
 int main() {
   utils::PrintMatrix();
+  vulkan_test();
 
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-    std::cout << "Failed to initialize the SDL2 library\n";
+    cout << "Failed to initialize the SDL2 library" << endl;
     return -1;
   }
 
@@ -19,13 +31,13 @@ int main() {
                                         680, 480,
                                         SDL_WINDOW_RESIZABLE);
   if (!window) {
-    std::cout << "Failed to create window\n";
+    cout << "Failed to create window" << endl;
     return -1;
   }
 
   SDL_Surface *window_surface = SDL_GetWindowSurface(window);
   if (!window_surface) {
-    std::cout << "Failed to get the surface from the window\n";
+    cout << "Failed to get the surface from the window" << endl;
     return -1;
   }
   SDL_UpdateWindowSurface(window);
