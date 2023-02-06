@@ -1,8 +1,8 @@
-#include <iostream>
-
 #include <SDL2/SDL.h>
-#undef main // this is needed in Windows
+#undef main  // this is needed in Windows
 #include <vulkan/vulkan.h>
+
+#include <iostream>
 
 #include "utils.h"
 
@@ -10,10 +10,10 @@ using std::cout;
 using std::endl;
 
 void vulkan_test() {
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+  uint32_t extensionCount = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
-    cout << extensionCount << " extensions supported" << endl;
+  cout << extensionCount << " extensions supported" << endl;
 }
 
 int main() {
@@ -25,11 +25,9 @@ int main() {
     return -1;
   }
 
-  SDL_Window *window = SDL_CreateWindow("SDL2 Window",
-                                        SDL_WINDOWPOS_CENTERED,
-                                        SDL_WINDOWPOS_CENTERED,
-                                        680, 480,
-                                        SDL_WINDOW_RESIZABLE);
+  SDL_Window *window =
+      SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_CENTERED,
+                       SDL_WINDOWPOS_CENTERED, 680, 480, SDL_WINDOW_RESIZABLE);
   if (!window) {
     cout << "Failed to create window" << endl;
     return -1;
@@ -45,7 +43,8 @@ int main() {
   SDL_Event event;
   while (true) {
     SDL_PollEvent(&event);
-    if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE) {
+    if (event.type == SDL_WINDOWEVENT &&
+        event.window.event == SDL_WINDOWEVENT_CLOSE) {
       break;
     }
   }
