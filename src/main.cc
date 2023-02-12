@@ -1,9 +1,8 @@
-#include <vulkan/vulkan.h>
-
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 
+#include "asserts.h"
 #include "hello_triangle_app.h"
 
 using std::cerr;
