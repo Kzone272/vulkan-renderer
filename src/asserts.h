@@ -24,3 +24,6 @@
 #else
 #define DASSERT(x) /* DASSERT does nothing when not debugging */
 #endif
+
+// ASSERT that a vulkan API call returns VK_SUCCESS.
+#define VKASSERT(x) ASSERT((x) == VK_SUCCESS)

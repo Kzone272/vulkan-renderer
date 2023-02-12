@@ -2,6 +2,7 @@
 add_executable(main
   main.cc
   hello_triangle_app.h
+  asserts.h
 )
 target_compile_features(main PRIVATE cxx_std_17)
 
