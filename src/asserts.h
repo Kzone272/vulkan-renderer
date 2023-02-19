@@ -26,4 +26,11 @@
 #endif
 
 // ASSERT that a vulkan API call returns VK_SUCCESS.
-#define VKASSERT(x) ASSERT((x) == VK_SUCCESS)
+#define VKASSERT(x)                                                       \
+  if ((x) != VK_SUCCESS) {                                                \
+    char buf[2048];                                                       \
+    snprintf(buf, 2048, "Failed VkResult: (%d), in \"%s\", line %d\n", x, \
+             __FILE__, __LINE__);                                         \
+    std::cerr << buf << std::endl;                                        \
+    exit(1);                                                              \
+  } else  // This 'else' exists to catch the user's following semicolon
