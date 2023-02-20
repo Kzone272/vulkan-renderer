@@ -68,23 +68,36 @@ class HelloTriangleApp {
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
+    create_info.enabledLayerCount = 0;
 
+    auto ext_names = getRequiredExtensions();
+    create_info.enabledExtensionCount = ext_names.size();
+    create_info.ppEnabledExtensionNames = ext_names.data();
+
+#if __APPLE__
+    create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
+    VKASSERT(vkCreateInstance(&create_info, nullptr, &instance_));
+  }
+
+  std::vector<const char*> getRequiredExtensions() {
     uint32_t ext_count = 0;
     ASSERT(SDL_Vulkan_GetInstanceExtensions(nullptr, &ext_count, nullptr));
     std::vector<const char*> ext_names(ext_count);
     ASSERT(SDL_Vulkan_GetInstanceExtensions(nullptr, &ext_count,
                                             ext_names.data()));
 
-    printf("SDL requires %d extensions:\n", ext_count);
+#if __APPLE__
+    ext_names.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
+
+    printf("Required extensions (%lu):\n", ext_names.size());
     for (auto& name : ext_names) {
       printf("  %s\n", name);
     }
 
-    create_info.enabledExtensionCount = ext_count;
-    create_info.ppEnabledExtensionNames = ext_names.data();
-    create_info.enabledLayerCount = 0;
-
-    VKASSERT(vkCreateInstance(&create_info, nullptr, &instance_));
+    return ext_names;
   }
 
   void printSupportedExtensions() {
