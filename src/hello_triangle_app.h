@@ -5,7 +5,10 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#include <iostream>
 #include <vector>
+
+#include "asserts.h"
 
 using std::cerr;
 using std::cout;
