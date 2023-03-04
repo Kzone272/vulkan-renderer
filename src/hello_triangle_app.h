@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "asserts.h"
+#include "defines.h"
 
 using std::cerr;
 using std::cout;
@@ -71,11 +72,14 @@ class HelloTriangleApp {
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
-    create_info.enabledLayerCount = 0;
 
     auto ext_names = getRequiredExtensions();
     create_info.enabledExtensionCount = ext_names.size();
     create_info.ppEnabledExtensionNames = ext_names.data();
+
+    auto validation_layers = getValidationLayers();
+    create_info.enabledLayerCount = validation_layers.size();
+    create_info.ppEnabledLayerNames = validation_layers.data();
 
 #if __APPLE__
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
@@ -114,6 +118,42 @@ class HelloTriangleApp {
     for (auto& ext : sup_exts) {
       printf("  %s v%d\n", ext.extensionName, ext.specVersion);
     }
+  }
+
+  std::vector<const char*> getValidationLayers() {
+    std::vector<const char*> required_layers;
+#ifdef DEBUG
+    required_layers.push_back("VK_LAYER_KHRONOS_validation");
+#endif
+
+    if (required_layers.size()) {
+      uint32_t layer_count = 0;
+      VKASSERT(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+      std::vector<VkLayerProperties> layer_props(layer_count);
+      VKASSERT(
+          vkEnumerateInstanceLayerProperties(&layer_count, layer_props.data()));
+
+      printf("Available layers:\n");
+      for (const auto& layer_prop : layer_props) {
+        printf("  %s\n", layer_prop.layerName);
+      }
+
+      for (const auto& layer : required_layers) {
+        bool found = false;
+        for (const auto& layer_prop : layer_props) {
+          if (strcmp(layer, layer_prop.layerName) == 0) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          printf("Missing required validation layer: %s\n", layer);
+          ASSERT(false);
+        }
+      }
+    }
+
+    return required_layers;
   }
 
   void cleanup() {
