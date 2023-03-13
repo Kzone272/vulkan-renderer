@@ -232,20 +232,42 @@ class HelloTriangleApp {
   }
 
   bool isDeviceSuitable(VkPhysicalDevice device) {
-    // Example suitability check:
-    // VkPhysicalDeviceProperties device_props;
-    // vkGetPhysicalDeviceProperties(device, &device_props);
-    // VkPhysicalDeviceFeatures device_features;
-    // vkGetPhysicalDeviceFeatures(device, &device_features);
-
-    // if (device_props.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-    //   return false;
-    // }
-    // if (!device_features.geometryShader) {
-    //   return false;
-    // }
+    QueueFamilyIndices indices = findQueueFamilies(device);
+    if (!indices.isComplete()) {
+      return false;
+    }
 
     return true;
+  }
+
+  struct QueueFamilyIndices {
+    int gfx_family = -1;
+
+    bool isComplete() {
+      return gfx_family != -1;
+    }
+  };
+
+  QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+    uint32_t q_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &q_family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> q_families(q_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &q_family_count,
+                                             q_families.data());
+
+    QueueFamilyIndices indices;
+    int i = 0;
+    for (const auto& q_family : q_families) {
+      if (q_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+        indices.gfx_family = i;
+      }
+      if (indices.isComplete()) {
+        break;
+      }
+      i++;
+    }
+
+    return indices;
   }
 
   void cleanup() {
