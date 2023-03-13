@@ -21,6 +21,9 @@ namespace {
 constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
 
+const std::vector<const char*> validation_layers = {
+    "VK_LAYER_KHRONOS_validation"};
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
               VkDebugUtilsMessageTypeFlagsEXT msg_type,
@@ -62,6 +65,7 @@ class HelloTriangleApp {
       setupDebugMessenger();
     }
     pickPhysicalDevice();
+    createLogicalDevice();
   }
 
   void mainLoop() {
@@ -152,44 +156,41 @@ class HelloTriangleApp {
   }
 
   std::vector<const char*> getValidationLayers() {
-    std::vector<const char*> required_layers;
-    if (enable_validation_layers_) {
-      required_layers.push_back("VK_LAYER_KHRONOS_validation");
+    if (!enable_validation_layers_) {
+      return {};
     }
 
-    if (required_layers.size()) {
-      uint32_t layer_count = 0;
-      VKASSERT(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
-      std::vector<VkLayerProperties> layer_props(layer_count);
-      VKASSERT(
-          vkEnumerateInstanceLayerProperties(&layer_count, layer_props.data()));
+    uint32_t layer_count = 0;
+    VKASSERT(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+    std::vector<VkLayerProperties> layer_props(layer_count);
+    VKASSERT(
+        vkEnumerateInstanceLayerProperties(&layer_count, layer_props.data()));
 
-      printf("Available layers:\n");
+    printf("Available layers (%zu):\n", layer_count);
+    for (const auto& layer_prop : layer_props) {
+      printf("  %s\n", layer_prop.layerName);
+    }
+
+    for (const auto& layer : validation_layers) {
+      bool found = false;
       for (const auto& layer_prop : layer_props) {
-        printf("  %s\n", layer_prop.layerName);
+        if (strcmp(layer, layer_prop.layerName) == 0) {
+          found = true;
+          break;
+        }
       }
-
-      for (const auto& layer : required_layers) {
-        bool found = false;
-        for (const auto& layer_prop : layer_props) {
-          if (strcmp(layer, layer_prop.layerName) == 0) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          printf("Missing required validation layer: %s\n", layer);
-          ASSERT(false);
-        }
+      if (!found) {
+        printf("Missing required validation layer: %s\n", layer);
+        ASSERT(false);
       }
     }
 
-    printf("Required layers (%zu):\n", required_layers.size());
-    for (const auto& layer : required_layers) {
+    printf("Required layers (%zu):\n", validation_layers.size());
+    for (const auto& layer : validation_layers) {
       printf("  %s\n", layer);
     }
 
-    return required_layers;
+    return validation_layers;
   }
 
 #define LOAD_VK_FN(fn) (PFN_##fn) vkGetInstanceProcAddr(instance_, #fn);
@@ -231,15 +232,6 @@ class HelloTriangleApp {
     ASSERT(physical_device_);
   }
 
-  bool isDeviceSuitable(VkPhysicalDevice device) {
-    QueueFamilyIndices indices = findQueueFamilies(device);
-    if (!indices.isComplete()) {
-      return false;
-    }
-
-    return true;
-  }
-
   struct QueueFamilyIndices {
     int gfx_family = -1;
 
@@ -247,6 +239,16 @@ class HelloTriangleApp {
       return gfx_family != -1;
     }
   };
+
+  bool isDeviceSuitable(VkPhysicalDevice device) {
+    QueueFamilyIndices indices = findQueueFamilies(device);
+    if (!indices.isComplete()) {
+      return false;
+    }
+
+    q_indices_ = indices;
+    return true;
+  }
 
   QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
     uint32_t q_family_count = 0;
@@ -270,7 +272,36 @@ class HelloTriangleApp {
     return indices;
   }
 
+  void createLogicalDevice() {
+    VkDeviceQueueCreateInfo device_q_ci{};
+    device_q_ci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    device_q_ci.queueFamilyIndex = q_indices_.gfx_family;
+    device_q_ci.queueCount = 1;
+    float q_prio = 1.0f;
+    device_q_ci.pQueuePriorities = &q_prio;
+
+    VkPhysicalDeviceFeatures device_features{};
+
+    VkDeviceCreateInfo device_ci{};
+    device_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_ci.queueCreateInfoCount = 1;
+    device_ci.pQueueCreateInfos = &device_q_ci;
+    device_ci.pEnabledFeatures = &device_features;
+    device_ci.enabledExtensionCount = 0;
+    if (enable_validation_layers_) {
+      device_ci.enabledLayerCount = validation_layers.size();
+      device_ci.ppEnabledLayerNames = validation_layers.data();
+    } else {
+      device_ci.enabledLayerCount = 0;
+    }
+
+    VKASSERT(vkCreateDevice(physical_device_, &device_ci, nullptr, &device_));
+    vkGetDeviceQueue(device_, q_indices_.gfx_family, 0, &gfx_q_);
+    ASSERT(gfx_q_);
+  }
+
   void cleanup() {
+    vkDestroyDevice(device_, nullptr);
     if (enable_validation_layers_) {
       auto destroy_dbg_fn = LOAD_VK_FN(vkDestroyDebugUtilsMessengerEXT);
       ASSERT(destroy_dbg_fn);
@@ -287,6 +318,10 @@ class HelloTriangleApp {
   VkInstance instance_;
   VkDebugUtilsMessengerEXT dbg_messenger_;
   VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
+  // Indices of queue families for the selected |physical_device_|
+  QueueFamilyIndices q_indices_;
+  VkDevice device_;
+  VkQueue gfx_q_ = VK_NULL_HANDLE;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
