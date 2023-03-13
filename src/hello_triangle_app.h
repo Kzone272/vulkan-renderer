@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include <iostream>
+#include <set>
 #include <vector>
 
 #include "asserts.h"
@@ -64,6 +65,7 @@ class HelloTriangleApp {
     if (enable_validation_layers_) {
       setupDebugMessenger();
     }
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
   }
@@ -166,7 +168,7 @@ class HelloTriangleApp {
     VKASSERT(
         vkEnumerateInstanceLayerProperties(&layer_count, layer_props.data()));
 
-    printf("Available layers (%zu):\n", layer_count);
+    printf("Available layers (%u):\n", layer_count);
     for (const auto& layer_prop : layer_props) {
       printf("  %s\n", layer_prop.layerName);
     }
@@ -216,6 +218,10 @@ class HelloTriangleApp {
     VKASSERT(create_fn(instance_, &ci, nullptr, &dbg_messenger_));
   }
 
+  void createSurface() {
+    ASSERT(SDL_Vulkan_CreateSurface(window_, instance_, &surface_));
+  }
+
   void pickPhysicalDevice() {
     uint32_t device_count = 0;
     vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
@@ -234,9 +240,10 @@ class HelloTriangleApp {
 
   struct QueueFamilyIndices {
     int gfx_family = -1;
+    int present_family = -1;
 
     bool isComplete() {
-      return gfx_family != -1;
+      return gfx_family != -1 && present_family != -1;
     }
   };
 
@@ -263,6 +270,14 @@ class HelloTriangleApp {
       if (q_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
         indices.gfx_family = i;
       }
+
+      VkBool32 present_support = false;
+      vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface_,
+                                           &present_support);
+      if (present_support) {
+        indices.present_family = i;
+      }
+
       if (indices.isComplete()) {
         break;
       }
@@ -273,19 +288,25 @@ class HelloTriangleApp {
   }
 
   void createLogicalDevice() {
-    VkDeviceQueueCreateInfo device_q_ci{};
-    device_q_ci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    device_q_ci.queueFamilyIndex = q_indices_.gfx_family;
-    device_q_ci.queueCount = 1;
+    std::vector<VkDeviceQueueCreateInfo> device_q_cis;
+    std::set<int> unique_q_indices = {q_indices_.gfx_family,
+                                      q_indices_.present_family};
     float q_prio = 1.0f;
-    device_q_ci.pQueuePriorities = &q_prio;
+    for (int q_index : unique_q_indices) {
+      VkDeviceQueueCreateInfo device_q_ci{};
+      device_q_ci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+      device_q_ci.queueFamilyIndex = q_index;
+      device_q_ci.queueCount = 1;
+      device_q_ci.pQueuePriorities = &q_prio;
+      device_q_cis.push_back(device_q_ci);
+    }
 
     VkPhysicalDeviceFeatures device_features{};
 
     VkDeviceCreateInfo device_ci{};
     device_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_ci.queueCreateInfoCount = 1;
-    device_ci.pQueueCreateInfos = &device_q_ci;
+    device_ci.queueCreateInfoCount = device_q_cis.size();
+    device_ci.pQueueCreateInfos = device_q_cis.data();
     device_ci.pEnabledFeatures = &device_features;
     device_ci.enabledExtensionCount = 0;
     if (enable_validation_layers_) {
@@ -298,6 +319,8 @@ class HelloTriangleApp {
     VKASSERT(vkCreateDevice(physical_device_, &device_ci, nullptr, &device_));
     vkGetDeviceQueue(device_, q_indices_.gfx_family, 0, &gfx_q_);
     ASSERT(gfx_q_);
+    vkGetDeviceQueue(device_, q_indices_.present_family, 0, &present_q_);
+    ASSERT(present_q_);
   }
 
   void cleanup() {
@@ -307,6 +330,7 @@ class HelloTriangleApp {
       ASSERT(destroy_dbg_fn);
       destroy_dbg_fn(instance_, dbg_messenger_, nullptr);
     }
+    vkDestroySurfaceKHR(instance_, surface_, nullptr);
     vkDestroyInstance(instance_, nullptr);
 
     SDL_DestroyWindow(window_);
@@ -317,11 +341,13 @@ class HelloTriangleApp {
 
   VkInstance instance_;
   VkDebugUtilsMessengerEXT dbg_messenger_;
+  VkSurfaceKHR surface_;
   VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
   VkDevice device_;
   VkQueue gfx_q_ = VK_NULL_HANDLE;
+  VkQueue present_q_ = VK_NULL_HANDLE;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
