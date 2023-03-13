@@ -61,6 +61,7 @@ class HelloTriangleApp {
     if (enable_validation_layers_) {
       setupDebugMessenger();
     }
+    pickPhysicalDevice();
   }
 
   void mainLoop() {
@@ -214,6 +215,39 @@ class HelloTriangleApp {
     VKASSERT(create_fn(instance_, &ci, nullptr, &dbg_messenger_));
   }
 
+  void pickPhysicalDevice() {
+    uint32_t device_count = 0;
+    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+    ASSERT(device_count > 0);
+    std::vector<VkPhysicalDevice> devices(device_count);
+    vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+
+    for (const auto& device : devices) {
+      if (isDeviceSuitable(device)) {
+        physical_device_ = device;
+        break;
+      }
+    }
+    ASSERT(physical_device_);
+  }
+
+  bool isDeviceSuitable(VkPhysicalDevice device) {
+    // Example suitability check:
+    // VkPhysicalDeviceProperties device_props;
+    // vkGetPhysicalDeviceProperties(device, &device_props);
+    // VkPhysicalDeviceFeatures device_features;
+    // vkGetPhysicalDeviceFeatures(device, &device_features);
+
+    // if (device_props.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+    //   return false;
+    // }
+    // if (!device_features.geometryShader) {
+    //   return false;
+    // }
+
+    return true;
+  }
+
   void cleanup() {
     if (enable_validation_layers_) {
       auto destroy_dbg_fn = LOAD_VK_FN(vkDestroyDebugUtilsMessengerEXT);
@@ -230,6 +264,7 @@ class HelloTriangleApp {
 
   VkInstance instance_;
   VkDebugUtilsMessengerEXT dbg_messenger_;
+  VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
