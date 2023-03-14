@@ -5,6 +5,7 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#include <algorithm>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -24,6 +25,8 @@ constexpr int HEIGHT = 600;
 
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
+const std::vector<const char*> device_extensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
@@ -68,6 +71,7 @@ class HelloTriangleApp {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+    createSwapChain();
   }
 
   void mainLoop() {
@@ -136,10 +140,12 @@ class HelloTriangleApp {
       ext_names.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
-    printf("Required extensions (%zu):\n", ext_names.size());
+#ifdef DEBUG
+    printf("Required instance extensions (%zu):\n", ext_names.size());
     for (auto& name : ext_names) {
       printf("  %s\n", name);
     }
+#endif
 
     return ext_names;
   }
@@ -151,7 +157,7 @@ class HelloTriangleApp {
     std::vector<VkExtensionProperties> sup_exts(sup_ext_count);
     VKASSERT(vkEnumerateInstanceExtensionProperties(nullptr, &sup_ext_count,
                                                     sup_exts.data()));
-    printf("Vulkan supports %d extensions\n", sup_ext_count);
+    printf("Supported instance extensions (%d)\n", sup_ext_count);
     for (auto& ext : sup_exts) {
       printf("  %s v%d\n", ext.extensionName, ext.specVersion);
     }
@@ -252,8 +258,19 @@ class HelloTriangleApp {
     if (!indices.isComplete()) {
       return false;
     }
+    if (!checkDeviceExtensionSupport(device)) {
+      return false;
+    }
+    SwapchainSupportDetails swapchain_support = querySwapChainSupport(device);
+    if (swapchain_support.formats.empty() ||
+        swapchain_support.present_modes.empty()) {
+      return false;
+    }
 
+    // Cache these because we'll use this device.
     q_indices_ = indices;
+    swapchain_support_ = swapchain_support;
+
     return true;
   }
 
@@ -287,6 +304,68 @@ class HelloTriangleApp {
     return indices;
   }
 
+  bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+    uint32_t ext_count = 0;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
+    std::vector<VkExtensionProperties> extensions(ext_count);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count,
+                                         extensions.data());
+
+    // Map to just the names.
+    std::vector<std::string> available_exts(ext_count);
+    std::transform(extensions.begin(), extensions.end(), available_exts.begin(),
+                   [](VkExtensionProperties ext) {
+                     return std::string{ext.extensionName};
+                   });
+    // Make a copy so we can sort it.
+    std::vector<std::string> required_exts(device_extensions.begin(),
+                                           device_extensions.end());
+    std::sort(required_exts.begin(), required_exts.end());
+    std::sort(available_exts.begin(), available_exts.end());
+    return std::includes(available_exts.begin(), available_exts.end(),
+                         required_exts.begin(), required_exts.end());
+  }
+
+  struct SwapchainSupportDetails {
+    VkSurfaceCapabilitiesKHR caps;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> present_modes;
+  };
+
+  SwapchainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+    SwapchainSupportDetails details;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.caps);
+    uint32_t format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count,
+                                         nullptr);
+    if (format_count) {
+      details.formats.resize(format_count);
+      vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count,
+                                           details.formats.data());
+    }
+    uint32_t present_mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_,
+                                              &present_mode_count, nullptr);
+    if (present_mode_count) {
+      details.present_modes.resize(present_mode_count);
+      vkGetPhysicalDeviceSurfacePresentModesKHR(
+          device, surface_, &present_mode_count, details.present_modes.data());
+    }
+
+#ifdef DEBUG
+    printf("supported formats (%d)\n", format_count);
+    for (const auto& format : details.formats) {
+      printf("  %d\n", format.format);
+    }
+    printf("supported present modes (%d)\n", present_mode_count);
+    for (const auto& present_mode : details.present_modes) {
+      printf("  %d\n", present_mode);
+    }
+#endif
+
+    return details;
+  }
+
   void createLogicalDevice() {
     std::vector<VkDeviceQueueCreateInfo> device_q_cis;
     std::set<int> unique_q_indices = {q_indices_.gfx_family,
@@ -308,7 +387,8 @@ class HelloTriangleApp {
     device_ci.queueCreateInfoCount = device_q_cis.size();
     device_ci.pQueueCreateInfos = device_q_cis.data();
     device_ci.pEnabledFeatures = &device_features;
-    device_ci.enabledExtensionCount = 0;
+    device_ci.enabledExtensionCount = device_extensions.size();
+    device_ci.ppEnabledExtensionNames = device_extensions.data();
     if (enable_validation_layers_) {
       device_ci.enabledLayerCount = validation_layers.size();
       device_ci.ppEnabledLayerNames = validation_layers.data();
@@ -323,7 +403,102 @@ class HelloTriangleApp {
     ASSERT(present_q_);
   }
 
+  VkSurfaceFormatKHR chooseSwapSurfaceFormat(
+      const std::vector<VkSurfaceFormatKHR>& formats) {
+    DASSERT(formats.size());
+    for (const auto& format : formats) {
+      if (format.format == VK_FORMAT_B8G8R8A8_SRGB &&
+          format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+        return format;
+      }
+    }
+
+    return formats[0];
+  }
+
+  VkPresentModeKHR chooseSwapPresentMode(
+      const std::vector<VkPresentModeKHR>& present_modes) {
+    if (std::find(present_modes.begin(), present_modes.end(),
+                  VK_PRESENT_MODE_MAILBOX_KHR) != present_modes.end()) {
+      return VK_PRESENT_MODE_MAILBOX_KHR;
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+  }
+
+  VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& caps) {
+    if (caps.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+      return caps.currentExtent;
+    } else {
+      int width = 0;
+      int height = 0;
+      SDL_GL_GetDrawableSize(window_, &width, &height);
+      VkExtent2D extent = {static_cast<uint32_t>(width),
+                           static_cast<uint32_t>(height)};
+      extent.width = std::clamp(extent.width, caps.minImageExtent.width,
+                                caps.maxImageExtent.width);
+      extent.height = std::clamp(extent.height, caps.minImageExtent.height,
+                                 caps.maxImageExtent.height);
+      return extent;
+    }
+  }
+
+  void createSwapChain() {
+    auto format = chooseSwapSurfaceFormat(swapchain_support_.formats);
+    auto present_mode = chooseSwapPresentMode(swapchain_support_.present_modes);
+    auto extent = chooseSwapExtent(swapchain_support_.caps);
+
+    uint32_t image_count = swapchain_support_.caps.minImageCount + 1;
+    if (swapchain_support_.caps.maxImageCount > 0) {
+      image_count =
+          std::min(image_count, swapchain_support_.caps.maxImageCount);
+    }
+
+    VkSwapchainCreateInfoKHR swapchain_ci{};
+    swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_ci.surface = surface_;
+    swapchain_ci.minImageCount = image_count;
+    swapchain_ci.imageFormat = format.format;
+    swapchain_ci.imageColorSpace = format.colorSpace;
+    swapchain_ci.imageExtent = extent;
+    swapchain_ci.imageArrayLayers = 1;
+    swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchain_ci.preTransform = swapchain_support_.caps.currentTransform;
+    swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchain_ci.presentMode = present_mode;
+    swapchain_ci.clipped = VK_TRUE;
+    swapchain_ci.oldSwapchain = VK_NULL_HANDLE;
+
+    uint32_t queue_family_indices[] = {
+        static_cast<uint32_t>(q_indices_.gfx_family),
+        static_cast<uint32_t>(q_indices_.present_family)};
+    if (q_indices_.gfx_family != q_indices_.present_family) {
+      swapchain_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+      swapchain_ci.queueFamilyIndexCount = 2;
+      swapchain_ci.pQueueFamilyIndices = queue_family_indices;
+    } else {
+      swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+      swapchain_ci.queueFamilyIndexCount = 0;
+      swapchain_ci.pQueueFamilyIndices = nullptr;
+    }
+
+    VKASSERT(
+        vkCreateSwapchainKHR(device_, &swapchain_ci, nullptr, &swapchain_));
+
+    vkGetSwapchainImagesKHR(device_, swapchain_, &image_count, nullptr);
+    swapchain_images_.resize(image_count);
+    vkGetSwapchainImagesKHR(device_, swapchain_, &image_count,
+                            swapchain_images_.data());
+
+    swapchain_format_ = format.format;
+    swapchain_extent_ = extent;
+    printf("Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
+           swapchain_format_, swapchain_extent_.width,
+           swapchain_extent_.height);
+  }
+
   void cleanup() {
+    vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     vkDestroyDevice(device_, nullptr);
     if (enable_validation_layers_) {
       auto destroy_dbg_fn = LOAD_VK_FN(vkDestroyDebugUtilsMessengerEXT);
@@ -348,6 +523,11 @@ class HelloTriangleApp {
   VkDevice device_;
   VkQueue gfx_q_ = VK_NULL_HANDLE;
   VkQueue present_q_ = VK_NULL_HANDLE;
+  SwapchainSupportDetails swapchain_support_;
+  VkSwapchainKHR swapchain_;
+  std::vector<VkImage> swapchain_images_;
+  VkFormat swapchain_format_;
+  VkExtent2D swapchain_extent_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
