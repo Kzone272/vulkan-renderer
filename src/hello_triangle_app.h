@@ -72,6 +72,7 @@ class HelloTriangleApp {
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapChain();
+    createImageViews();
   }
 
   void mainLoop() {
@@ -494,7 +495,31 @@ class HelloTriangleApp {
            swapchain_extent_.height);
   }
 
+  void createImageViews() {
+    swapchain_views_.resize(swapchain_images_.size());
+    for (size_t i = 0; i < swapchain_images_.size(); i++) {
+      VkImageViewCreateInfo ci{};
+      ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      ci.image = swapchain_images_[i];
+      ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      ci.format = swapchain_format_;
+      ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      ci.subresourceRange.baseMipLevel = 0;
+      ci.subresourceRange.levelCount = 1;
+      ci.subresourceRange.baseArrayLayer = 0;
+      ci.subresourceRange.layerCount = 1;
+      VKASSERT(vkCreateImageView(device_, &ci, nullptr, &swapchain_views_[i]));
+    }
+  }
+
   void cleanup() {
+    for (auto image_view : swapchain_views_) {
+      vkDestroyImageView(device_, image_view, nullptr);
+    }
     vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     vkDestroyDevice(device_, nullptr);
     if (enable_validation_layers_) {
@@ -525,6 +550,7 @@ class HelloTriangleApp {
   std::vector<VkImage> swapchain_images_;
   VkFormat swapchain_format_;
   VkExtent2D swapchain_extent_;
+  std::vector<VkImageView> swapchain_views_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
