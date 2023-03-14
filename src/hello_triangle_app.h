@@ -353,14 +353,11 @@ class HelloTriangleApp {
     }
 
 #ifdef DEBUG
-    printf("supported formats (%d)\n", format_count);
+    printf("Supported formats (%d)\n", format_count);
     for (const auto& format : details.formats) {
-      printf("  %d\n", format.format);
+      printf("  %d", format.format);
     }
-    printf("supported present modes (%d)\n", present_mode_count);
-    for (const auto& present_mode : details.present_modes) {
-      printf("  %d\n", present_mode);
-    }
+    printf("\n");
 #endif
 
     return details;
