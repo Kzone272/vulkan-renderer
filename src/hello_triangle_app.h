@@ -73,6 +73,7 @@ class HelloTriangleApp {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createGraphicsPipeline();
   }
 
   void mainLoop() {
@@ -515,6 +516,8 @@ class HelloTriangleApp {
       VKASSERT(vkCreateImageView(device_, &ci, nullptr, &swapchain_views_[i]));
     }
   }
+
+  void createGraphicsPipeline() {}
 
   void cleanup() {
     for (auto image_view : swapchain_views_) {

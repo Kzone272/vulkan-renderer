@@ -6,6 +6,7 @@ add_executable(main
   defines.h
 )
 target_compile_features(main PRIVATE cxx_std_17)
+add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
   ${SDL2_INCLUDE_DIRS}
@@ -36,3 +37,5 @@ target_link_libraries(setup PRIVATE
   SDL2::SDL2
   ${Vulkan_LIBRARIES}
 )
+
+add_subdirectory(shaders)

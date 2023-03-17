@@ -6,6 +6,8 @@ project(VulkanTutorial
   LANGUAGES CXX
 )
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/")
+
 find_package(Eigen3 3.4.0 REQUIRED)
 find_package(SDL2 2.26.2 REQUIRED)
 find_package(Vulkan REQUIRED)
