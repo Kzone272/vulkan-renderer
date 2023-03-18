@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -35,6 +36,17 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
               void* user_data) {
   printf("validation layer: %s\n", callback_data->pMessage);
   return VK_FALSE;
+}
+
+static std::vector<char> readFile(const std::string& filename) {
+  std::ifstream file(filename, std::ios::ate | std::ios::binary);
+  ASSERT(file.is_open());
+  size_t file_size = static_cast<size_t>(file.tellg());
+  std::vector<char> buffer(file_size);
+  file.seekg(0);
+  file.read(buffer.data(), file_size);
+  file.close();
+  return buffer;
 }
 
 }  // namespace
@@ -517,7 +529,43 @@ class HelloTriangleApp {
     }
   }
 
-  void createGraphicsPipeline() {}
+  void createGraphicsPipeline() {
+    auto vert_shader_code = readFile("shaders/shader.vert.spv");
+    auto frag_shader_code = readFile("shaders/shader.frag.spv");
+
+    VkShaderModule vert_shader = createShaderModule(vert_shader_code);
+    VkShaderModule frag_shader = createShaderModule(frag_shader_code);
+
+    VkPipelineShaderStageCreateInfo vert_shader_stage_ci{};
+    vert_shader_stage_ci.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vert_shader_stage_ci.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vert_shader_stage_ci.module = vert_shader;
+    vert_shader_stage_ci.pName = "main";
+
+    VkPipelineShaderStageCreateInfo frag_shader_stage_ci{};
+    frag_shader_stage_ci.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    frag_shader_stage_ci.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_shader_stage_ci.module = frag_shader;
+    frag_shader_stage_ci.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shader_stages[] = {vert_shader_stage_ci,
+                                                       frag_shader_stage_ci};
+
+    vkDestroyShaderModule(device_, vert_shader, nullptr);
+    vkDestroyShaderModule(device_, frag_shader, nullptr);
+  }
+
+  VkShaderModule createShaderModule(const std::vector<char>& code) {
+    VkShaderModuleCreateInfo ci{};
+    ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    ci.codeSize = code.size();
+    ci.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    VkShaderModule shader_module;
+    VKASSERT(vkCreateShaderModule(device_, &ci, nullptr, &shader_module));
+    return shader_module;
+  }
 
   void cleanup() {
     for (auto image_view : swapchain_views_) {

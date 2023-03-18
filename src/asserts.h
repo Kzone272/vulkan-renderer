@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <stdexcept>
 
 #include "defines.h"
 
@@ -13,8 +14,7 @@
     char buf[2048];                                                        \
     snprintf(buf, 2048, "Assertion failed in \"%s\", line %d\n", __FILE__, \
              __LINE__);                                                    \
-    std::cerr << buf << std::endl;                                         \
-    exit(1);                                                               \
+    throw std::logic_error(buf);                                           \
   } else  // This 'else' exists to catch the user's following semicolon
 #endif
 
