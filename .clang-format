@@ -1,4 +1,5 @@
 BasedOnStyle: Google
 Language: Cpp
 
-AllowShortFunctionsOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: None
+AlignAfterOpenBracket: AlwaysBreak

@@ -33,11 +33,11 @@ const std::vector<const char*> device_extensions = {
 #endif
 };
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL
-debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
-              VkDebugUtilsMessageTypeFlagsEXT msg_type,
-              const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
-              void* user_data) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
+    VkDebugUtilsMessageTypeFlagsEXT msg_type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void* user_data) {
   printf("validation layer: %s\n", callback_data->pMessage);
   return VK_FALSE;
 }
@@ -69,9 +69,9 @@ class HelloTriangleApp {
     ASSERT(SDL_Init(SDL_INIT_VIDEO) == 0);
 
     SDL_WindowFlags window_flags = SDL_WINDOW_VULKAN;
-    window_ =
-        SDL_CreateWindow("Vulkan Tutorial", SDL_WINDOWPOS_CENTERED,
-                         SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, window_flags);
+    window_ = SDL_CreateWindow(
+        "Vulkan Tutorial", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        WIDTH, HEIGHT, window_flags);
     if (!window_) {
       std::string error{SDL_GetError()};
       cerr << error << endl;
@@ -147,8 +147,8 @@ class HelloTriangleApp {
     uint32_t ext_count = 0;
     ASSERT(SDL_Vulkan_GetInstanceExtensions(nullptr, &ext_count, nullptr));
     std::vector<const char*> ext_names(ext_count);
-    ASSERT(SDL_Vulkan_GetInstanceExtensions(nullptr, &ext_count,
-                                            ext_names.data()));
+    ASSERT(SDL_Vulkan_GetInstanceExtensions(
+        nullptr, &ext_count, ext_names.data()));
 
 #if __APPLE__
     ext_names.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
@@ -171,11 +171,11 @@ class HelloTriangleApp {
 
   void printSupportedExtensions() {
     uint32_t sup_ext_count = 0;
-    VKASSERT(vkEnumerateInstanceExtensionProperties(nullptr, &sup_ext_count,
-                                                    nullptr));
+    VKASSERT(vkEnumerateInstanceExtensionProperties(
+        nullptr, &sup_ext_count, nullptr));
     std::vector<VkExtensionProperties> sup_exts(sup_ext_count);
-    VKASSERT(vkEnumerateInstanceExtensionProperties(nullptr, &sup_ext_count,
-                                                    sup_exts.data()));
+    VKASSERT(vkEnumerateInstanceExtensionProperties(
+        nullptr, &sup_ext_count, sup_exts.data()));
     printf("Supported instance extensions (%d)\n", sup_ext_count);
     for (auto& ext : sup_exts) {
       printf("  %s v%d\n", ext.extensionName, ext.specVersion);
@@ -297,8 +297,8 @@ class HelloTriangleApp {
     uint32_t q_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &q_family_count, nullptr);
     std::vector<VkQueueFamilyProperties> q_families(q_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &q_family_count,
-                                             q_families.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        device, &q_family_count, q_families.data());
 
     QueueFamilyIndices indices;
     int i = 0;
@@ -308,8 +308,8 @@ class HelloTriangleApp {
       }
 
       VkBool32 present_support = false;
-      vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface_,
-                                           &present_support);
+      vkGetPhysicalDeviceSurfaceSupportKHR(
+          device, i, surface_, &present_support);
       if (present_support) {
         indices.present_family = i;
       }
@@ -327,22 +327,24 @@ class HelloTriangleApp {
     uint32_t ext_count = 0;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
     std::vector<VkExtensionProperties> extensions(ext_count);
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count,
-                                         extensions.data());
+    vkEnumerateDeviceExtensionProperties(
+        device, nullptr, &ext_count, extensions.data());
 
     // Map to just the names.
     std::vector<std::string> available_exts(ext_count);
-    std::transform(extensions.begin(), extensions.end(), available_exts.begin(),
-                   [](VkExtensionProperties ext) {
-                     return std::string{ext.extensionName};
-                   });
+    std::transform(
+        extensions.begin(), extensions.end(), available_exts.begin(),
+        [](VkExtensionProperties ext) {
+          return std::string{ext.extensionName};
+        });
     // Make a copy so we can sort it.
-    std::vector<std::string> required_exts(device_extensions.begin(),
-                                           device_extensions.end());
+    std::vector<std::string> required_exts(
+        device_extensions.begin(), device_extensions.end());
     std::sort(required_exts.begin(), required_exts.end());
     std::sort(available_exts.begin(), available_exts.end());
-    return std::includes(available_exts.begin(), available_exts.end(),
-                         required_exts.begin(), required_exts.end());
+    return std::includes(
+        available_exts.begin(), available_exts.end(), required_exts.begin(),
+        required_exts.end());
   }
 
   struct SwapchainSupportDetails {
@@ -355,16 +357,16 @@ class HelloTriangleApp {
     SwapchainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.caps);
     uint32_t format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count,
-                                         nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(
+        device, surface_, &format_count, nullptr);
     if (format_count) {
       details.formats.resize(format_count);
-      vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count,
-                                           details.formats.data());
+      vkGetPhysicalDeviceSurfaceFormatsKHR(
+          device, surface_, &format_count, details.formats.data());
     }
     uint32_t present_mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_,
-                                              &present_mode_count, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(
+        device, surface_, &present_mode_count, nullptr);
     if (present_mode_count) {
       details.present_modes.resize(present_mode_count);
       vkGetPhysicalDeviceSurfacePresentModesKHR(
@@ -384,8 +386,8 @@ class HelloTriangleApp {
 
   void createLogicalDevice() {
     std::vector<VkDeviceQueueCreateInfo> device_q_cis;
-    std::set<int> unique_q_indices = {q_indices_.gfx_family,
-                                      q_indices_.present_family};
+    std::set<int> unique_q_indices = {
+        q_indices_.gfx_family, q_indices_.present_family};
     float q_prio = 1.0f;
     for (int q_index : unique_q_indices) {
       VkDeviceQueueCreateInfo device_q_ci{};
@@ -434,8 +436,9 @@ class HelloTriangleApp {
 
   VkPresentModeKHR chooseSwapPresentMode(
       const std::vector<VkPresentModeKHR>& present_modes) {
-    if (std::find(present_modes.begin(), present_modes.end(),
-                  VK_PRESENT_MODE_MAILBOX_KHR) != present_modes.end()) {
+    if (std::find(
+            present_modes.begin(), present_modes.end(),
+            VK_PRESENT_MODE_MAILBOX_KHR) != present_modes.end()) {
       return VK_PRESENT_MODE_MAILBOX_KHR;
     }
 
@@ -449,12 +452,13 @@ class HelloTriangleApp {
       int width = 0;
       int height = 0;
       SDL_GL_GetDrawableSize(window_, &width, &height);
-      VkExtent2D extent = {static_cast<uint32_t>(width),
-                           static_cast<uint32_t>(height)};
-      extent.width = std::clamp(extent.width, caps.minImageExtent.width,
-                                caps.maxImageExtent.width);
-      extent.height = std::clamp(extent.height, caps.minImageExtent.height,
-                                 caps.maxImageExtent.height);
+      VkExtent2D extent = {
+          static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+      extent.width = std::clamp(
+          extent.width, caps.minImageExtent.width, caps.maxImageExtent.width);
+      extent.height = std::clamp(
+          extent.height, caps.minImageExtent.height,
+          caps.maxImageExtent.height);
       return extent;
     }
   }
@@ -503,14 +507,14 @@ class HelloTriangleApp {
 
     vkGetSwapchainImagesKHR(device_, swapchain_, &image_count, nullptr);
     swapchain_images_.resize(image_count);
-    vkGetSwapchainImagesKHR(device_, swapchain_, &image_count,
-                            swapchain_images_.data());
+    vkGetSwapchainImagesKHR(
+        device_, swapchain_, &image_count, swapchain_images_.data());
 
     swapchain_format_ = format.format;
     swapchain_extent_ = extent;
-    printf("Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
-           swapchain_format_, swapchain_extent_.width,
-           swapchain_extent_.height);
+    printf(
+        "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
+        swapchain_format_, swapchain_extent_.width, swapchain_extent_.height);
   }
 
   void createImageViews() {
@@ -555,8 +559,8 @@ class HelloTriangleApp {
     frag_shader_stage_ci.module = frag_shader;
     frag_shader_stage_ci.pName = "main";
 
-    VkPipelineShaderStageCreateInfo shader_stages[] = {vert_shader_stage_ci,
-                                                       frag_shader_stage_ci};
+    VkPipelineShaderStageCreateInfo shader_stages[] = {
+        vert_shader_stage_ci, frag_shader_stage_ci};
 
     vkDestroyShaderModule(device_, vert_shader, nullptr);
     vkDestroyShaderModule(device_, frag_shader, nullptr);
