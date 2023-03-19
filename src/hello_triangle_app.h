@@ -27,7 +27,11 @@ constexpr int HEIGHT = 600;
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
 const std::vector<const char*> device_extensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+#if __APPLE__
+    "VK_KHR_portability_subset",
+#endif
+};
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
@@ -148,6 +152,7 @@ class HelloTriangleApp {
 
 #if __APPLE__
     ext_names.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    ext_names.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 #endif
 
     if (enable_validation_layers_) {
