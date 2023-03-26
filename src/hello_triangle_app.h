@@ -562,6 +562,91 @@ class HelloTriangleApp {
     VkPipelineShaderStageCreateInfo shader_stages[] = {
         vert_shader_stage_ci, frag_shader_stage_ci};
 
+    std::vector<VkDynamicState> dyn_states = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+    VkPipelineDynamicStateCreateInfo dyn_state{};
+    dyn_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dyn_state.dynamicStateCount = dyn_states.size();
+    dyn_state.pDynamicStates = dyn_states.data();
+
+    VkPipelineVertexInputStateCreateInfo vert_in_info{};
+    vert_in_info.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vert_in_info.vertexBindingDescriptionCount = 0;
+    vert_in_info.pVertexBindingDescriptions = nullptr;
+    vert_in_info.vertexAttributeDescriptionCount = 0;
+    vert_in_info.pVertexAttributeDescriptions = nullptr;
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+    input_assembly.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)swapchain_extent_.width;
+    viewport.height = (float)swapchain_extent_.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = swapchain_extent_;
+
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.scissorCount = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState color_blend_att{};
+    color_blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                     VK_COLOR_COMPONENT_B_BIT |
+                                     VK_COLOR_COMPONENT_A_BIT;
+    color_blend_att.blendEnable = VK_TRUE;
+    color_blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    color_blend_att.colorBlendOp = VK_BLEND_OP_ADD;
+    color_blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    color_blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+
+    VkPipelineColorBlendStateCreateInfo color_blending{};
+    color_blending.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blending.logicOpEnable = VK_FALSE;
+    color_blending.attachmentCount = 1;
+    color_blending.pAttachments = &color_blend_att;
+
+    VkPipelineLayoutCreateInfo pipeline_layout_ci{};
+    pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_ci.setLayoutCount = 0;
+    pipeline_layout_ci.pushConstantRangeCount = 0;
+
+    VKASSERT(vkCreatePipelineLayout(
+        device_, &pipeline_layout_ci, nullptr, &pipeline_layout_));
+
+    // Cleanup
     vkDestroyShaderModule(device_, vert_shader, nullptr);
     vkDestroyShaderModule(device_, frag_shader, nullptr);
   }
@@ -577,6 +662,7 @@ class HelloTriangleApp {
   }
 
   void cleanup() {
+    vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
     for (auto image_view : swapchain_views_) {
       vkDestroyImageView(device_, image_view, nullptr);
     }
@@ -611,6 +697,7 @@ class HelloTriangleApp {
   VkFormat swapchain_format_;
   VkExtent2D swapchain_extent_;
   std::vector<VkImageView> swapchain_views_;
+  VkPipelineLayout pipeline_layout_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
