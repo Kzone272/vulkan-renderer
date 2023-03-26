@@ -25,9 +25,9 @@ int main() {
     return -1;
   }
 
-  SDL_Window *window =
-      SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, 680, 480, SDL_WINDOW_RESIZABLE);
+  SDL_Window *window = SDL_CreateWindow(
+      "SDL2 Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 680, 480,
+      SDL_WINDOW_RESIZABLE);
   if (!window) {
     cout << "Failed to create window" << endl;
     return -1;
