@@ -91,6 +91,7 @@ class HelloTriangleApp {
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createFrameBuffers();
   }
 
   void mainLoop() {
@@ -709,7 +710,28 @@ class HelloTriangleApp {
     return shader_module;
   }
 
+  void createFrameBuffers() {
+    swapchain_fbs_.resize(swapchain_views_.size());
+    for (size_t i = 0; i < swapchain_views_.size(); i++) {
+      std::vector<VkImageView> atts = {swapchain_views_[i]};
+
+      VkFramebufferCreateInfo fb_ci{};
+      fb_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+      fb_ci.renderPass = render_pass_;
+      fb_ci.attachmentCount = atts.size();
+      fb_ci.pAttachments = atts.data();
+      fb_ci.width = swapchain_extent_.width;
+      fb_ci.height = swapchain_extent_.height;
+      fb_ci.layers = 1;
+      VKASSERT(
+          vkCreateFramebuffer(device_, &fb_ci, nullptr, &swapchain_fbs_[i]));
+    }
+  }
+
   void cleanup() {
+    for (auto fb : swapchain_fbs_) {
+      vkDestroyFramebuffer(device_, fb, nullptr);
+    }
     vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
     vkDestroyRenderPass(device_, render_pass_, nullptr);
@@ -750,6 +772,7 @@ class HelloTriangleApp {
   VkRenderPass render_pass_;
   VkPipelineLayout pipeline_layout_;
   VkPipeline gfx_pipeline_;
+  std::vector<VkFramebuffer> swapchain_fbs_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
