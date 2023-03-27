@@ -589,7 +589,7 @@ class HelloTriangleApp {
     frag_shader_stage_ci.module = frag_shader;
     frag_shader_stage_ci.pName = "main";
 
-    VkPipelineShaderStageCreateInfo shader_stages[] = {
+    std::vector<VkPipelineShaderStageCreateInfo> shader_stages = {
         vert_shader_stage_ci, frag_shader_stage_ci};
 
     std::vector<VkDynamicState> dyn_states = {
@@ -676,6 +676,24 @@ class HelloTriangleApp {
     VKASSERT(vkCreatePipelineLayout(
         device_, &pipeline_layout_ci, nullptr, &pipeline_layout_));
 
+    VkGraphicsPipelineCreateInfo pipeline_ci{};
+    pipeline_ci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_ci.stageCount = shader_stages.size();
+    pipeline_ci.pStages = shader_stages.data();
+    pipeline_ci.pVertexInputState = &vert_in_info;
+    pipeline_ci.pInputAssemblyState = &input_assembly;
+    pipeline_ci.pViewportState = &viewport_state;
+    pipeline_ci.pRasterizationState = &rasterizer;
+    pipeline_ci.pMultisampleState = &multisampling;
+    pipeline_ci.pDepthStencilState = nullptr;
+    pipeline_ci.pColorBlendState = &color_blending;
+    pipeline_ci.pDynamicState = &dyn_state;
+    pipeline_ci.layout = pipeline_layout_;
+    pipeline_ci.renderPass = render_pass_;
+    pipeline_ci.subpass = 0;
+    VKASSERT(vkCreateGraphicsPipelines(
+        device_, VK_NULL_HANDLE, 1, &pipeline_ci, nullptr, &gfx_pipeline_));
+
     // Cleanup
     vkDestroyShaderModule(device_, vert_shader, nullptr);
     vkDestroyShaderModule(device_, frag_shader, nullptr);
@@ -692,6 +710,7 @@ class HelloTriangleApp {
   }
 
   void cleanup() {
+    vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
     vkDestroyRenderPass(device_, render_pass_, nullptr);
     for (auto image_view : swapchain_views_) {
@@ -730,6 +749,7 @@ class HelloTriangleApp {
   std::vector<VkImageView> swapchain_views_;
   VkRenderPass render_pass_;
   VkPipelineLayout pipeline_layout_;
+  VkPipeline gfx_pipeline_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
