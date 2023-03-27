@@ -89,6 +89,7 @@ class HelloTriangleApp {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createRenderPass();
     createGraphicsPipeline();
   }
 
@@ -538,6 +539,35 @@ class HelloTriangleApp {
     }
   }
 
+  void createRenderPass() {
+    VkAttachmentDescription color_att{};
+    color_att.format = swapchain_format_;
+    color_att.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_att.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color_att.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference color_att_ref{};
+    color_att_ref.attachment = 0;
+    color_att_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_att_ref;
+
+    VkRenderPassCreateInfo rp_ci{};
+    rp_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    rp_ci.attachmentCount = 1;
+    rp_ci.pAttachments = &color_att;
+    rp_ci.subpassCount = 1;
+    rp_ci.pSubpasses = &subpass;
+    VKASSERT(vkCreateRenderPass(device_, &rp_ci, nullptr, &render_pass_));
+  }
+
   void createGraphicsPipeline() {
     auto vert_shader_code = readFile("shaders/shader.vert.spv");
     auto frag_shader_code = readFile("shaders/shader.frag.spv");
@@ -663,6 +693,7 @@ class HelloTriangleApp {
 
   void cleanup() {
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+    vkDestroyRenderPass(device_, render_pass_, nullptr);
     for (auto image_view : swapchain_views_) {
       vkDestroyImageView(device_, image_view, nullptr);
     }
@@ -697,6 +728,7 @@ class HelloTriangleApp {
   VkFormat swapchain_format_;
   VkExtent2D swapchain_extent_;
   std::vector<VkImageView> swapchain_views_;
+  VkRenderPass render_pass_;
   VkPipelineLayout pipeline_layout_;
 
 #ifdef DEBUG
