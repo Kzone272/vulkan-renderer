@@ -94,6 +94,7 @@ class HelloTriangleApp {
     createFrameBuffers();
     createCommandPool();
     createCommandBuffer();
+    createSyncObjects();
   }
 
   void mainLoop() {
@@ -104,7 +105,46 @@ class HelloTriangleApp {
           event.window.event == SDL_WINDOWEVENT_CLOSE) {
         break;
       }
+      drawFrame();
     }
+
+    vkDeviceWaitIdle(device_);
+  }
+
+  void drawFrame() {
+    vkWaitForFences(device_, 1, &in_flight_fence_, VK_TRUE, UINT64_MAX);
+    VKASSERT(vkResetFences(device_, 1, &in_flight_fence_));
+
+    uint32_t img_ind = -1;
+    vkAcquireNextImageKHR(
+        device_, swapchain_, UINT64_MAX, img_sem_, VK_NULL_HANDLE, &img_ind);
+    ASSERT(img_ind >= 0);
+    ASSERT(img_ind < swapchain_images_.size());
+
+    VKASSERT(vkResetCommandBuffer(cmd_buffer_, 0));
+    recordCommandBuffer(cmd_buffer_, img_ind);
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkPipelineStageFlags wait_stages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &img_sem_;
+    submit_info.pWaitDstStageMask = wait_stages;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd_buffer_;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &render_sem_;
+    VKASSERT(vkQueueSubmit(gfx_q_, 1, &submit_info, in_flight_fence_));
+
+    VkPresentInfoKHR present_info{};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = &render_sem_;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &swapchain_;
+    present_info.pImageIndices = &img_ind;
+    vkQueuePresentKHR(present_q_, &present_info);
   }
 
   void createInstance() {
@@ -562,12 +602,24 @@ class HelloTriangleApp {
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_att_ref;
 
+    // Writing to the subpass color attachment depends on the swapchain
+    // finishing its read of the color attachment.
+    VkSubpassDependency dep{};
+    dep.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dep.dstSubpass = 0;
+    dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep.srcAccessMask = 0;
+    dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     VkRenderPassCreateInfo rp_ci{};
     rp_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     rp_ci.attachmentCount = 1;
     rp_ci.pAttachments = &color_att;
     rp_ci.subpassCount = 1;
     rp_ci.pSubpasses = &subpass;
+    rp_ci.dependencyCount = 1;
+    rp_ci.pDependencies = &dep;
     VKASSERT(vkCreateRenderPass(device_, &rp_ci, nullptr, &render_pass_));
   }
 
@@ -642,9 +694,9 @@ class HelloTriangleApp {
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
     VkPipelineColorBlendAttachmentState color_blend_att{};
-    color_blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                     VK_COLOR_COMPONENT_B_BIT |
-                                     VK_COLOR_COMPONENT_A_BIT;
+    color_blend_att.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     color_blend_att.blendEnable = VK_TRUE;
     color_blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     color_blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -735,7 +787,7 @@ class HelloTriangleApp {
     VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, &cmd_buffer_));
   }
 
-  void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t image_ind) {
+  void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_ind) {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     VKASSERT(vkBeginCommandBuffer(cmd_buf, &begin_info));
@@ -743,7 +795,7 @@ class HelloTriangleApp {
     VkRenderPassBeginInfo rp_info{};
     rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rp_info.renderPass = render_pass_;
-    rp_info.framebuffer = swapchain_fbs_[image_ind];
+    rp_info.framebuffer = swapchain_fbs_[img_ind];
     rp_info.renderArea.offset = {0, 0};
     rp_info.renderArea.extent = swapchain_extent_;
     VkClearValue clear_col = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
@@ -772,7 +824,22 @@ class HelloTriangleApp {
     VKASSERT(vkEndCommandBuffer(cmd_buf));
   }
 
+  void createSyncObjects() {
+    VkSemaphoreCreateInfo sem_ci{};
+    sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &img_sem_));
+    VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &render_sem_));
+
+    VkFenceCreateInfo fence_ci{};
+    fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    VKASSERT(vkCreateFence(device_, &fence_ci, nullptr, &in_flight_fence_));
+  }
+
   void cleanup() {
+    vkDestroySemaphore(device_, img_sem_, nullptr);
+    vkDestroySemaphore(device_, render_sem_, nullptr);
+    vkDestroyFence(device_, in_flight_fence_, nullptr);
     vkDestroyCommandPool(device_, cmd_pool_, nullptr);
     for (auto fb : swapchain_fbs_) {
       vkDestroyFramebuffer(device_, fb, nullptr);
@@ -820,6 +887,9 @@ class HelloTriangleApp {
   std::vector<VkFramebuffer> swapchain_fbs_;
   VkCommandPool cmd_pool_;
   VkCommandBuffer cmd_buffer_;
+  VkSemaphore img_sem_;
+  VkSemaphore render_sem_;
+  VkFence in_flight_fence_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
