@@ -92,6 +92,8 @@ class HelloTriangleApp {
     createRenderPass();
     createGraphicsPipeline();
     createFrameBuffers();
+    createCommandPool();
+    createCommandBuffer();
   }
 
   void mainLoop() {
@@ -616,18 +618,6 @@ class HelloTriangleApp {
     input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_assembly.primitiveRestartEnable = VK_FALSE;
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)swapchain_extent_.width;
-    viewport.height = (float)swapchain_extent_.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = swapchain_extent_;
-
     VkPipelineViewportStateCreateInfo viewport_state{};
     viewport_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -728,7 +718,62 @@ class HelloTriangleApp {
     }
   }
 
+  void createCommandPool() {
+    VkCommandPoolCreateInfo pool_ci{};
+    pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    pool_ci.queueFamilyIndex = q_indices_.gfx_family;
+    VKASSERT(vkCreateCommandPool(device_, &pool_ci, nullptr, &cmd_pool_));
+  }
+
+  void createCommandBuffer() {
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.commandPool = cmd_pool_;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandBufferCount = 1;
+    VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, &cmd_buffer_));
+  }
+
+  void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t image_ind) {
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    VKASSERT(vkBeginCommandBuffer(cmd_buf, &begin_info));
+
+    VkRenderPassBeginInfo rp_info{};
+    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rp_info.renderPass = render_pass_;
+    rp_info.framebuffer = swapchain_fbs_[image_ind];
+    rp_info.renderArea.offset = {0, 0};
+    rp_info.renderArea.extent = swapchain_extent_;
+    VkClearValue clear_col = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    rp_info.clearValueCount = 1;
+    rp_info.pClearValues = &clear_col;
+    vkCmdBeginRenderPass(cmd_buf, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, gfx_pipeline_);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)swapchain_extent_.width;
+    viewport.height = (float)swapchain_extent_.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = swapchain_extent_;
+    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+    vkCmdDraw(cmd_buf, 3, 1, 0, 0);
+    vkCmdEndRenderPass(cmd_buf);
+    VKASSERT(vkEndCommandBuffer(cmd_buf));
+  }
+
   void cleanup() {
+    vkDestroyCommandPool(device_, cmd_pool_, nullptr);
     for (auto fb : swapchain_fbs_) {
       vkDestroyFramebuffer(device_, fb, nullptr);
     }
@@ -773,6 +818,8 @@ class HelloTriangleApp {
   VkPipelineLayout pipeline_layout_;
   VkPipeline gfx_pipeline_;
   std::vector<VkFramebuffer> swapchain_fbs_;
+  VkCommandPool cmd_pool_;
+  VkCommandBuffer cmd_buffer_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
