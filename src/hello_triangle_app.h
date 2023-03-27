@@ -24,6 +24,8 @@ namespace {
 constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
 
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
 const std::vector<const char*> device_extensions = {
@@ -93,7 +95,7 @@ class HelloTriangleApp {
     createGraphicsPipeline();
     createFrameBuffers();
     createCommandPool();
-    createCommandBuffer();
+    createCommandBuffers();
     createSyncObjects();
   }
 
@@ -106,41 +108,45 @@ class HelloTriangleApp {
         break;
       }
       drawFrame();
+      frame_num++;
     }
 
     vkDeviceWaitIdle(device_);
   }
 
   void drawFrame() {
-    vkWaitForFences(device_, 1, &in_flight_fence_, VK_TRUE, UINT64_MAX);
-    VKASSERT(vkResetFences(device_, 1, &in_flight_fence_));
+    int frame = frame_num % MAX_FRAMES_IN_FLIGHT;
+
+    vkWaitForFences(device_, 1, &in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
+    VKASSERT(vkResetFences(device_, 1, &in_flight_fences_[frame]));
 
     uint32_t img_ind = -1;
     vkAcquireNextImageKHR(
-        device_, swapchain_, UINT64_MAX, img_sem_, VK_NULL_HANDLE, &img_ind);
+        device_, swapchain_, UINT64_MAX, img_sems_[frame], VK_NULL_HANDLE,
+        &img_ind);
     ASSERT(img_ind >= 0);
     ASSERT(img_ind < swapchain_images_.size());
 
-    VKASSERT(vkResetCommandBuffer(cmd_buffer_, 0));
-    recordCommandBuffer(cmd_buffer_, img_ind);
+    VKASSERT(vkResetCommandBuffer(cmd_bufs_[frame], 0));
+    recordCommandBuffer(cmd_bufs_[frame], img_ind);
 
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     VkPipelineStageFlags wait_stages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = &img_sem_;
+    submit_info.pWaitSemaphores = &img_sems_[frame];
     submit_info.pWaitDstStageMask = wait_stages;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &cmd_buffer_;
+    submit_info.pCommandBuffers = &cmd_bufs_[frame];
     submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &render_sem_;
-    VKASSERT(vkQueueSubmit(gfx_q_, 1, &submit_info, in_flight_fence_));
+    submit_info.pSignalSemaphores = &render_sems_[frame];
+    VKASSERT(vkQueueSubmit(gfx_q_, 1, &submit_info, in_flight_fences_[frame]));
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &render_sem_;
+    present_info.pWaitSemaphores = &render_sems_[frame];
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &swapchain_;
     present_info.pImageIndices = &img_ind;
@@ -778,13 +784,15 @@ class HelloTriangleApp {
     VKASSERT(vkCreateCommandPool(device_, &pool_ci, nullptr, &cmd_pool_));
   }
 
-  void createCommandBuffer() {
+  void createCommandBuffers() {
+    cmd_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
+
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.commandPool = cmd_pool_;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
-    VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, &cmd_buffer_));
+    alloc_info.commandBufferCount = cmd_bufs_.size();
+    VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, cmd_bufs_.data()));
   }
 
   void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_ind) {
@@ -827,19 +835,28 @@ class HelloTriangleApp {
   void createSyncObjects() {
     VkSemaphoreCreateInfo sem_ci{};
     sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &img_sem_));
-    VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &render_sem_));
 
     VkFenceCreateInfo fence_ci{};
     fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    VKASSERT(vkCreateFence(device_, &fence_ci, nullptr, &in_flight_fence_));
+
+    img_sems_.resize(MAX_FRAMES_IN_FLIGHT);
+    render_sems_.resize(MAX_FRAMES_IN_FLIGHT);
+    in_flight_fences_.resize(MAX_FRAMES_IN_FLIGHT);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &img_sems_[i]));
+      VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &render_sems_[i]));
+      VKASSERT(
+          vkCreateFence(device_, &fence_ci, nullptr, &in_flight_fences_[i]));
+    }
   }
 
   void cleanup() {
-    vkDestroySemaphore(device_, img_sem_, nullptr);
-    vkDestroySemaphore(device_, render_sem_, nullptr);
-    vkDestroyFence(device_, in_flight_fence_, nullptr);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      vkDestroySemaphore(device_, img_sems_[i], nullptr);
+      vkDestroySemaphore(device_, render_sems_[i], nullptr);
+      vkDestroyFence(device_, in_flight_fences_[i], nullptr);
+    }
     vkDestroyCommandPool(device_, cmd_pool_, nullptr);
     for (auto fb : swapchain_fbs_) {
       vkDestroyFramebuffer(device_, fb, nullptr);
@@ -866,6 +883,8 @@ class HelloTriangleApp {
 
   SDL_Window* window_ = nullptr;
 
+  uint64_t frame_num = 0;
+
   VkInstance instance_;
   VkDebugUtilsMessengerEXT dbg_messenger_;
   VkSurfaceKHR surface_;
@@ -886,10 +905,10 @@ class HelloTriangleApp {
   VkPipeline gfx_pipeline_;
   std::vector<VkFramebuffer> swapchain_fbs_;
   VkCommandPool cmd_pool_;
-  VkCommandBuffer cmd_buffer_;
-  VkSemaphore img_sem_;
-  VkSemaphore render_sem_;
-  VkFence in_flight_fence_;
+  std::vector<VkCommandBuffer> cmd_bufs_;
+  std::vector<VkSemaphore> img_sems_;
+  std::vector<VkSemaphore> render_sems_;
+  std::vector<VkFence> in_flight_fences_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
