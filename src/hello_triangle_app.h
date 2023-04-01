@@ -6,6 +6,8 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <set>
@@ -18,6 +20,10 @@ using std::cerr;
 using std::cout;
 using std::endl;
 using std::printf;
+
+using namespace std::chrono_literals;
+using Clock = std::chrono::steady_clock;
+using Time = std::chrono::time_point<Clock>;
 
 namespace {
 
@@ -102,20 +108,51 @@ class HelloTriangleApp {
   void mainLoop() {
     SDL_Event event;
     while (true) {
+      timeTick();
       SDL_PollEvent(&event);
       if (event.type == SDL_WINDOWEVENT &&
           event.window.event == SDL_WINDOWEVENT_CLOSE) {
         break;
       }
       drawFrame();
-      frame_num++;
+      frame_num_++;
     }
 
     vkDeviceWaitIdle(device_);
   }
 
+  using float_ms = std::chrono::duration<float, std::ratio<1, 1000>>;
+
+  void timeTick() {
+    Time now = Clock::now();
+    if (frame_num_ == 0) {
+      last_frame_time_ = now;
+    }
+
+    auto time_delta = now - last_frame_time_;
+    time_delta_ms_ = float_ms(time_delta).count();
+    last_frame_time_ = now;
+
+    checkFps(now);
+  }
+
+  void checkFps(Time now) {
+    if (frame_num_ == 0) {
+      next_fps_time_ = now + 1s;
+      return;
+    }
+
+    if (now > next_fps_time_) {
+      int fps = frame_num_ - last_fps_frame_;
+      printf("fps: %d\n", fps);
+
+      next_fps_time_ = now + 1s;
+      last_fps_frame_ = frame_num_;
+    }
+  }
+
   void drawFrame() {
-    int frame = frame_num % MAX_FRAMES_IN_FLIGHT;
+    int frame = frame_num_ % MAX_FRAMES_IN_FLIGHT;
 
     vkWaitForFences(device_, 1, &in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
     VKASSERT(vkResetFences(device_, 1, &in_flight_fences_[frame]));
@@ -795,6 +832,17 @@ class HelloTriangleApp {
     VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, cmd_bufs_.data()));
   }
 
+  float getClearValue() {
+    constexpr float seq_dur_ms = 5000;
+    static float seq = 0;
+    seq += time_delta_ms_ / seq_dur_ms;
+    while (seq > 1) {
+      seq -= 1;
+    }
+    // return seq < 0.5f ? seq : (1.0f - seq); // linear bounce
+    return cos(seq * 2.0f * M_PI) / 2.0f + 0.5f;
+  }
+
   void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_ind) {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -806,7 +854,8 @@ class HelloTriangleApp {
     rp_info.framebuffer = swapchain_fbs_[img_ind];
     rp_info.renderArea.offset = {0, 0};
     rp_info.renderArea.extent = swapchain_extent_;
-    VkClearValue clear_col = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    float val = getClearValue();
+    VkClearValue clear_col = {{{val, val, val, 1.0f}}};
     rp_info.clearValueCount = 1;
     rp_info.pClearValues = &clear_col;
     vkCmdBeginRenderPass(cmd_buf, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
@@ -883,7 +932,14 @@ class HelloTriangleApp {
 
   SDL_Window* window_ = nullptr;
 
-  uint64_t frame_num = 0;
+  uint64_t frame_num_ = 0;
+  Time last_frame_time_;
+  // Time in ms since the last draw, as a float
+  float time_delta_ms_ = 0.0f;
+
+  // Used to calculate FPS
+  uint64_t last_fps_frame_ = 0;
+  Time next_fps_time_;
 
   VkInstance instance_;
   VkDebugUtilsMessengerEXT dbg_messenger_;
