@@ -523,10 +523,10 @@ class HelloTriangleApp {
 
   VkPresentModeKHR chooseSwapPresentMode(
       const std::vector<VkPresentModeKHR>& present_modes) {
-    if (std::find(
-            present_modes.begin(), present_modes.end(),
-            VK_PRESENT_MODE_MAILBOX_KHR) != present_modes.end()) {
-      return VK_PRESENT_MODE_MAILBOX_KHR;
+    constexpr VkPresentModeKHR preferred_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    if (std::find(present_modes.begin(), present_modes.end(), preferred_mode) !=
+        present_modes.end()) {
+      return preferred_mode;
     }
 
     return VK_PRESENT_MODE_FIFO_KHR;
