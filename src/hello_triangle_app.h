@@ -342,11 +342,25 @@ class HelloTriangleApp {
     vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
 
     for (const auto& device : devices) {
-      if (isDeviceSuitable(device)) {
-        physical_device_ = device;
-        break;
-      }
+    QueueFamilyIndices indices = findQueueFamilies(device);
+    if (!indices.isComplete()) {
+        continue;
     }
+    if (!checkDeviceExtensionSupport(device)) {
+        continue;
+    }
+      SwapchainSupportDetails swapchain_support = querySwapchainSupport(device);
+    if (swapchain_support.formats.empty() ||
+        swapchain_support.present_modes.empty()) {
+        continue;
+    }
+
+      physical_device_ = device;
+    q_indices_ = indices;
+    swapchain_support_ = swapchain_support;
+      break;
+    }
+
     ASSERT(physical_device_);
   }
 
@@ -358,27 +372,6 @@ class HelloTriangleApp {
       return gfx_family != -1 && present_family != -1;
     }
   };
-
-  bool isDeviceSuitable(VkPhysicalDevice device) {
-    QueueFamilyIndices indices = findQueueFamilies(device);
-    if (!indices.isComplete()) {
-      return false;
-    }
-    if (!checkDeviceExtensionSupport(device)) {
-      return false;
-    }
-    SwapchainSupportDetails swapchain_support = querySwapChainSupport(device);
-    if (swapchain_support.formats.empty() ||
-        swapchain_support.present_modes.empty()) {
-      return false;
-    }
-
-    // Cache these because we'll use this device.
-    q_indices_ = indices;
-    swapchain_support_ = swapchain_support;
-
-    return true;
-  }
 
   QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
     uint32_t q_family_count = 0;
