@@ -5,6 +5,7 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -62,6 +63,44 @@ static std::vector<char> readFile(const std::string& filename) {
 }
 
 }  // namespace
+
+using Eigen::Vector2f;
+using Eigen::Vector3f;
+
+struct Vertex {
+  Vector2f pos;
+  Vector3f color;
+
+  static VkVertexInputBindingDescription getBindingDesc() {
+    VkVertexInputBindingDescription binding{};
+    binding.binding = 0;
+    binding.stride = sizeof(Vertex);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    return binding;
+  }
+
+  static std::array<VkVertexInputAttributeDescription, 2> getAttrDescs() {
+    std::array<VkVertexInputAttributeDescription, 2> attrs{};
+    attrs[0].binding = 0;
+    attrs[0].location = 0;
+    attrs[0].format = VK_FORMAT_R32G32_SFLOAT;  // Vector2f
+    attrs[0].offset = offsetof(Vertex, pos);
+
+    attrs[1].binding = 0;
+    attrs[1].location = 1;
+    attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;  // Vector3f
+    attrs[1].offset = offsetof(Vertex, color);
+
+    return attrs;
+  }
+};
+
+// RGB triangle
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
 class HelloTriangleApp {
  public:
@@ -426,7 +465,7 @@ class HelloTriangleApp {
     ASSERT(physical_device_);
 
 #ifdef DEBUG
-    printf("Supported formats (%d)\n", swapchain_support_.formats.size());
+    printf("Supported formats (%zd)\n", swapchain_support_.formats.size());
     for (const auto& format : swapchain_support_.formats) {
       printf("  %d", format.format);
     }
@@ -754,13 +793,16 @@ class HelloTriangleApp {
     dyn_state.dynamicStateCount = dyn_states.size();
     dyn_state.pDynamicStates = dyn_states.data();
 
+    auto binding = Vertex::getBindingDesc();
+    auto attrs = Vertex::getAttrDescs();
+
     VkPipelineVertexInputStateCreateInfo vert_in_info{};
     vert_in_info.sType =
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vert_in_info.vertexBindingDescriptionCount = 0;
-    vert_in_info.pVertexBindingDescriptions = nullptr;
-    vert_in_info.vertexAttributeDescriptionCount = 0;
-    vert_in_info.pVertexAttributeDescriptions = nullptr;
+    vert_in_info.vertexBindingDescriptionCount = 1;
+    vert_in_info.pVertexBindingDescriptions = &binding;
+    vert_in_info.vertexAttributeDescriptionCount = attrs.size();
+    vert_in_info.pVertexAttributeDescriptions = attrs.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly{};
     input_assembly.sType =
