@@ -72,11 +72,36 @@ class HelloTriangleApp {
     cleanup();
   }
 
+  // Apparently this can be called on another thread by the OS. That could
+  // potentiall cause problems in the future.
+  static int SdlEventWatcher(void* data, SDL_Event* event) {
+    if (event->type == SDL_WINDOWEVENT) {
+      if (event->window.event == SDL_WINDOWEVENT_RESIZED) {
+        reinterpret_cast<HelloTriangleApp*>(data)->WindowResized();
+      } else if (event->window.event == SDL_WINDOWEVENT_MOVED) {
+        reinterpret_cast<HelloTriangleApp*>(data)->WindowMoved();
+      }
+    }
+    return 0;
+  }
+
+  void WindowResized() {
+    window_resized_ = true;
+    // This might not be correct, but we'll check the windows size again in
+    // recreateSwapchain().
+    empty_window_ = false;
+    update();
+  }
+
+  void WindowMoved() {
+    update();
+  }
+
  private:
   void initWindow() {
     ASSERT(SDL_Init(SDL_INIT_VIDEO) == 0);
 
-    SDL_WindowFlags window_flags = SDL_WINDOW_VULKAN;
+    uint32_t window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
     window_ = SDL_CreateWindow(
         "Vulkan Tutorial", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WIDTH, HEIGHT, window_flags);
@@ -85,6 +110,7 @@ class HelloTriangleApp {
       cerr << error << endl;
       ASSERT(false);
     }
+    SDL_AddEventWatch(SdlEventWatcher, this);
   }
 
   void initVulkan() {
@@ -95,7 +121,7 @@ class HelloTriangleApp {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
-    createSwapChain();
+    createSwapchain();
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
@@ -106,19 +132,41 @@ class HelloTriangleApp {
   }
 
   void mainLoop() {
-    SDL_Event event;
     while (true) {
-      timeTick();
-      SDL_PollEvent(&event);
-      if (event.type == SDL_WINDOWEVENT &&
-          event.window.event == SDL_WINDOWEVENT_CLOSE) {
+      processEvents();
+      if (quit_) {
         break;
       }
-      drawFrame();
-      frame_num_++;
+      update();
     }
 
     vkDeviceWaitIdle(device_);
+  }
+
+  void processEvents() {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_WINDOWEVENT) {
+        if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+          quit_ = true;
+          break;
+        } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+          window_resized_ = true;
+        } else if (event.window.event == SDL_WINDOWEVENT_MINIMIZED) {
+          window_minimized_ = true;
+        } else if (event.window.event == SDL_WINDOWEVENT_RESTORED) {
+          window_minimized_ = false;
+        }
+      }
+    }
+  }
+
+  void update() {
+    timeTick();
+    if (!window_minimized_ && !empty_window_) {
+      drawFrame();
+      frame_num_++;
+    }
   }
 
   using float_ms = std::chrono::duration<float, std::ratio<1, 1000>>;
@@ -155,14 +203,21 @@ class HelloTriangleApp {
     int frame = frame_num_ % MAX_FRAMES_IN_FLIGHT;
 
     vkWaitForFences(device_, 1, &in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
-    VKASSERT(vkResetFences(device_, 1, &in_flight_fences_[frame]));
 
     uint32_t img_ind = -1;
-    vkAcquireNextImageKHR(
+    VkResult result = vkAcquireNextImageKHR(
         device_, swapchain_, UINT64_MAX, img_sems_[frame], VK_NULL_HANDLE,
         &img_ind);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+      recreateSwapchain();
+      return;
+    }
+    ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR);
     ASSERT(img_ind >= 0);
     ASSERT(img_ind < swapchain_images_.size());
+
+    // Only reset the fence if we're submitting work.
+    VKASSERT(vkResetFences(device_, 1, &in_flight_fences_[frame]));
 
     VKASSERT(vkResetCommandBuffer(cmd_bufs_[frame], 0));
     recordCommandBuffer(cmd_bufs_[frame], img_ind);
@@ -187,7 +242,15 @@ class HelloTriangleApp {
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &swapchain_;
     present_info.pImageIndices = &img_ind;
-    vkQueuePresentKHR(present_q_, &present_info);
+
+    result = vkQueuePresentKHR(present_q_, &present_info);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
+        window_resized_) {
+      window_resized_ = false;
+      recreateSwapchain();
+    } else {
+      VKASSERT(result);
+    }
   }
 
   void createInstance() {
@@ -342,26 +405,33 @@ class HelloTriangleApp {
     vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
 
     for (const auto& device : devices) {
-    QueueFamilyIndices indices = findQueueFamilies(device);
-    if (!indices.isComplete()) {
+      QueueFamilyIndices indices = findQueueFamilies(device);
+      if (!indices.isComplete()) {
         continue;
-    }
-    if (!checkDeviceExtensionSupport(device)) {
+      }
+      if (!checkDeviceExtensionSupport(device)) {
         continue;
-    }
+      }
       SwapchainSupportDetails swapchain_support = querySwapchainSupport(device);
-    if (swapchain_support.formats.empty() ||
-        swapchain_support.present_modes.empty()) {
+      if (swapchain_support.formats.empty() ||
+          swapchain_support.present_modes.empty()) {
         continue;
-    }
+      }
 
       physical_device_ = device;
-    q_indices_ = indices;
-    swapchain_support_ = swapchain_support;
+      q_indices_ = indices;
+      swapchain_support_ = swapchain_support;
       break;
     }
-
     ASSERT(physical_device_);
+
+#ifdef DEBUG
+    printf("Supported formats (%d)\n", swapchain_support_.formats.size());
+    for (const auto& format : swapchain_support_.formats) {
+      printf("  %d", format.format);
+    }
+    printf("\n");
+#endif
   }
 
   struct QueueFamilyIndices {
@@ -433,7 +503,7 @@ class HelloTriangleApp {
     std::vector<VkPresentModeKHR> present_modes;
   };
 
-  SwapchainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+  SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) {
     SwapchainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.caps);
     uint32_t format_count = 0;
@@ -452,14 +522,6 @@ class HelloTriangleApp {
       vkGetPhysicalDeviceSurfacePresentModesKHR(
           device, surface_, &present_mode_count, details.present_modes.data());
     }
-
-#ifdef DEBUG
-    printf("Supported formats (%d)\n", format_count);
-    for (const auto& format : details.formats) {
-      printf("  %d", format.format);
-    }
-    printf("\n");
-#endif
 
     return details;
   }
@@ -543,7 +605,7 @@ class HelloTriangleApp {
     }
   }
 
-  void createSwapChain() {
+  void createSwapchain() {
     auto format = chooseSwapSurfaceFormat(swapchain_support_.formats);
     auto present_mode = chooseSwapPresentMode(swapchain_support_.present_modes);
     auto extent = chooseSwapExtent(swapchain_support_.caps);
@@ -893,23 +955,51 @@ class HelloTriangleApp {
     }
   }
 
+  void recreateSwapchain() {
+    int width = 0;
+    int height = 0;
+    SDL_GL_GetDrawableSize(window_, &width, &height);
+    if (width == 0 || height == 0) {
+      empty_window_ = true;
+      return;
+    }
+
+    if (swapchain_extent_.width == width &&
+        swapchain_extent_.height == height) {
+      return;
+    }
+
+    vkDeviceWaitIdle(device_);
+
+    cleanupSwapchain();
+
+    swapchain_support_ = querySwapchainSupport(physical_device_);
+    createSwapchain();
+    createImageViews();
+    createFrameBuffers();
+  }
+
+  void cleanupSwapchain() {
+    for (auto fb : swapchain_fbs_) {
+      vkDestroyFramebuffer(device_, fb, nullptr);
+    }
+    for (auto image_view : swapchain_views_) {
+      vkDestroyImageView(device_, image_view, nullptr);
+    }
+    vkDestroySwapchainKHR(device_, swapchain_, nullptr);
+  }
+
   void cleanup() {
+    cleanupSwapchain();
+    vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
+    vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+    vkDestroyRenderPass(device_, render_pass_, nullptr);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
       vkDestroySemaphore(device_, img_sems_[i], nullptr);
       vkDestroySemaphore(device_, render_sems_[i], nullptr);
       vkDestroyFence(device_, in_flight_fences_[i], nullptr);
     }
     vkDestroyCommandPool(device_, cmd_pool_, nullptr);
-    for (auto fb : swapchain_fbs_) {
-      vkDestroyFramebuffer(device_, fb, nullptr);
-    }
-    vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
-    vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
-    vkDestroyRenderPass(device_, render_pass_, nullptr);
-    for (auto image_view : swapchain_views_) {
-      vkDestroyImageView(device_, image_view, nullptr);
-    }
-    vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     vkDestroyDevice(device_, nullptr);
     if (enable_validation_layers_) {
       auto destroy_dbg_fn = LOAD_VK_FN(vkDestroyDebugUtilsMessengerEXT);
@@ -924,6 +1014,11 @@ class HelloTriangleApp {
   }
 
   SDL_Window* window_ = nullptr;
+
+  bool quit_ = false;
+  bool window_resized_ = false;
+  bool window_minimized_ = false;
+  bool empty_window_ = false;
 
   uint64_t frame_num_ = 0;
   Time last_frame_time_;
