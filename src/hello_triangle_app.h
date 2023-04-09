@@ -933,34 +933,24 @@ class HelloTriangleApp {
   }
 
   void createVertexBuffer() {
-    VkDeviceSize vert_size = sizeof(Vertex) * vertices.size();
-
-    VkBuffer staging_buf;
-    VkDeviceMemory staging_buf_mem;
-    createBuffer(
-        vert_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        staging_buf, staging_buf_mem);
-
-    void* data;
-    VKASSERT(vkMapMemory(device_, staging_buf_mem, 0, vert_size, 0, &data));
-    memcpy(data, vertices.data(), (size_t)vert_size);
-    vkUnmapMemory(device_, staging_buf_mem);
-
-    createBuffer(
-        vert_size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vert_buf_, vert_buf_mem_);
-    copyBuffer(staging_buf, vert_buf_, vert_size);
-
-    vkDestroyBuffer(device_, staging_buf, nullptr);
-    vkFreeMemory(device_, staging_buf_mem, nullptr);
+    VkDeviceSize size = sizeof(Vertex) * vertices.size();
+    stageBuffer(
+        size, (void*)vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        vert_buf_, vert_buf_mem_);
   }
 
   void createIndexBuffer() {
     VkDeviceSize size = sizeof(uint16_t) * indices.size();
+    stageBuffer(
+        size, (void*)indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, ind_buf_,
+        ind_buf_mem_);
+  }
 
+  // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
+  // from the staging_buf to dst_buf.
+  void stageBuffer(
+      VkDeviceSize size, void* data, VkBufferUsageFlags usage,
+      VkBuffer& dst_buf, VkDeviceMemory& dst_buf_mem) {
     VkBuffer staging_buf;
     VkDeviceMemory staging_buf_mem;
     createBuffer(
@@ -969,16 +959,15 @@ class HelloTriangleApp {
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         staging_buf, staging_buf_mem);
 
-    void* data;
-    VKASSERT(vkMapMemory(device_, staging_buf_mem, 0, size, 0, &data));
-    memcpy(data, indices.data(), (size_t)size);
+    void* staging_data;
+    VKASSERT(vkMapMemory(device_, staging_buf_mem, 0, size, 0, &staging_data));
+    memcpy(staging_data, data, (size_t)size);
     vkUnmapMemory(device_, staging_buf_mem);
 
     createBuffer(
-        size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, ind_buf_, ind_buf_mem_);
-    copyBuffer(staging_buf, ind_buf_, size);
+        size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dst_buf, dst_buf_mem);
+    copyBuffer(staging_buf, dst_buf, size);
 
     vkDestroyBuffer(device_, staging_buf, nullptr);
     vkFreeMemory(device_, staging_buf_mem, nullptr);
