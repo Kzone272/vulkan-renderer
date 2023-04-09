@@ -925,29 +925,80 @@ class HelloTriangleApp {
   }
 
   void createVertexBuffer() {
+    VkDeviceSize vert_size = sizeof(Vertex) * vertices.size();
+
+    VkBuffer staging_buf;
+    VkDeviceMemory staging_buf_mem;
+    createBuffer(
+        vert_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buf, staging_buf_mem);
+
+    void* data;
+    VKASSERT(vkMapMemory(device_, staging_buf_mem, 0, vert_size, 0, &data));
+    memcpy(data, vertices.data(), (size_t)vert_size);
+    vkUnmapMemory(device_, staging_buf_mem);
+
+    createBuffer(
+        vert_size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vert_buf_, vert_buf_mem_);
+    copyBuffer(staging_buf, vert_buf_, vert_size);
+
+    vkDestroyBuffer(device_, staging_buf, nullptr);
+    vkFreeMemory(device_, staging_buf_mem, nullptr);
+  }
+
+  void copyBuffer(VkBuffer src_buf, VkBuffer dst_buf, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandPool = cmd_pool_;
+    alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer cmd_buf;
+    VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, &cmd_buf));
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VKASSERT(vkBeginCommandBuffer(cmd_buf, &begin_info));
+
+    VkBufferCopy copy_region{};
+    copy_region.size = size;
+    vkCmdCopyBuffer(cmd_buf, src_buf, dst_buf, 1, &copy_region);
+    VKASSERT(vkEndCommandBuffer(cmd_buf));
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd_buf;
+    VKASSERT(vkQueueSubmit(gfx_q_, 1, &submit, VK_NULL_HANDLE));
+    VKASSERT(vkQueueWaitIdle(gfx_q_));
+
+    vkFreeCommandBuffers(device_, cmd_pool_, 1, &cmd_buf);
+  }
+
+  void createBuffer(
+      VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags props,
+      VkBuffer& buf, VkDeviceMemory& buf_mem) {
     VkBufferCreateInfo buffer_ci{};
     buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_ci.size = sizeof(Vertex) * vertices.size();
-    buffer_ci.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    buffer_ci.size = size;
+    buffer_ci.usage = usage;
     buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    VKASSERT(vkCreateBuffer(device_, &buffer_ci, nullptr, &vert_buf_));
+    VKASSERT(vkCreateBuffer(device_, &buffer_ci, nullptr, &buf));
 
     VkMemoryRequirements mem_reqs;
-    vkGetBufferMemoryRequirements(device_, vert_buf_, &mem_reqs);
+    vkGetBufferMemoryRequirements(device_, buf, &mem_reqs);
 
     VkMemoryAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = mem_reqs.size;
-    alloc_info.memoryTypeIndex = findMemoryType(
-        mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &vert_buf_mem_));
-    VKASSERT(vkBindBufferMemory(device_, vert_buf_, vert_buf_mem_, 0));
-
-    void* data;
-    vkMapMemory(device_, vert_buf_mem_, 0, buffer_ci.size, 0, &data);
-    memcpy(data, vertices.data(), (size_t)buffer_ci.size);
-    vkUnmapMemory(device_, vert_buf_mem_);
+    alloc_info.memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props);
+    VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &buf_mem));
+    VKASSERT(vkBindBufferMemory(device_, buf, buf_mem, 0));
   }
 
   uint32_t findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags props) {
