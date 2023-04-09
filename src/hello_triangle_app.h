@@ -97,14 +97,21 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-    // RGB triangle
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    // CMY triangle
-    {{0.2f, -0.3f}, {0.0f, 1.0f, 1.0f}},
-    {{0.6f, -0.3f}, {1.0f, 0.0f, 1.0f}},
+    // RGB square
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}},
+    // CMY square
+    {{0.4f, -0.3f}, {0.0f, 1.0f, 1.0f}},
+    {{0.8f, -0.3f}, {1.0f, 0.0f, 1.0f}},
     {{0.4f, 0.2f}, {1.0f, 1.0f, 0.0f}},
+    {{0.8f, 0.2f}, {1.0f, 1.0f, 1.0f}},
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0,  // RGB square
+    4, 5, 6, 6, 5, 7   // CMY square
 };
 
 class HelloTriangleApp {
@@ -172,6 +179,7 @@ class HelloTriangleApp {
     createFrameBuffers();
     createCommandPool();
     createVertexBuffer();
+    createIndexBuffer();
     createCommandBuffers();
     createSyncObjects();
   }
@@ -950,6 +958,32 @@ class HelloTriangleApp {
     vkFreeMemory(device_, staging_buf_mem, nullptr);
   }
 
+  void createIndexBuffer() {
+    VkDeviceSize size = sizeof(uint16_t) * indices.size();
+
+    VkBuffer staging_buf;
+    VkDeviceMemory staging_buf_mem;
+    createBuffer(
+        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buf, staging_buf_mem);
+
+    void* data;
+    VKASSERT(vkMapMemory(device_, staging_buf_mem, 0, size, 0, &data));
+    memcpy(data, indices.data(), (size_t)size);
+    vkUnmapMemory(device_, staging_buf_mem);
+
+    createBuffer(
+        size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, ind_buf_, ind_buf_mem_);
+    copyBuffer(staging_buf, ind_buf_, size);
+
+    vkDestroyBuffer(device_, staging_buf, nullptr);
+    vkFreeMemory(device_, staging_buf_mem, nullptr);
+  }
+
   void copyBuffer(VkBuffer src_buf, VkBuffer dst_buf, VkDeviceSize size) {
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1071,8 +1105,9 @@ class HelloTriangleApp {
 
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, &vert_buf_, offsets);
+    vkCmdBindIndexBuffer(cmd_buf, ind_buf_, 0, VK_INDEX_TYPE_UINT16);
 
-    vkCmdDraw(cmd_buf, vertices.size(), 1, 0, 0);
+    vkCmdDrawIndexed(cmd_buf, indices.size(), 1, 0, 0, 0);
     vkCmdEndRenderPass(cmd_buf);
     VKASSERT(vkEndCommandBuffer(cmd_buf));
   }
@@ -1135,6 +1170,8 @@ class HelloTriangleApp {
 
     vkDestroyBuffer(device_, vert_buf_, nullptr);
     vkFreeMemory(device_, vert_buf_mem_, nullptr);
+    vkDestroyBuffer(device_, ind_buf_, nullptr);
+    vkFreeMemory(device_, ind_buf_mem_, nullptr);
 
     vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
@@ -1200,6 +1237,8 @@ class HelloTriangleApp {
   std::vector<VkFence> in_flight_fences_;
   VkBuffer vert_buf_;
   VkDeviceMemory vert_buf_mem_;
+  VkBuffer ind_buf_;
+  VkDeviceMemory ind_buf_mem_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
