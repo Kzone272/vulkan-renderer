@@ -10,7 +10,9 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -48,7 +50,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageTypeFlagsEXT msg_type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
     void* user_data) {
-  printf("validation layer: %s\n", callback_data->pMessage);
+  printf("dbg_layer: %s\n\n", callback_data->pMessage);
   return VK_FALSE;
 }
 
@@ -65,6 +67,7 @@ static std::vector<char> readFile(const std::string& filename) {
 
 }  // namespace
 
+using glm::mat4;
 using glm::vec2;
 using glm::vec3;
 
@@ -113,6 +116,12 @@ const std::vector<Vertex> vertices = {
 const std::vector<uint16_t> indices = {
     0, 1, 2, 2, 3, 0,  // RGB square
     4, 5, 6, 6, 5, 7   // CMY square
+};
+
+struct UniformBufferObject {
+  mat4 model;
+  mat4 view;
+  mat4 proj;
 };
 
 class HelloTriangleApp {
@@ -176,11 +185,13 @@ class HelloTriangleApp {
     createSwapchain();
     createImageViews();
     createRenderPass();
+    createDescriptorSetLayout();
     createGraphicsPipeline();
     createFrameBuffers();
     createCommandPool();
     createVertexBuffer();
     createIndexBuffer();
+    createUniformBuffers();
     createCommandBuffers();
     createSyncObjects();
   }
@@ -217,6 +228,7 @@ class HelloTriangleApp {
 
   void update() {
     timeTick();
+    animate();
     if (!window_minimized_ && !empty_window_) {
       drawFrame();
       frame_num_++;
@@ -253,6 +265,54 @@ class HelloTriangleApp {
     }
   }
 
+  struct AnimationState {
+    float clear_val = 0.0f;
+    float model_rot = 0.0f;
+  };
+
+  void animate() {
+    anim_.clear_val = updateClearValue();
+    anim_.model_rot = updateModelRotation();
+  }
+
+  float updateClearValue() {
+    constexpr float seq_dur_ms = 5000;
+    static float seq = 0;
+    seq += time_delta_ms_ / seq_dur_ms;
+    while (seq > 1) {
+      seq -= 1;
+    }
+    // return seq < 0.5f ? seq : (1.0f - seq); // linear bounce
+    return cos(seq * 2.0f * M_PI) / 2.0f + 0.5f;
+  }
+
+  float updateModelRotation() {
+    constexpr float seq_dur_ms = 4000;
+    constexpr float total_rot = 360;
+    static float seq = 0;
+    seq += time_delta_ms_ / seq_dur_ms;
+    while (seq > 1) {
+      seq -= 1;
+    }
+    return seq * total_rot;
+  }
+
+  void updateUniformBuffer() {
+    auto& buf = uniform_bufs_[frame_num_ % MAX_FRAMES_IN_FLIGHT];
+
+    UniformBufferObject ubo;
+    ubo.model =
+        glm::rotate(mat4(1), glm::radians(anim_.model_rot), vec3(0, 0, 1));
+    ubo.view = glm::lookAt(vec3(2, 2, -2), vec3(0), vec3(0, 1, 0));
+    ubo.proj = glm::perspectiveFov(
+        glm::radians(90.0f), (float)swapchain_extent_.width,
+        (float)swapchain_extent_.height, 0.1f, 100.0f);
+    // Invert y-axis because Vulkan is opposite GL.
+    ubo.proj[1][1] *= -1;
+
+    memcpy(buf.buf_mapped, &ubo, sizeof(ubo));
+  }
+
   void drawFrame() {
     int frame = frame_num_ % MAX_FRAMES_IN_FLIGHT;
 
@@ -272,6 +332,8 @@ class HelloTriangleApp {
 
     // Only reset the fence if we're submitting work.
     VKASSERT(vkResetFences(device_, 1, &in_flight_fences_[frame]));
+
+    updateUniformBuffer();
 
     VKASSERT(vkResetCommandBuffer(cmd_bufs_[frame], 0));
     recordCommandBuffer(cmd_bufs_[frame], img_ind);
@@ -775,6 +837,21 @@ class HelloTriangleApp {
     VKASSERT(vkCreateRenderPass(device_, &rp_ci, nullptr, &render_pass_));
   }
 
+  void createDescriptorSetLayout() {
+    VkDescriptorSetLayoutBinding ubo_binding{};
+    ubo_binding.binding = 0;
+    ubo_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubo_binding.descriptorCount = 1;
+    ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layout_ci{};
+    layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_ci.bindingCount = 1;
+    layout_ci.pBindings = &ubo_binding;
+    VKASSERT(vkCreateDescriptorSetLayout(
+        device_, &layout_ci, nullptr, &desc_set_layout_));
+  }
+
   void createGraphicsPipeline() {
     auto vert_shader_code = readFile("shaders/shader.vert.spv");
     auto frag_shader_code = readFile("shaders/shader.frag.spv");
@@ -868,8 +945,8 @@ class HelloTriangleApp {
 
     VkPipelineLayoutCreateInfo pipeline_layout_ci{};
     pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_ci.setLayoutCount = 0;
-    pipeline_layout_ci.pushConstantRangeCount = 0;
+    pipeline_layout_ci.setLayoutCount = 1;
+    pipeline_layout_ci.pSetLayouts = &desc_set_layout_;
 
     VKASSERT(vkCreatePipelineLayout(
         device_, &pipeline_layout_ci, nullptr, &pipeline_layout_));
@@ -945,6 +1022,21 @@ class HelloTriangleApp {
     stageBuffer(
         size, (void*)indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, ind_buf_,
         ind_buf_mem_);
+  }
+
+  void createUniformBuffers() {
+    VkDeviceSize buf_size = sizeof(UniformBufferObject);
+    uniform_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      createBuffer(
+          buf_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+          uniform_bufs_[i].buf, uniform_bufs_[i].buf_mem);
+      VKASSERT(vkMapMemory(
+          device_, uniform_bufs_[i].buf_mem, 0, buf_size, 0,
+          &uniform_bufs_[i].buf_mapped));
+    }
   }
 
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
@@ -1049,17 +1141,6 @@ class HelloTriangleApp {
     VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, cmd_bufs_.data()));
   }
 
-  float getClearValue() {
-    constexpr float seq_dur_ms = 5000;
-    static float seq = 0;
-    seq += time_delta_ms_ / seq_dur_ms;
-    while (seq > 1) {
-      seq -= 1;
-    }
-    // return seq < 0.5f ? seq : (1.0f - seq); // linear bounce
-    return cos(seq * 2.0f * M_PI) / 2.0f + 0.5f;
-  }
-
   void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_ind) {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1071,7 +1152,7 @@ class HelloTriangleApp {
     rp_info.framebuffer = swapchain_fbs_[img_ind];
     rp_info.renderArea.offset = {0, 0};
     rp_info.renderArea.extent = swapchain_extent_;
-    float val = getClearValue();
+    float val = anim_.clear_val;
     VkClearValue clear_col = {{{val, val, val, 1.0f}}};
     rp_info.clearValueCount = 1;
     rp_info.pClearValues = &clear_col;
@@ -1163,6 +1244,13 @@ class HelloTriangleApp {
     vkDestroyBuffer(device_, ind_buf_, nullptr);
     vkFreeMemory(device_, ind_buf_mem_, nullptr);
 
+    for (auto& buf_state : uniform_bufs_) {
+      vkDestroyBuffer(device_, buf_state.buf, nullptr);
+      vkFreeMemory(device_, buf_state.buf_mem, nullptr);
+      buf_state.buf_mapped = nullptr;  // paranoia
+    }
+
+    vkDestroyDescriptorSetLayout(device_, desc_set_layout_, nullptr);
     vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
     vkDestroyRenderPass(device_, render_pass_, nullptr);
@@ -1201,6 +1289,8 @@ class HelloTriangleApp {
   uint64_t last_fps_frame_ = 0;
   Time next_fps_time_;
 
+  AnimationState anim_;
+
   VkInstance instance_;
   VkDebugUtilsMessengerEXT dbg_messenger_;
   VkSurfaceKHR surface_;
@@ -1217,6 +1307,7 @@ class HelloTriangleApp {
   VkExtent2D swapchain_extent_;
   std::vector<VkImageView> swapchain_views_;
   VkRenderPass render_pass_;
+  VkDescriptorSetLayout desc_set_layout_;
   VkPipelineLayout pipeline_layout_;
   VkPipeline gfx_pipeline_;
   std::vector<VkFramebuffer> swapchain_fbs_;
@@ -1229,6 +1320,13 @@ class HelloTriangleApp {
   VkDeviceMemory vert_buf_mem_;
   VkBuffer ind_buf_;
   VkDeviceMemory ind_buf_mem_;
+
+  struct UniformBufferState {
+    VkBuffer buf;
+    VkDeviceMemory buf_mem;
+    void* buf_mapped;
+  };
+  std::vector<UniformBufferState> uniform_bufs_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
