@@ -5,11 +5,12 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
-#include <Eigen/Core>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -64,12 +65,12 @@ static std::vector<char> readFile(const std::string& filename) {
 
 }  // namespace
 
-using Eigen::Vector2f;
-using Eigen::Vector3f;
+using glm::vec2;
+using glm::vec3;
 
 struct Vertex {
-  Vector2f pos;
-  Vector3f color;
+  vec2 pos;
+  vec3 color;
 
   static VkVertexInputBindingDescription getBindingDesc() {
     VkVertexInputBindingDescription binding{};
@@ -84,12 +85,12 @@ struct Vertex {
     std::array<VkVertexInputAttributeDescription, 2> attrs{};
     attrs[0].binding = 0;
     attrs[0].location = 0;
-    attrs[0].format = VK_FORMAT_R32G32_SFLOAT;  // Vector2f
+    attrs[0].format = VK_FORMAT_R32G32_SFLOAT;  // vec2
     attrs[0].offset = offsetof(Vertex, pos);
 
     attrs[1].binding = 0;
     attrs[1].location = 1;
-    attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;  // Vector3f
+    attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;  // vec3
     attrs[1].offset = offsetof(Vertex, color);
 
     return attrs;

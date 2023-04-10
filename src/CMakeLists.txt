@@ -10,12 +10,12 @@ add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
   ${SDL2_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS}
   ${Vulkan_INCLUDE_DIRS}
 )
 
 target_link_libraries(main PRIVATE
   SDL2::SDL2
+  glm::glm
   ${Vulkan_LIBRARIES}
 )
 
@@ -29,12 +29,12 @@ target_compile_features(setup PRIVATE cxx_std_17)
 
 target_include_directories(setup PRIVATE
   ${SDL2_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS}
   ${Vulkan_INCLUDE_DIRS}
 )
 
 target_link_libraries(setup PRIVATE
   SDL2::SDL2
+  glm::glm
   ${Vulkan_LIBRARIES}
 )
 
