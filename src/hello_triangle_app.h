@@ -11,6 +11,8 @@
 #include <cmath>
 #include <fstream>
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_LEFT_HANDED
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
@@ -109,8 +111,8 @@ const std::vector<Vertex> vertices = {
     // CMY square
     {{0.4f, -0.3f}, {0.0f, 1.0f, 1.0f}},
     {{0.8f, -0.3f}, {1.0f, 0.0f, 1.0f}},
-    {{0.4f, 0.2f}, {1.0f, 1.0f, 0.0f}},
-    {{0.8f, 0.2f}, {1.0f, 1.0f, 1.0f}},
+    {{0.4f, 0.1f}, {1.0f, 1.0f, 0.0f}},
+    {{0.8f, 0.1f}, {1.0f, 1.0f, 1.0f}},
 };
 
 const std::vector<uint16_t> indices = {
@@ -192,6 +194,8 @@ class HelloTriangleApp {
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
   }
@@ -302,11 +306,13 @@ class HelloTriangleApp {
 
     UniformBufferObject ubo;
     ubo.model =
+        glm::translate(mat4(1), vec3(anim_.clear_val)) *
         glm::rotate(mat4(1), glm::radians(anim_.model_rot), vec3(0, 0, 1));
-    ubo.view = glm::lookAt(vec3(2, 2, -2), vec3(0), vec3(0, 1, 0));
-    ubo.proj = glm::perspectiveFov(
-        glm::radians(90.0f), (float)swapchain_extent_.width,
-        (float)swapchain_extent_.height, 0.1f, 100.0f);
+    ubo.view = glm::lookAt(vec3(0, 0, -1), vec3(0), vec3(0, 1, 0));
+    ubo.proj = glm::perspective(
+        glm::radians(90.0f),
+        (float)swapchain_extent_.width / (float)swapchain_extent_.height, 0.1f,
+        100.0f);
     // Invert y-axis because Vulkan is opposite GL.
     ubo.proj[1][1] *= -1;
 
@@ -916,7 +922,7 @@ class HelloTriangleApp {
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -1130,6 +1136,53 @@ class HelloTriangleApp {
     ASSERT(false);
   }
 
+  void createDescriptorPool() {
+    VkDescriptorPoolSize pool_size{};
+    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_size.descriptorCount = MAX_FRAMES_IN_FLIGHT;
+
+    VkDescriptorPoolCreateInfo pool_ci{};
+    pool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_ci.poolSizeCount = 1;
+    pool_ci.pPoolSizes = &pool_size;
+    pool_ci.maxSets = MAX_FRAMES_IN_FLIGHT;
+    VKASSERT(vkCreateDescriptorPool(device_, &pool_ci, nullptr, &desc_pool_));
+  }
+
+  void createDescriptorSets() {
+    std::vector<VkDescriptorSetLayout> layouts(
+        MAX_FRAMES_IN_FLIGHT, desc_set_layout_);
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = desc_pool_;
+    alloc_info.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+    alloc_info.pSetLayouts = layouts.data();
+
+    std::vector<VkDescriptorSet> desc_sets(MAX_FRAMES_IN_FLIGHT);
+    VKASSERT(vkAllocateDescriptorSets(device_, &alloc_info, desc_sets.data()));
+
+    ASSERT(desc_sets.size() == uniform_bufs_.size());
+    for (int i = 0; i < uniform_bufs_.size(); i++) {
+      auto& buf_state = uniform_bufs_[i];
+      buf_state.desc_set = desc_sets[i];
+
+      VkDescriptorBufferInfo buffer_info{};
+      buffer_info.buffer = buf_state.buf;
+      buffer_info.offset = 0;
+      buffer_info.range = sizeof(UniformBufferObject);
+
+      VkWriteDescriptorSet desc_write{};
+      desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      desc_write.dstSet = buf_state.desc_set;
+      desc_write.dstBinding = 0;
+      desc_write.dstArrayElement = 0;
+      desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      desc_write.descriptorCount = 1;
+      desc_write.pBufferInfo = &buffer_info;
+      vkUpdateDescriptorSets(device_, 1, &desc_write, 0, nullptr);
+    }
+  }
+
   void createCommandBuffers() {
     cmd_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -1173,6 +1226,11 @@ class HelloTriangleApp {
     scissor.offset = {0, 0};
     scissor.extent = swapchain_extent_;
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+    auto buf_state = uniform_bufs_[frame_num_ % MAX_FRAMES_IN_FLIGHT];
+    vkCmdBindDescriptorSets(
+        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1,
+        &buf_state.desc_set, 0, nullptr);
 
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, &vert_buf_, offsets);
@@ -1247,9 +1305,12 @@ class HelloTriangleApp {
     for (auto& buf_state : uniform_bufs_) {
       vkDestroyBuffer(device_, buf_state.buf, nullptr);
       vkFreeMemory(device_, buf_state.buf_mem, nullptr);
-      buf_state.buf_mapped = nullptr;  // paranoia
+      // paranoia
+      buf_state.buf_mapped = nullptr;
+      buf_state.desc_set = VK_NULL_HANDLE;  // cleaned up by the pool
     }
 
+    vkDestroyDescriptorPool(device_, desc_pool_, nullptr);
     vkDestroyDescriptorSetLayout(device_, desc_set_layout_, nullptr);
     vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
@@ -1308,6 +1369,7 @@ class HelloTriangleApp {
   std::vector<VkImageView> swapchain_views_;
   VkRenderPass render_pass_;
   VkDescriptorSetLayout desc_set_layout_;
+  VkDescriptorPool desc_pool_;
   VkPipelineLayout pipeline_layout_;
   VkPipeline gfx_pipeline_;
   std::vector<VkFramebuffer> swapchain_fbs_;
@@ -1325,6 +1387,7 @@ class HelloTriangleApp {
     VkBuffer buf;
     VkDeviceMemory buf_mem;
     void* buf_mapped;
+    VkDescriptorSet desc_set;
   };
   std::vector<UniformBufferState> uniform_bufs_;
 
