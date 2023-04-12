@@ -103,20 +103,20 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-    // RGB square
+    // RGB square (ul, ur, ll, lr)
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
     {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}},
-    // CMY square
-    {{0.4f, -0.3f}, {0.0f, 1.0f, 1.0f}},
-    {{0.8f, -0.3f}, {1.0f, 0.0f, 1.0f}},
+    // CMY square (ul, ur, ll, lr)
     {{0.4f, 0.1f}, {1.0f, 1.0f, 0.0f}},
     {{0.8f, 0.1f}, {1.0f, 1.0f, 1.0f}},
+    {{0.4f, -0.3f}, {0.0f, 1.0f, 1.0f}},
+    {{0.8f, -0.3f}, {1.0f, 0.0f, 1.0f}},
 };
 
 const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0,  // RGB square
+    0, 1, 2, 2, 1, 3,  // RGB square
     4, 5, 6, 6, 5, 7   // CMY square
 };
 
@@ -922,7 +922,7 @@ class HelloTriangleApp {
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
