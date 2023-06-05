@@ -1026,8 +1026,34 @@ class HelloTriangleApp {
     SDL_Surface* texture = IMG_Load("assets/textures/texture.jpg");
     ASSERT(texture);
     ASSERT(texture->pixels);
+    if (texture->format->format != SDL_PIXELFORMAT_RGBA8888) {
+      printf(
+          "converting image pixel format from %s to %s\n",
+          SDL_GetPixelFormatName(texture->format->format),
+          SDL_GetPixelFormatName(SDL_PIXELFORMAT_RGBA8888));
+      auto* new_surface =
+          SDL_ConvertSurfaceFormat(texture, SDL_PIXELFORMAT_RGBA8888, 0);
+      SDL_FreeSurface(texture);
+      texture = new_surface;
+    }
 
     VkDeviceSize image_size = texture->w * texture->h * 4;
+    VkBuffer staging_buf;
+    VkDeviceMemory staging_buf_mem;
+    createBuffer(
+        image_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buf, staging_buf_mem);
+
+    void* data;
+    vkMapMemory(device_, staging_buf_mem, 0, image_size, 0, &data);
+    memcpy(data, texture->pixels, static_cast<size_t>(image_size));
+    vkUnmapMemory(device_, staging_buf_mem);
+    SDL_FreeSurface(texture);
+
+    vkDestroyBuffer(device_, staging_buf, nullptr);
+    vkFreeMemory(device_, staging_buf_mem, nullptr);
   }
 
   void createVertexBuffer() {
