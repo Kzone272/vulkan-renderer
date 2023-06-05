@@ -15,9 +15,20 @@ target_include_directories(main PRIVATE
 
 target_link_libraries(main PRIVATE
   SDL2::SDL2
+  SDL2_image::SDL2_image
   glm::glm
   ${Vulkan_LIBRARIES}
 )
+
+# Copy assets directory to build directory.
+add_custom_target(assets)
+add_custom_command(TARGET main POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:main>/assets"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    "$<TARGET_FILE_DIR:main>/assets"
+)
+add_dependencies(main assets)
 
 
 # App for testing that the project setup works.

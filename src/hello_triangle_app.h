@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #undef main  // SDL needs this on Windows
+#include <SDL_image.h>
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
@@ -191,6 +192,7 @@ class HelloTriangleApp {
     createGraphicsPipeline();
     createFrameBuffers();
     createCommandPool();
+    createTextureImage();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -1014,6 +1016,18 @@ class HelloTriangleApp {
     pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     pool_ci.queueFamilyIndex = q_indices_.gfx_family;
     VKASSERT(vkCreateCommandPool(device_, &pool_ci, nullptr, &cmd_pool_));
+  }
+
+  void createTextureImage() {
+    if (!IMG_Init(IMG_INIT_JPG)) {
+      printf("%s", IMG_GetError());
+      ASSERT(false);
+    }
+    SDL_Surface* texture = IMG_Load("assets/textures/texture.jpg");
+    ASSERT(texture);
+    ASSERT(texture->pixels);
+
+    VkDeviceSize image_size = texture->w * texture->h * 4;
   }
 
   void createVertexBuffer() {
