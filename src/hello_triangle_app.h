@@ -194,6 +194,7 @@ class HelloTriangleApp {
     createCommandPool();
     createTextureImage();
     createTextureImageView();
+    createTextureSampler();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -542,6 +543,11 @@ class HelloTriangleApp {
           swapchain_support.present_modes.empty()) {
         continue;
       }
+      VkPhysicalDeviceFeatures features;
+      vkGetPhysicalDeviceFeatures(device, &features);
+      if (!features.samplerAnisotropy) {
+        continue;
+      }
 
       physical_device_ = device;
       q_indices_ = indices;
@@ -549,6 +555,7 @@ class HelloTriangleApp {
       break;
     }
     ASSERT(physical_device_);
+    vkGetPhysicalDeviceProperties(physical_device_, &device_props_);
 
 #ifdef DEBUG
     printf("Supported formats (%zd)\n", swapchain_support_.formats.size());
@@ -666,6 +673,7 @@ class HelloTriangleApp {
     }
 
     VkPhysicalDeviceFeatures device_features{};
+    device_features.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo device_ci{};
     device_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1180,6 +1188,27 @@ class HelloTriangleApp {
     texture_img_view_ = createImageView(texture_img_, VK_FORMAT_R8G8B8A8_SRGB);
   }
 
+  void createTextureSampler() {
+    VkSamplerCreateInfo ci{};
+    ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    ci.magFilter = VK_FILTER_LINEAR;
+    ci.minFilter = VK_FILTER_LINEAR;
+    ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    ci.anisotropyEnable = VK_TRUE;
+    ci.maxAnisotropy = device_props_.limits.maxSamplerAnisotropy;
+    ci.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    ci.unnormalizedCoordinates = VK_FALSE;
+    ci.compareEnable = VK_FALSE;
+    ci.compareOp = VK_COMPARE_OP_ALWAYS;
+    ci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    ci.mipLodBias = 0.f;
+    ci.minLod = 0.f;
+    ci.maxLod = 0.f;
+    VKASSERT(vkCreateSampler(device_, &ci, nullptr, &texture_sampler_));
+  }
+
   void createVertexBuffer() {
     VkDeviceSize size = sizeof(Vertex) * vertices.size();
     stageBuffer(
@@ -1476,6 +1505,7 @@ class HelloTriangleApp {
     vkFreeMemory(device_, vert_buf_mem_, nullptr);
     vkDestroyBuffer(device_, ind_buf_, nullptr);
     vkFreeMemory(device_, ind_buf_mem_, nullptr);
+    vkDestroySampler(device_, texture_sampler_, nullptr);
     vkDestroyImageView(device_, texture_img_view_, nullptr);
     vkDestroyImage(device_, texture_img_, nullptr);
     vkFreeMemory(device_, texture_img_mem_, nullptr);
@@ -1534,6 +1564,7 @@ class HelloTriangleApp {
   VkDebugUtilsMessengerEXT dbg_messenger_;
   VkSurfaceKHR surface_;
   VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
+  VkPhysicalDeviceProperties device_props_;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
   VkDevice device_;
@@ -1563,6 +1594,7 @@ class HelloTriangleApp {
   VkImage texture_img_;
   VkDeviceMemory texture_img_mem_;
   VkImageView texture_img_view_;
+  VkSampler texture_sampler_;
 
   struct UniformBufferState {
     VkBuffer buf;
