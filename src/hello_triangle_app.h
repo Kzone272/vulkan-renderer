@@ -1058,6 +1058,15 @@ class HelloTriangleApp {
         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_img_, texture_img_mem_);
 
+    transitionImageLayout(
+        texture_img_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    copyBufferToImage(staging_buf, texture_img_, width, height);
+    transitionImageLayout(
+        texture_img_, VK_FORMAT_R8G8B8A8_SRGB,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     vkDestroyBuffer(device_, staging_buf, nullptr);
     vkFreeMemory(device_, staging_buf_mem, nullptr);
   }
@@ -1092,6 +1101,73 @@ class HelloTriangleApp {
     VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &img_mem));
 
     VKASSERT(vkBindImageMemory(device_, img, img_mem, 0));
+  }
+
+  void transitionImageLayout(
+      VkImage img, VkFormat format, VkImageLayout old_layout,
+      VkImageLayout new_layout) {
+    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = img;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags src_stage;
+    VkPipelineStageFlags dst_stage;
+    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+      barrier.srcAccessMask = 0;
+      barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+      dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (
+        old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+        new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+      barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else {
+      printf(
+          "Unsupported layout transition! (%d -> %d)\n", old_layout,
+          new_layout);
+      ASSERT(false);
+    }
+
+    vkCmdPipelineBarrier(
+        cmd_buf, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    endSingleTimeCommands(cmd_buf);
+  }
+
+  void copyBufferToImage(
+      VkBuffer buf, VkImage img, uint32_t width, uint32_t height) {
+    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {width, height, 1};
+
+    vkCmdCopyBufferToImage(
+        cmd_buf, buf, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    endSingleTimeCommands(cmd_buf);
   }
 
   void createVertexBuffer() {
@@ -1151,6 +1227,16 @@ class HelloTriangleApp {
   }
 
   void copyBuffer(VkBuffer src_buf, VkBuffer dst_buf, VkDeviceSize size) {
+    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+
+    VkBufferCopy copy_region{};
+    copy_region.size = size;
+    vkCmdCopyBuffer(cmd_buf, src_buf, dst_buf, 1, &copy_region);
+
+    endSingleTimeCommands(cmd_buf);
+  }
+
+  VkCommandBuffer beginSingleTimeCommands() {
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -1165,9 +1251,10 @@ class HelloTriangleApp {
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     VKASSERT(vkBeginCommandBuffer(cmd_buf, &begin_info));
 
-    VkBufferCopy copy_region{};
-    copy_region.size = size;
-    vkCmdCopyBuffer(cmd_buf, src_buf, dst_buf, 1, &copy_region);
+    return cmd_buf;
+  }
+
+  void endSingleTimeCommands(VkCommandBuffer cmd_buf) {
     VKASSERT(vkEndCommandBuffer(cmd_buf));
 
     VkSubmitInfo submit{};
