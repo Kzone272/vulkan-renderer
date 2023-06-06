@@ -1036,8 +1036,9 @@ class HelloTriangleApp {
       SDL_FreeSurface(texture);
       texture = new_surface;
     }
-
-    VkDeviceSize image_size = texture->w * texture->h * 4;
+    uint32_t width = texture->w;
+    uint32_t height = texture->h;
+    VkDeviceSize image_size = width * height * 4;
     VkBuffer staging_buf;
     VkDeviceMemory staging_buf_mem;
     createBuffer(
@@ -1052,8 +1053,45 @@ class HelloTriangleApp {
     vkUnmapMemory(device_, staging_buf_mem);
     SDL_FreeSurface(texture);
 
+    createImage(
+        width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_img_, texture_img_mem_);
+
     vkDestroyBuffer(device_, staging_buf, nullptr);
     vkFreeMemory(device_, staging_buf_mem, nullptr);
+  }
+
+  void createImage(
+      uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
+      VkImageUsageFlags usage, VkMemoryPropertyFlags props, VkImage& img,
+      VkDeviceMemory& img_mem) {
+    VkImageCreateInfo img_ci{};
+    img_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_ci.imageType = VK_IMAGE_TYPE_2D;
+    img_ci.extent.width = width;
+    img_ci.extent.height = height;
+    img_ci.extent.depth = 1;
+    img_ci.mipLevels = 1;
+    img_ci.arrayLayers = 1;
+    img_ci.format = format;
+    img_ci.tiling = tiling;
+    img_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    img_ci.usage = usage;
+    img_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    img_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+    VKASSERT(vkCreateImage(device_, &img_ci, nullptr, &img));
+
+    VkMemoryRequirements mem_reqs;
+    vkGetImageMemoryRequirements(device_, img, &mem_reqs);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props);
+    VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &img_mem));
+
+    VKASSERT(vkBindImageMemory(device_, img, img_mem, 0));
   }
 
   void createVertexBuffer() {
@@ -1341,6 +1379,8 @@ class HelloTriangleApp {
     vkFreeMemory(device_, vert_buf_mem_, nullptr);
     vkDestroyBuffer(device_, ind_buf_, nullptr);
     vkFreeMemory(device_, ind_buf_mem_, nullptr);
+    vkDestroyImage(device_, texture_img_, nullptr);
+    vkFreeMemory(device_, texture_img_mem_, nullptr);
 
     for (auto& buf_state : uniform_bufs_) {
       vkDestroyBuffer(device_, buf_state.buf, nullptr);
@@ -1422,6 +1462,8 @@ class HelloTriangleApp {
   VkDeviceMemory vert_buf_mem_;
   VkBuffer ind_buf_;
   VkDeviceMemory ind_buf_mem_;
+  VkImage texture_img_;
+  VkDeviceMemory texture_img_mem_;
 
   struct UniformBufferState {
     VkBuffer buf;
