@@ -193,6 +193,7 @@ class HelloTriangleApp {
     createFrameBuffers();
     createCommandPool();
     createTextureImage();
+    createTextureImageView();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -786,22 +787,27 @@ class HelloTriangleApp {
   void createImageViews() {
     swapchain_views_.resize(swapchain_images_.size());
     for (size_t i = 0; i < swapchain_images_.size(); i++) {
-      VkImageViewCreateInfo ci{};
-      ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-      ci.image = swapchain_images_[i];
-      ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-      ci.format = swapchain_format_;
-      ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-      ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-      ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-      ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      ci.subresourceRange.baseMipLevel = 0;
-      ci.subresourceRange.levelCount = 1;
-      ci.subresourceRange.baseArrayLayer = 0;
-      ci.subresourceRange.layerCount = 1;
-      VKASSERT(vkCreateImageView(device_, &ci, nullptr, &swapchain_views_[i]));
+      swapchain_views_[i] =
+          createImageView(swapchain_images_[i], swapchain_format_);
     }
+  }
+
+  VkImageView createImageView(VkImage img, VkFormat format) {
+    VkImageViewCreateInfo ci{};
+    ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ci.image = img;
+    ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    ci.format = format;
+    ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    ci.subresourceRange.baseMipLevel = 0;
+    ci.subresourceRange.levelCount = 1;
+    ci.subresourceRange.baseArrayLayer = 0;
+    ci.subresourceRange.layerCount = 1;
+
+    VkImageView img_view;
+    VKASSERT(vkCreateImageView(device_, &ci, nullptr, &img_view));
+
+    return img_view;
   }
 
   void createRenderPass() {
@@ -1170,6 +1176,10 @@ class HelloTriangleApp {
     endSingleTimeCommands(cmd_buf);
   }
 
+  void createTextureImageView() {
+    texture_img_view_ = createImageView(texture_img_, VK_FORMAT_R8G8B8A8_SRGB);
+  }
+
   void createVertexBuffer() {
     VkDeviceSize size = sizeof(Vertex) * vertices.size();
     stageBuffer(
@@ -1466,6 +1476,7 @@ class HelloTriangleApp {
     vkFreeMemory(device_, vert_buf_mem_, nullptr);
     vkDestroyBuffer(device_, ind_buf_, nullptr);
     vkFreeMemory(device_, ind_buf_mem_, nullptr);
+    vkDestroyImageView(device_, texture_img_view_, nullptr);
     vkDestroyImage(device_, texture_img_, nullptr);
     vkFreeMemory(device_, texture_img_mem_, nullptr);
 
@@ -1551,6 +1562,7 @@ class HelloTriangleApp {
   VkDeviceMemory ind_buf_mem_;
   VkImage texture_img_;
   VkDeviceMemory texture_img_mem_;
+  VkImageView texture_img_view_;
 
   struct UniformBufferState {
     VkBuffer buf;
