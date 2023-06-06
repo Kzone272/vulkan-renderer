@@ -317,7 +317,7 @@ class HelloTriangleApp {
     UniformBufferObject ubo;
     ubo.model =
         glm::translate(mat4(1), vec3(anim_.clear_val)) *
-        glm::rotate(mat4(1), glm::radians(anim_.model_rot), vec3(0, 0, 1));
+        glm::rotate(mat4(1), glm::radians(anim_.model_rot), vec3(0, 1, 1));
     ubo.view = glm::lookAt(vec3(0, 0, -1), vec3(0), vec3(0, 1, 0));
     ubo.proj = glm::perspective(
         glm::radians(90.0f),
