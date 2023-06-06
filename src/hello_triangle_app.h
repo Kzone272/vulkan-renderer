@@ -77,6 +77,7 @@ using glm::vec3;
 struct Vertex {
   vec2 pos;
   vec3 color;
+  vec2 uv;
 
   static VkVertexInputBindingDescription getBindingDesc() {
     VkVertexInputBindingDescription binding{};
@@ -87,8 +88,8 @@ struct Vertex {
     return binding;
   }
 
-  static std::array<VkVertexInputAttributeDescription, 2> getAttrDescs() {
-    std::array<VkVertexInputAttributeDescription, 2> attrs{};
+  static std::array<VkVertexInputAttributeDescription, 3> getAttrDescs() {
+    std::array<VkVertexInputAttributeDescription, 3> attrs{};
     attrs[0].binding = 0;
     attrs[0].location = 0;
     attrs[0].format = VK_FORMAT_R32G32_SFLOAT;  // vec2
@@ -99,21 +100,26 @@ struct Vertex {
     attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;  // vec3
     attrs[1].offset = offsetof(Vertex, color);
 
+    attrs[2].binding = 0;
+    attrs[2].location = 2;
+    attrs[2].format = VK_FORMAT_R32G32_SFLOAT;  // vec2
+    attrs[2].offset = offsetof(Vertex, uv);
+
     return attrs;
   }
 };
 
 const std::vector<Vertex> vertices = {
     // RGB square (ul, ur, ll, lr)
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}, {0.f, 0.f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.f, 0.f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.f, 1.f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.f, 1.f}},
     // CMY square (ul, ur, ll, lr)
-    {{0.4f, 0.1f}, {1.0f, 1.0f, 0.0f}},
-    {{0.8f, 0.1f}, {1.0f, 1.0f, 1.0f}},
-    {{0.4f, -0.3f}, {0.0f, 1.0f, 1.0f}},
-    {{0.8f, -0.3f}, {1.0f, 0.0f, 1.0f}},
+    {{0.4f, 0.1f}, {1.0f, 1.0f, 0.0f}, {0.f, 0.f}},
+    {{0.8f, 0.1f}, {1.0f, 1.0f, 1.0f}, {1.f, 0.f}},
+    {{0.4f, -0.3f}, {0.0f, 1.0f, 1.0f}, {0.f, 1.f}},
+    {{0.8f, -0.3f}, {1.0f, 0.0f, 1.0f}, {1.f, 1.f}},
 };
 
 const std::vector<uint16_t> indices = {
@@ -866,10 +872,20 @@ class HelloTriangleApp {
     ubo_binding.descriptorCount = 1;
     ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+    VkDescriptorSetLayoutBinding sampler_binding{};
+    sampler_binding.binding = 1;
+    sampler_binding.descriptorCount = 1;
+    sampler_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    sampler_binding.pImmutableSamplers = nullptr;
+    sampler_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {
+        ubo_binding, sampler_binding};
+
     VkDescriptorSetLayoutCreateInfo layout_ci{};
     layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_ci.bindingCount = 1;
-    layout_ci.pBindings = &ubo_binding;
+    layout_ci.bindingCount = bindings.size();
+    layout_ci.pBindings = bindings.data();
     VKASSERT(vkCreateDescriptorSetLayout(
         device_, &layout_ci, nullptr, &desc_set_layout_));
   }
@@ -1040,13 +1056,15 @@ class HelloTriangleApp {
     SDL_Surface* texture = IMG_Load("assets/textures/texture.jpg");
     ASSERT(texture);
     ASSERT(texture->pixels);
-    if (texture->format->format != SDL_PIXELFORMAT_RGBA8888) {
+    // Vulkan likes images to have alpha channels. The SDL byte order is also
+    // defined opposite to VkFormat.
+    SDL_PixelFormatEnum desired_fmt = SDL_PIXELFORMAT_ABGR8888;
+    if (texture->format->format != desired_fmt) {
       printf(
           "converting image pixel format from %s to %s\n",
           SDL_GetPixelFormatName(texture->format->format),
-          SDL_GetPixelFormatName(SDL_PIXELFORMAT_RGBA8888));
-      auto* new_surface =
-          SDL_ConvertSurfaceFormat(texture, SDL_PIXELFORMAT_RGBA8888, 0);
+          SDL_GetPixelFormatName(desired_fmt));
+      auto* new_surface = SDL_ConvertSurfaceFormat(texture, desired_fmt, 0);
       SDL_FreeSurface(texture);
       texture = new_surface;
     }
@@ -1067,18 +1085,18 @@ class HelloTriangleApp {
     vkUnmapMemory(device_, staging_buf_mem);
     SDL_FreeSurface(texture);
 
+    texture_fmt_ = VK_FORMAT_R8G8B8A8_SRGB;
     createImage(
-        width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+        width, height, texture_fmt_, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_img_, texture_img_mem_);
 
     transitionImageLayout(
-        texture_img_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
+        texture_img_, texture_fmt_, VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     copyBufferToImage(staging_buf, texture_img_, width, height);
     transitionImageLayout(
-        texture_img_, VK_FORMAT_R8G8B8A8_SRGB,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        texture_img_, texture_fmt_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     vkDestroyBuffer(device_, staging_buf, nullptr);
@@ -1185,7 +1203,7 @@ class HelloTriangleApp {
   }
 
   void createTextureImageView() {
-    texture_img_view_ = createImageView(texture_img_, VK_FORMAT_R8G8B8A8_SRGB);
+    texture_img_view_ = createImageView(texture_img_, texture_fmt_);
   }
 
   void createTextureSampler() {
@@ -1341,14 +1359,16 @@ class HelloTriangleApp {
   }
 
   void createDescriptorPool() {
-    VkDescriptorPoolSize pool_size{};
-    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    pool_size.descriptorCount = MAX_FRAMES_IN_FLIGHT;
+    std::array<VkDescriptorPoolSize, 2> pool_sizes{};
+    pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_sizes[0].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+    pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    pool_sizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo pool_ci{};
     pool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_ci.poolSizeCount = 1;
-    pool_ci.pPoolSizes = &pool_size;
+    pool_ci.poolSizeCount = pool_sizes.size();
+    pool_ci.pPoolSizes = pool_sizes.data();
     pool_ci.maxSets = MAX_FRAMES_IN_FLIGHT;
     VKASSERT(vkCreateDescriptorPool(device_, &pool_ci, nullptr, &desc_pool_));
   }
@@ -1370,20 +1390,36 @@ class HelloTriangleApp {
       auto& buf_state = uniform_bufs_[i];
       buf_state.desc_set = desc_sets[i];
 
+      std::array<VkWriteDescriptorSet, 2> desc_writes{};
+
       VkDescriptorBufferInfo buffer_info{};
       buffer_info.buffer = buf_state.buf;
       buffer_info.offset = 0;
       buffer_info.range = sizeof(UniformBufferObject);
 
-      VkWriteDescriptorSet desc_write{};
-      desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      desc_write.dstSet = buf_state.desc_set;
-      desc_write.dstBinding = 0;
-      desc_write.dstArrayElement = 0;
-      desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      desc_write.descriptorCount = 1;
-      desc_write.pBufferInfo = &buffer_info;
-      vkUpdateDescriptorSets(device_, 1, &desc_write, 0, nullptr);
+      desc_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      desc_writes[0].dstSet = buf_state.desc_set;
+      desc_writes[0].dstBinding = 0;
+      desc_writes[0].dstArrayElement = 0;
+      desc_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      desc_writes[0].descriptorCount = 1;
+      desc_writes[0].pBufferInfo = &buffer_info;
+
+      VkDescriptorImageInfo image_info{};
+      image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      image_info.imageView = texture_img_view_;
+      image_info.sampler = texture_sampler_;
+
+      desc_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      desc_writes[1].dstSet = buf_state.desc_set;
+      desc_writes[1].dstBinding = 1;
+      desc_writes[1].dstArrayElement = 0;
+      desc_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      desc_writes[1].descriptorCount = 1;
+      desc_writes[1].pImageInfo = &image_info;
+
+      vkUpdateDescriptorSets(
+          device_, desc_writes.size(), desc_writes.data(), 0, nullptr);
     }
   }
 
@@ -1593,6 +1629,7 @@ class HelloTriangleApp {
   VkDeviceMemory ind_buf_mem_;
   VkImage texture_img_;
   VkDeviceMemory texture_img_mem_;
+  VkFormat texture_fmt_;
   VkImageView texture_img_view_;
   VkSampler texture_sampler_;
 
