@@ -4,6 +4,8 @@
 #undef main  // SDL needs this on Windows
 #include <SDL_image.h>
 #include <SDL_vulkan.h>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
@@ -16,6 +18,8 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -36,8 +40,10 @@ namespace {
 
 constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
-
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
+const std::string MODEL_PATH = "assets/models/viking_room.obj";
+const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
 
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -79,6 +85,10 @@ struct Vertex {
   vec3 color;
   vec2 uv;
 
+  bool operator==(const Vertex& other) const {
+    return pos == other.pos && color == other.color && uv == other.uv;
+  }
+
   static VkVertexInputBindingDescription getBindingDesc() {
     VkVertexInputBindingDescription binding{};
     binding.binding = 0;
@@ -109,22 +119,23 @@ struct Vertex {
   }
 };
 
-const std::vector<Vertex> vertices = {
-    // RGB square (ul, ur, ll, lr)
-    {{-0.5f, 0.5f, 0.f}, {0.0f, 0.0f, 0.0f}, {0.f, 0.f}},
-    {{0.5f, 0.5f, 0.f}, {0.0f, 0.0f, 1.0f}, {1.f, 0.f}},
-    {{-0.5f, -0.5f, 0.f}, {1.0f, 0.0f, 0.0f}, {0.f, 1.f}},
-    {{0.5f, -0.5f, 0.f}, {0.0f, 1.0f, 0.0f}, {1.f, 1.f}},
-    // CMY square (ul, ur, ll, lr)
-    {{0.4f, 0.1f, 0.5f}, {1.0f, 1.0f, 0.0f}, {0.f, 0.f}},
-    {{0.8f, 0.1f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.f, 0.f}},
-    {{0.4f, -0.3f, 0.5f}, {0.0f, 1.0f, 1.0f}, {0.f, 1.f}},
-    {{0.8f, -0.3f, 0.5f}, {1.0f, 0.0f, 1.0f}, {1.f, 1.f}},
+namespace std {
+
+template <>
+struct hash<Vertex> {
+  size_t operator()(Vertex const& vertex) const {
+    return ((hash<glm::vec3>()(vertex.pos) ^
+             (hash<glm::vec3>()(vertex.color) << 1)) >>
+            1) ^
+           (hash<glm::vec2>()(vertex.uv) << 1);
+  }
 };
 
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 1, 3,  // RGB square
-    4, 5, 6, 6, 5, 7   // CMY square
+}  // namespace std
+
+struct Geometry {
+  std::vector<Vertex> vertices;
+  std::vector<uint32_t> indices;
 };
 
 struct UniformBufferObject {
@@ -202,6 +213,7 @@ class HelloTriangleApp {
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
+    loadModel();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -317,11 +329,13 @@ class HelloTriangleApp {
 
     UniformBufferObject ubo;
     ubo.model =
-        glm::translate(mat4(1), vec3(anim_.clear_val)) *
-        glm::rotate(mat4(1), glm::radians(anim_.model_rot), vec3(0, 1, 1));
-    ubo.view = glm::lookAt(vec3(0, 0, -1), vec3(0), vec3(0, 1, 0));
+        // spin model
+        glm::rotate(mat4(1), glm::radians(anim_.model_rot), vec3(0, 1, 0)) *
+        // reorient model
+        glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0));
+    ubo.view = glm::lookAt(vec3(0, 1.25, -2.5), vec3(0), vec3(0, 1, 0));
     ubo.proj = glm::perspective(
-        glm::radians(90.0f),
+        glm::radians(45.0f),
         (float)swapchain_extent_.width / (float)swapchain_extent_.height, 0.1f,
         100.0f);
     // Invert y-axis because Vulkan is opposite GL.
@@ -1130,7 +1144,7 @@ class HelloTriangleApp {
       printf("%s", IMG_GetError());
       ASSERT(false);
     }
-    SDL_Surface* texture = IMG_Load("assets/textures/texture.jpg");
+    SDL_Surface* texture = IMG_Load(TEXTURE_PATH.c_str());
     ASSERT(texture);
     ASSERT(texture->pixels);
     // Vulkan likes images to have alpha channels. The SDL byte order is also
@@ -1321,18 +1335,57 @@ class HelloTriangleApp {
     VKASSERT(vkCreateSampler(device_, &ci, nullptr, &texture_sampler_));
   }
 
+  void loadModel() {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn;
+    std::string err;
+    ASSERT(tinyobj::LoadObj(
+        &attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()));
+
+    std::unordered_map<Vertex, uint32_t> uniq_verts;
+    for (const auto& shape : shapes) {
+      for (const auto& index : shape.mesh.indices) {
+        Vertex vert{};
+        vert.pos = {
+            attrib.vertices[3 * index.vertex_index],
+            attrib.vertices[3 * index.vertex_index + 1],
+            attrib.vertices[3 * index.vertex_index + 2],
+        };
+        vert.uv = {
+            attrib.texcoords[2 * index.texcoord_index],
+            1.f - attrib.texcoords[2 * index.texcoord_index + 1],  // Flip v
+        };
+        vert.color = {1.f, 1.f, 1.f};
+
+        auto it = uniq_verts.find(vert);
+        if (it == uniq_verts.end()) {
+          it = uniq_verts
+                   .insert({vert, static_cast<uint32_t>(uniq_verts.size())})
+                   .first;
+          geom.vertices.push_back(vert);
+        }
+        geom.indices.push_back(it->second);
+      }
+    }
+    printf(
+        "loaded %zd vertices, %zd indices\n", geom.vertices.size(),
+        geom.indices.size());
+  }
+
   void createVertexBuffer() {
-    VkDeviceSize size = sizeof(Vertex) * vertices.size();
+    VkDeviceSize size = sizeof(Vertex) * geom.vertices.size();
     stageBuffer(
-        size, (void*)vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        size, (void*)geom.vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         vert_buf_, vert_buf_mem_);
   }
 
   void createIndexBuffer() {
-    VkDeviceSize size = sizeof(uint16_t) * indices.size();
+    VkDeviceSize size = sizeof(uint32_t) * geom.indices.size();
     stageBuffer(
-        size, (void*)indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, ind_buf_,
-        ind_buf_mem_);
+        size, (void*)geom.indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        ind_buf_, ind_buf_mem_);
   }
 
   void createUniformBuffers() {
@@ -1539,7 +1592,8 @@ class HelloTriangleApp {
     rp_info.framebuffer = swapchain_fbs_[img_ind];
     rp_info.renderArea.offset = {0, 0};
     rp_info.renderArea.extent = swapchain_extent_;
-    float val = anim_.clear_val;
+    // float val = anim_.clear_val;
+    float val = 0.f;
     std::array<VkClearValue, 2> clear_values{};
     clear_values[0].color = {{val, val, val, 1.0f}};
     clear_values[1].depthStencil = {1.f, 0};
@@ -1570,9 +1624,9 @@ class HelloTriangleApp {
 
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, &vert_buf_, offsets);
-    vkCmdBindIndexBuffer(cmd_buf, ind_buf_, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(cmd_buf, ind_buf_, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDrawIndexed(cmd_buf, indices.size(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(cmd_buf, geom.indices.size(), 1, 0, 0, 0);
     vkCmdEndRenderPass(cmd_buf);
     VKASSERT(vkEndCommandBuffer(cmd_buf));
   }
@@ -1737,6 +1791,8 @@ class HelloTriangleApp {
   VkImage depth_img_;
   VkDeviceMemory depth_img_mem_;
   VkImageView depth_img_view_;
+
+  Geometry geom;
 
   struct UniformBufferState {
     VkBuffer buf;

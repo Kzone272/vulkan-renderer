@@ -11,6 +11,7 @@ add_dependencies(main shaders)
 target_include_directories(main PRIVATE
   ${SDL2_INCLUDE_DIRS}
   ${Vulkan_INCLUDE_DIRS}
+  ${TINYOBJLOADER_INCLUDE_DIRS}
 )
 
 target_link_libraries(main PRIVATE
