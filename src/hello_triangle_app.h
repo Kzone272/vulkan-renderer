@@ -1191,7 +1191,7 @@ class HelloTriangleApp {
         texture_img_, texture_fmt_, mip_levels_, VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     copyBufferToImage(staging_buf, texture_img_, width, height);
-    generateMipmaps(texture_img_, width, height, mip_levels_);
+    generateMipmaps(texture_img_, width, height, texture_fmt_, mip_levels_);
     // Transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating
     // mipmaps.
 
@@ -1315,7 +1315,15 @@ class HelloTriangleApp {
   }
 
   void generateMipmaps(
-      VkImage img, int32_t width, int32_t height, uint32_t mip_levels) {
+      VkImage img, int32_t width, int32_t height, VkFormat format,
+      uint32_t mip_levels) {
+    VkFormatProperties format_props;
+    vkGetPhysicalDeviceFormatProperties(
+        physical_device_, format, &format_props);
+    ASSERT(
+        format_props.optimalTilingFeatures &
+        VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+
     VkCommandBuffer cmd_buf = beginSingleTimeCommands();
 
     VkImageMemoryBarrier barrier{};
@@ -1415,7 +1423,7 @@ class HelloTriangleApp {
     ci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     ci.mipLodBias = 0.f;
     ci.minLod = 0.f;
-    ci.maxLod = 0.f;
+    ci.maxLod = mip_levels_;
     VKASSERT(vkCreateSampler(device_, &ci, nullptr, &texture_sampler_));
   }
 
