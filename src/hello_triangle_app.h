@@ -15,10 +15,6 @@
 #include <fstream>
 
 #include "asserts.h"
-#define VULKAN_HPP_NO_EXCEPTIONS
-#define VULKAN_HPP_ASSERT vulkanHppAssert
-#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS  // allow designated initializers
-#include <vulkan/vulkan.hpp>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE

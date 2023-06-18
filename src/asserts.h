@@ -40,13 +40,3 @@ char buf[2048];
     std::cerr << asserts::buf << std::endl;                                   \
     exit(1);                                                                  \
   } else  // This 'else' exists to catch the user's following semicolon
-
-// TODO: I want to print a stacktrace in this function. I'll probably use
-//       boost-stacktrace.
-#ifndef vulkanHppAssert
-#define vulkanHppAssert(x)                                               \
-  if (!(x)) {                                                            \
-    printf("Assertion failed in \"%s\", line %d\n", __FILE__, __LINE__); \
-    exit(1);                                                             \
-  } else  // This 'else' exists to catch the user's following semicolon
-#endif

@@ -14,6 +14,11 @@ target_include_directories(main PRIVATE
   ${TINYOBJLOADER_INCLUDE_DIRS}
 )
 
+target_precompile_headers(main
+  PRIVATE
+  "vulkan-include.h"
+)
+
 target_link_libraries(main PRIVATE
   SDL2::SDL2
   SDL2_image::SDL2_image
