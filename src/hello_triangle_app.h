@@ -13,6 +13,12 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+
+#include "asserts.h"
+#define VULKAN_HPP_NO_EXCEPTIONS
+#define VULKAN_HPP_ASSERT vulkanHppAssert
+#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS  // allow designated initializers
+#include <vulkan/vulkan.hpp>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -24,7 +30,6 @@
 #include <set>
 #include <vector>
 
-#include "asserts.h"
 #include "defines.h"
 
 using std::cerr;
@@ -404,41 +409,32 @@ class HelloTriangleApp {
   void createInstance() {
     printSupportedExtensions();
 
-    VkApplicationInfo app_info{};
-    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "Hello Triangle";
-    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.pEngineName = "No Engine";
-    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion = VK_API_VERSION_1_0;
-
-    VkInstanceCreateInfo instance_ci{};
-    instance_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    instance_ci.pApplicationInfo = &app_info;
+    vk::ApplicationInfo app_info{
+        .pApplicationName = "Hello Triangle",
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName = "No Engine",
+        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = VK_API_VERSION_1_0,
+    };
+    vk::InstanceCreateInfo instance_ci{.pApplicationInfo = &app_info};
 
     auto ext_names = getRequiredExtensions();
-    instance_ci.enabledExtensionCount = ext_names.size();
-    instance_ci.ppEnabledExtensionNames = ext_names.data();
+    instance_ci.setPEnabledExtensionNames(ext_names);
 
     auto validation_layers = getValidationLayers();
-    if (validation_layers.size()) {
-      instance_ci.enabledLayerCount = validation_layers.size();
-      instance_ci.ppEnabledLayerNames = validation_layers.data();
-    } else {
-      instance_ci.enabledLayerCount = 0;
-    }
+    instance_ci.setPEnabledLayerNames(validation_layers);
 
-    VkDebugUtilsMessengerCreateInfoEXT dbg_messenger_ci{};
+    vk::DebugUtilsMessengerCreateInfoEXT dbg_messenger_ci{};
     if (enable_validation_layers_) {
-      makeDbgMessengerCi(dbg_messenger_ci);
+      dbg_messenger_ci = makeDbgMessengerCi();
       instance_ci.pNext = &dbg_messenger_ci;
     }
 
 #if __APPLE__
-    instance_ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    instance_ci.flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
 #endif
 
-    VKASSERT(vkCreateInstance(&instance_ci, nullptr, &instance_));
+    instance_ = vk::createInstance(instance_ci).value;
   }
 
   std::vector<const char*> getRequiredExtensions() {
@@ -520,25 +516,25 @@ class HelloTriangleApp {
 
 #define LOAD_VK_FN(fn) (PFN_##fn) vkGetInstanceProcAddr(instance_, #fn);
 
-  void makeDbgMessengerCi(VkDebugUtilsMessengerCreateInfoEXT& ci) {
-    ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    ci.messageSeverity =
-        // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |  // toggle comment
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    ci.pfnUserCallback = debugCallback;
-    ci.pUserData = nullptr;
+  vk::DebugUtilsMessengerCreateInfoEXT makeDbgMessengerCi() {
+    vk::DebugUtilsMessengerCreateInfoEXT ci{
+        .messageSeverity =
+            // vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |  // toggle
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
+        .messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                       vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+                       vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance,
+        .pfnUserCallback = debugCallback,
+    };
+    return ci;
   }
 
   void setupDebugMessenger() {
-    VkDebugUtilsMessengerCreateInfoEXT ci{};
-    makeDbgMessengerCi(ci);
-    auto create_fn = LOAD_VK_FN(vkCreateDebugUtilsMessengerEXT);
-    ASSERT(create_fn);
-    VKASSERT(create_fn(instance_, &ci, nullptr, &dbg_messenger_));
+    auto ci = makeDbgMessengerCi();
+    vk::DispatchLoaderDynamic dldi(instance_, vkGetInstanceProcAddr);
+    dbg_messenger_ =
+        instance_.createDebugUtilsMessengerEXT(ci, nullptr, dldi).value;
   }
 
   void createSurface() {
@@ -1900,8 +1896,8 @@ class HelloTriangleApp {
 
   AnimationState anim_;
 
-  VkInstance instance_;
-  VkDebugUtilsMessengerEXT dbg_messenger_;
+  vk::Instance instance_;
+  vk::DebugUtilsMessengerEXT dbg_messenger_;
   VkSurfaceKHR surface_;
   VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
   VkPhysicalDeviceProperties device_props_;
