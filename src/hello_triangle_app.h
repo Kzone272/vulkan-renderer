@@ -460,15 +460,11 @@ class HelloTriangleApp {
   }
 
   void printSupportedExtensions() {
-    uint32_t sup_ext_count = 0;
-    VKASSERT(vkEnumerateInstanceExtensionProperties(
-        nullptr, &sup_ext_count, nullptr));
-    std::vector<VkExtensionProperties> sup_exts(sup_ext_count);
-    VKASSERT(vkEnumerateInstanceExtensionProperties(
-        nullptr, &sup_ext_count, sup_exts.data()));
-    printf("Supported instance extensions (%d)\n", sup_ext_count);
+    std::vector<vk::ExtensionProperties> sup_exts =
+        vk::enumerateInstanceExtensionProperties().value;
+    printf("Supported instance extensions (%zd)\n", sup_exts.size());
     for (auto& ext : sup_exts) {
-      printf("  %s v%d\n", ext.extensionName, ext.specVersion);
+      printf("  %s v%d\n", ext.extensionName.data(), ext.specVersion);
     }
   }
 
@@ -477,15 +473,12 @@ class HelloTriangleApp {
       return {};
     }
 
-    uint32_t layer_count = 0;
-    VKASSERT(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
-    std::vector<VkLayerProperties> layer_props(layer_count);
-    VKASSERT(
-        vkEnumerateInstanceLayerProperties(&layer_count, layer_props.data()));
+    std::vector<vk::LayerProperties> layer_props =
+        vk::enumerateInstanceLayerProperties().value;
 
-    printf("Available layers (%u):\n", layer_count);
+    printf("Available layers (%zu):\n", layer_props.size());
     for (const auto& layer_prop : layer_props) {
-      printf("  %s\n", layer_prop.layerName);
+      printf("  %s\n", layer_prop.layerName.data());
     }
 
     for (const auto& layer : validation_layers) {
@@ -534,15 +527,15 @@ class HelloTriangleApp {
   }
 
   void createSurface() {
-    ASSERT(SDL_Vulkan_CreateSurface(window_, instance_, &surface_));
+    VkSurfaceKHR surface;
+    ASSERT(SDL_Vulkan_CreateSurface(window_, instance_, &surface));
+    surface_ = surface;
   }
 
   void pickPhysicalDevice() {
-    uint32_t device_count = 0;
-    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
-    ASSERT(device_count > 0);
-    std::vector<VkPhysicalDevice> devices(device_count);
-    vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+    std::vector<vk::PhysicalDevice> devices =
+        instance_.enumeratePhysicalDevices().value;
+    ASSERT(devices.size() > 0);
 
     for (const auto& device : devices) {
       QueueFamilyIndices indices = findQueueFamilies(device);
@@ -557,8 +550,7 @@ class HelloTriangleApp {
           swapchain_support.present_modes.empty()) {
         continue;
       }
-      VkPhysicalDeviceFeatures features;
-      vkGetPhysicalDeviceFeatures(device, &features);
+      vk::PhysicalDeviceFeatures features = device.getFeatures();
       if (!features.samplerAnisotropy) {
         continue;
       }
@@ -569,7 +561,7 @@ class HelloTriangleApp {
       break;
     }
     ASSERT(physical_device_);
-    vkGetPhysicalDeviceProperties(physical_device_, &device_props_);
+    device_props_ = physical_device_.getProperties();
     msaa_samples_ = getMaxSampleCount();
     printf("max msaa samples: %d\n", msaa_samples_);
 
@@ -582,21 +574,21 @@ class HelloTriangleApp {
 #endif
   }
 
-  VkSampleCountFlagBits getMaxSampleCount() {
-    VkSampleCountFlags count_limit =
-        device_props_.limits.framebufferColorSampleCounts &
-        device_props_.limits.framebufferDepthSampleCounts;
+  vk::SampleCountFlagBits getMaxSampleCount() {
+    auto count_limit = device_props_.limits.framebufferColorSampleCounts &
+                       device_props_.limits.framebufferDepthSampleCounts;
 
-    constexpr std::array<VkSampleCountFlagBits, 6> possible_counts = {
-        VK_SAMPLE_COUNT_64_BIT, VK_SAMPLE_COUNT_32_BIT, VK_SAMPLE_COUNT_16_BIT,
-        VK_SAMPLE_COUNT_8_BIT,  VK_SAMPLE_COUNT_4_BIT,  VK_SAMPLE_COUNT_2_BIT,
+    constexpr std::array<vk::SampleCountFlagBits, 6> possible_counts = {
+        vk::SampleCountFlagBits::e64, vk::SampleCountFlagBits::e32,
+        vk::SampleCountFlagBits::e16, vk::SampleCountFlagBits::e8,
+        vk::SampleCountFlagBits::e4,  vk::SampleCountFlagBits::e2,
     };
     for (const auto count : possible_counts) {
       if (count_limit & count) {
         return count;
       }
     }
-    return VK_SAMPLE_COUNT_1_BIT;
+    return vk::SampleCountFlagBits::e1;
   }
 
   struct QueueFamilyIndices {
@@ -608,23 +600,18 @@ class HelloTriangleApp {
     }
   };
 
-  QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
-    uint32_t q_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &q_family_count, nullptr);
-    std::vector<VkQueueFamilyProperties> q_families(q_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        device, &q_family_count, q_families.data());
+  QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice device) {
+    auto q_families = device.getQueueFamilyProperties();
 
     QueueFamilyIndices indices;
     int i = 0;
     for (const auto& q_family : q_families) {
-      if (q_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      if (q_family.queueFlags & vk::QueueFlagBits::eGraphics) {
         indices.gfx_family = i;
       }
 
-      VkBool32 present_support = false;
-      vkGetPhysicalDeviceSurfaceSupportKHR(
-          device, i, surface_, &present_support);
+      vk::Bool32 present_support =
+          device.getSurfaceSupportKHR(i, surface_).value;
       if (present_support) {
         indices.present_family = i;
       }
@@ -638,19 +625,16 @@ class HelloTriangleApp {
     return indices;
   }
 
-  bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
-    uint32_t ext_count = 0;
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
-    std::vector<VkExtensionProperties> extensions(ext_count);
-    vkEnumerateDeviceExtensionProperties(
-        device, nullptr, &ext_count, extensions.data());
+  bool checkDeviceExtensionSupport(vk::PhysicalDevice device) {
+    std::vector<vk::ExtensionProperties> extensions =
+        device.enumerateDeviceExtensionProperties().value;
 
     // Map to just the names.
-    std::vector<std::string> available_exts(ext_count);
+    std::vector<std::string> available_exts(extensions.size());
     std::transform(
         extensions.begin(), extensions.end(), available_exts.begin(),
-        [](VkExtensionProperties ext) {
-          return std::string{ext.extensionName};
+        [](vk::ExtensionProperties ext) -> std::string {
+          return ext.extensionName;
         });
     // Make a copy so we can sort it.
     std::vector<std::string> required_exts(
@@ -663,30 +647,16 @@ class HelloTriangleApp {
   }
 
   struct SwapchainSupportDetails {
-    VkSurfaceCapabilitiesKHR caps;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> present_modes;
+    vk::SurfaceCapabilitiesKHR caps;
+    std::vector<vk::SurfaceFormatKHR> formats;
+    std::vector<vk::PresentModeKHR> present_modes;
   };
 
-  SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) {
+  SwapchainSupportDetails querySwapchainSupport(vk::PhysicalDevice device) {
     SwapchainSupportDetails details;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.caps);
-    uint32_t format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(
-        device, surface_, &format_count, nullptr);
-    if (format_count) {
-      details.formats.resize(format_count);
-      vkGetPhysicalDeviceSurfaceFormatsKHR(
-          device, surface_, &format_count, details.formats.data());
-    }
-    uint32_t present_mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(
-        device, surface_, &present_mode_count, nullptr);
-    if (present_mode_count) {
-      details.present_modes.resize(present_mode_count);
-      vkGetPhysicalDeviceSurfacePresentModesKHR(
-          device, surface_, &present_mode_count, details.present_modes.data());
-    }
+    details.caps = device.getSurfaceCapabilitiesKHR(surface_).value;
+    details.formats = device.getSurfaceFormatsKHR(surface_).value;
+    details.present_modes = device.getSurfacePresentModesKHR(surface_).value;
 
     return details;
   }
@@ -729,12 +699,12 @@ class HelloTriangleApp {
     ASSERT(present_q_);
   }
 
-  VkSurfaceFormatKHR chooseSwapSurfaceFormat(
-      const std::vector<VkSurfaceFormatKHR>& formats) {
+  vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
+      const std::vector<vk::SurfaceFormatKHR>& formats) {
     DASSERT(formats.size());
     for (const auto& format : formats) {
-      if (format.format == VK_FORMAT_B8G8R8A8_SRGB &&
-          format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+      if (format.format == vk::Format::eB8G8R8A8Srgb &&
+          format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
         return format;
       }
     }
@@ -742,15 +712,15 @@ class HelloTriangleApp {
     return formats[0];
   }
 
-  VkPresentModeKHR chooseSwapPresentMode(
-      const std::vector<VkPresentModeKHR>& present_modes) {
-    constexpr VkPresentModeKHR preferred_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+  vk::PresentModeKHR chooseSwapPresentMode(
+      const std::vector<vk::PresentModeKHR>& present_modes) {
+    constexpr vk::PresentModeKHR preferred_mode = vk::PresentModeKHR::eMailbox;
     if (std::find(present_modes.begin(), present_modes.end(), preferred_mode) !=
         present_modes.end()) {
       return preferred_mode;
     }
 
-    return VK_PRESENT_MODE_FIFO_KHR;
+    return vk::PresentModeKHR::eFifo;
   }
 
   VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& caps) {
@@ -786,14 +756,15 @@ class HelloTriangleApp {
     swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_ci.surface = surface_;
     swapchain_ci.minImageCount = image_count;
-    swapchain_ci.imageFormat = format.format;
-    swapchain_ci.imageColorSpace = format.colorSpace;
+    swapchain_ci.imageFormat = (VkFormat)format.format;
+    swapchain_ci.imageColorSpace = (VkColorSpaceKHR)format.colorSpace;
     swapchain_ci.imageExtent = extent;
     swapchain_ci.imageArrayLayers = 1;
     swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    swapchain_ci.preTransform = swapchain_support_.caps.currentTransform;
+    swapchain_ci.preTransform =
+        (VkSurfaceTransformFlagBitsKHR)swapchain_support_.caps.currentTransform;
     swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_ci.presentMode = present_mode;
+    swapchain_ci.presentMode = (VkPresentModeKHR)present_mode;
     swapchain_ci.clipped = VK_TRUE;
     swapchain_ci.oldSwapchain = VK_NULL_HANDLE;
 
@@ -818,7 +789,7 @@ class HelloTriangleApp {
     vkGetSwapchainImagesKHR(
         device_, swapchain_, &image_count, swapchain_images_.data());
 
-    swapchain_format_ = format.format;
+    swapchain_format_ = (VkFormat)format.format;
     swapchain_extent_ = extent;
     printf(
         "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
@@ -857,7 +828,7 @@ class HelloTriangleApp {
   void createRenderPass() {
     VkAttachmentDescription color_att{};
     color_att.format = swapchain_format_;
-    color_att.samples = msaa_samples_;
+    color_att.samples = (VkSampleCountFlagBits)msaa_samples_;
     color_att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -872,7 +843,7 @@ class HelloTriangleApp {
     depth_fmt_ = findDepthFormat();
     VkAttachmentDescription depth_att{};
     depth_att.format = depth_fmt_;
-    depth_att.samples = msaa_samples_;
+    depth_att.samples = (VkSampleCountFlagBits)msaa_samples_;
     depth_att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth_att.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depth_att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1028,7 +999,7 @@ class HelloTriangleApp {
     multisampling.sType =
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = msaa_samples_;
+    multisampling.rasterizationSamples = (VkSampleCountFlagBits)msaa_samples_;
 
     VkPipelineColorBlendAttachmentState color_blend_att{};
     color_blend_att.colorWriteMask =
@@ -1127,7 +1098,7 @@ class HelloTriangleApp {
     VkFormat color_fmt = swapchain_format_;
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, color_fmt, 1,
-        msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
+        (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color_img_, color_img_mem_);
@@ -1138,7 +1109,7 @@ class HelloTriangleApp {
   void createDepthResources() {
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, depth_fmt_, 1,
-        msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
+        (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_img_, depth_img_mem_);
     depth_img_view_ =
@@ -1894,9 +1865,9 @@ class HelloTriangleApp {
 
   vk::Instance instance_;
   vk::DebugUtilsMessengerEXT dbg_messenger_;
-  VkSurfaceKHR surface_;
-  VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
-  VkPhysicalDeviceProperties device_props_;
+  vk::SurfaceKHR surface_;
+  vk::PhysicalDevice physical_device_;
+  vk::PhysicalDeviceProperties device_props_;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
   VkDevice device_;
@@ -1936,7 +1907,7 @@ class HelloTriangleApp {
   VkImage depth_img_;
   VkDeviceMemory depth_img_mem_;
   VkImageView depth_img_view_;
-  VkSampleCountFlagBits msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
+  vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   Geometry geom;
 
