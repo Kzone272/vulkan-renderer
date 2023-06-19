@@ -807,81 +807,83 @@ class HelloTriangleApp {
   }
 
   void createRenderPass() {
-    VkAttachmentDescription color_att{};
-    color_att.format = (VkFormat)swapchain_format_;
-    color_att.samples = (VkSampleCountFlagBits)msaa_samples_;
-    color_att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color_att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_att.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_att.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference color_att_ref{};
-    color_att_ref.attachment = 0;
-    color_att_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vk::AttachmentDescription color_att{
+        .format = swapchain_format_,
+        .samples = msaa_samples_,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::eColorAttachmentOptimal,
+    };
+    vk::AttachmentReference color_att_ref{
+        .attachment = 0,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    };
 
     depth_fmt_ = findDepthFormat();
-    VkAttachmentDescription depth_att{};
-    depth_att.format = depth_fmt_;
-    depth_att.samples = (VkSampleCountFlagBits)msaa_samples_;
-    depth_att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_att.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depth_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_att.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth_att.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    vk::AttachmentDescription depth_att{
+        .format = depth_fmt_,
+        .samples = msaa_samples_,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+    };
+    vk::AttachmentReference depth_att_ref{
+        .attachment = 1,
+        .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+    };
 
-    VkAttachmentReference depth_att_ref{};
-    depth_att_ref.attachment = 1;
-    depth_att_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    vk::AttachmentDescription color_resolve_att{
+        .format = swapchain_format_,
+        .samples = vk::SampleCountFlagBits::e1,
+        .loadOp = vk::AttachmentLoadOp::eDontCare,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::ePresentSrcKHR,
+    };
+    vk::AttachmentReference color_resolve_att_ref{
+        .attachment = 2,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    };
 
-    VkAttachmentDescription color_resolve_att{};
-    color_resolve_att.format = (VkFormat)swapchain_format_;
-    color_resolve_att.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_resolve_att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_resolve_att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_resolve_att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_resolve_att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_resolve_att.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_resolve_att.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference color_resolve_att_ref{};
-    color_resolve_att_ref.attachment = 2;
-    color_resolve_att_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_att_ref;
-    subpass.pDepthStencilAttachment = &depth_att_ref;
-    subpass.pResolveAttachments = &color_resolve_att_ref;
+    vk::SubpassDescription subpass{
+        .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_att_ref,
+        .pResolveAttachments = &color_resolve_att_ref,
+        .pDepthStencilAttachment = &depth_att_ref,
+    };
 
     // Writing to the subpass color attachment depends on the swapchain
     // finishing its read of the color attachment.
     // We also need to read and write to the depth buffer.
-    VkSubpassDependency dep{};
-    dep.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dep.dstSubpass = 0;
-    dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep.srcAccessMask = 0;
-    dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    vk::SubpassDependency dep{
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                        vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                        vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .srcAccessMask = {},
+        .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite |
+                         vk::AccessFlagBits::eDepthStencilAttachmentWrite,
 
-    std::array<VkAttachmentDescription, 3> atts = {
+    };
+
+    std::array<vk::AttachmentDescription, 3> atts = {
         color_att, depth_att, color_resolve_att};
-    VkRenderPassCreateInfo rp_ci{};
-    rp_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    rp_ci.attachmentCount = atts.size();
-    rp_ci.pAttachments = atts.data();
-    rp_ci.subpassCount = 1;
-    rp_ci.pSubpasses = &subpass;
-    rp_ci.dependencyCount = 1;
-    rp_ci.pDependencies = &dep;
-    VKASSERT(vkCreateRenderPass(device_, &rp_ci, nullptr, &render_pass_));
+    vk::RenderPassCreateInfo rp_ci{};
+    rp_ci.setAttachments(atts);
+    rp_ci.setSubpasses(subpass);
+    rp_ci.setDependencies(dep);
+    render_pass_ = device_.createRenderPass(rp_ci).value;
   }
 
   void createDescriptorSetLayout() {
@@ -1089,23 +1091,23 @@ class HelloTriangleApp {
 
   void createDepthResources() {
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, depth_fmt_, 1,
-        (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
+        swapchain_extent_.width, swapchain_extent_.height, (VkFormat)depth_fmt_,
+        1, (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_img_, depth_img_mem_);
-    depth_img_view_ =
-        createImageView(depth_img_, depth_fmt_, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+    depth_img_view_ = createImageView(
+        depth_img_, (VkFormat)depth_fmt_, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
     transitionImageLayout(
-        depth_img_, depth_fmt_, 1, VK_IMAGE_LAYOUT_UNDEFINED,
+        depth_img_, (VkFormat)depth_fmt_, 1, VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
   }
 
-  VkFormat findDepthFormat() {
+  vk::Format findDepthFormat() {
     return findSupportedFormat(
-        {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
-         VK_FORMAT_D24_UNORM_S8_UINT},
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint,
+         vk::Format::eD24UnormS8Uint},
+        vk::ImageTiling::eOptimal,
+        vk::FormatFeatureFlagBits::eDepthStencilAttachment);
   }
 
   bool hasStencilComponent(VkFormat format) {
@@ -1113,17 +1115,17 @@ class HelloTriangleApp {
            format == VK_FORMAT_D24_UNORM_S8_UINT;
   }
 
-  VkFormat findSupportedFormat(
-      const std::vector<VkFormat>& formats, VkImageTiling tiling,
-      VkFormatFeatureFlags features) {
+  vk::Format findSupportedFormat(
+      const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
+      vk::FormatFeatureFlags features) {
     ASSERT(
-        tiling == VK_IMAGE_TILING_LINEAR || tiling == VK_IMAGE_TILING_OPTIMAL);
+        tiling == vk::ImageTiling::eLinear ||
+        tiling == vk::ImageTiling::eOptimal);
 
     for (const auto& format : formats) {
-      VkFormatProperties props;
-      vkGetPhysicalDeviceFormatProperties(physical_device_, format, &props);
+      vk::FormatProperties props = physical_device_.getFormatProperties(format);
 
-      auto tiling_features = tiling == VK_IMAGE_TILING_LINEAR
+      auto tiling_features = tiling == vk::ImageTiling::eLinear
                                  ? props.linearTilingFeatures
                                  : props.optimalTilingFeatures;
       if ((tiling_features & features) == features) {
@@ -1860,7 +1862,7 @@ class HelloTriangleApp {
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
   std::vector<vk::ImageView> swapchain_views_;
-  VkRenderPass render_pass_;
+  vk::RenderPass render_pass_;
   VkDescriptorSetLayout desc_set_layout_;
   VkDescriptorPool desc_pool_;
   VkPipelineLayout pipeline_layout_;
@@ -1884,7 +1886,7 @@ class HelloTriangleApp {
   VkImage color_img_;
   VkDeviceMemory color_img_mem_;
   VkImageView color_img_view_;
-  VkFormat depth_fmt_;
+  vk::Format depth_fmt_;
   VkImage depth_img_;
   VkDeviceMemory depth_img_mem_;
   VkImageView depth_img_view_;
