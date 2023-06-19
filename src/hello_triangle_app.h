@@ -783,29 +783,27 @@ class HelloTriangleApp {
     swapchain_views_.resize(swapchain_images_.size());
     for (size_t i = 0; i < swapchain_images_.size(); i++) {
       swapchain_views_[i] = createImageView(
-          swapchain_images_[i], (VkFormat)swapchain_format_, 1,
-          VK_IMAGE_ASPECT_COLOR_BIT);
+          swapchain_images_[i], swapchain_format_, 1,
+          vk::ImageAspectFlagBits::eColor);
     }
   }
 
-  VkImageView createImageView(
-      VkImage img, VkFormat format, uint32_t mip_levels,
-      VkImageAspectFlags aspect_flags) {
-    VkImageViewCreateInfo ci{};
-    ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    ci.image = img;
-    ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    ci.format = format;
-    ci.subresourceRange.aspectMask = aspect_flags;
-    ci.subresourceRange.baseMipLevel = 0;
-    ci.subresourceRange.levelCount = mip_levels;
-    ci.subresourceRange.baseArrayLayer = 0;
-    ci.subresourceRange.layerCount = 1;
+  vk::ImageView createImageView(
+      vk::Image img, vk::Format format, uint32_t mip_levels,
+      vk::ImageAspectFlags aspect_flags) {
+    vk::ImageViewCreateInfo ci{
+        .image = img,
+        .viewType = vk::ImageViewType::e2D,
+        .format = format,
+        .subresourceRange = {
+            .aspectMask = aspect_flags,
+            .baseMipLevel = 0,
+            .levelCount = mip_levels,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        }};
 
-    VkImageView img_view;
-    VKASSERT(vkCreateImageView(device_, &ci, nullptr, &img_view));
-
-    return img_view;
+    return device_.createImageView(ci).value;
   }
 
   void createRenderPass() {
@@ -1057,28 +1055,28 @@ class HelloTriangleApp {
   }
 
   void createColorResources() {
-    VkFormat color_fmt = (VkFormat)swapchain_format_;
+    vk::Format color_fmt = swapchain_format_;
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, color_fmt, 1,
-        (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color_img_, color_img_mem_);
-    color_img_view_ =
-        createImageView(color_img_, color_fmt, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+        msaa_samples_, vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransientAttachment |
+            vk::ImageUsageFlagBits::eColorAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal, color_img_, color_img_mem_);
+    color_img_view_ = createImageView(
+        color_img_, color_fmt, 1, vk::ImageAspectFlagBits::eColor);
   }
 
   void createDepthResources() {
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, (VkFormat)depth_fmt_,
-        1, (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_img_, depth_img_mem_);
+        swapchain_extent_.width, swapchain_extent_.height, depth_fmt_, 1,
+        msaa_samples_, vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal, depth_img_, depth_img_mem_);
     depth_img_view_ = createImageView(
-        depth_img_, (VkFormat)depth_fmt_, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+        depth_img_, depth_fmt_, 1, vk::ImageAspectFlagBits::eDepth);
     transitionImageLayout(
-        depth_img_, (VkFormat)depth_fmt_, 1, VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        depth_img_, depth_fmt_, 1, vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthStencilAttachmentOptimal);
   }
 
   vk::Format findDepthFormat() {
@@ -1089,9 +1087,9 @@ class HelloTriangleApp {
         vk::FormatFeatureFlagBits::eDepthStencilAttachment);
   }
 
-  bool hasStencilComponent(VkFormat format) {
-    return format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
-           format == VK_FORMAT_D24_UNORM_S8_UINT;
+  bool hasStencilComponent(vk::Format format) {
+    return format == vk::Format::eD32SfloatS8Uint ||
+           format == vk::Format::eD24UnormS8Uint;
   }
 
   vk::Format findSupportedFormat(
@@ -1155,19 +1153,22 @@ class HelloTriangleApp {
     vkUnmapMemory(device_, staging_buf_mem);
     SDL_FreeSurface(texture);
 
-    texture_fmt_ = VK_FORMAT_R8G8B8A8_SRGB;
+    texture_fmt_ = vk::Format::eR8G8B8A8Srgb;
     createImage(
-        width, height, texture_fmt_, mip_levels_, VK_SAMPLE_COUNT_1_BIT,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-            VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_img_, texture_img_mem_);
+        width, height, texture_fmt_, mip_levels_, vk::SampleCountFlagBits::e1,
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransferSrc |
+            vk::ImageUsageFlagBits::eTransferDst |
+            vk::ImageUsageFlagBits::eSampled,
+        vk::MemoryPropertyFlagBits::eDeviceLocal, texture_img_,
+        texture_img_mem_);
 
     transitionImageLayout(
-        texture_img_, texture_fmt_, mip_levels_, VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        texture_img_, texture_fmt_, mip_levels_, vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eTransferDstOptimal);
     copyBufferToImage(staging_buf, texture_img_, width, height);
-    generateMipmaps(texture_img_, width, height, texture_fmt_, mip_levels_);
+    generateMipmaps(
+        texture_img_, width, height, (VkFormat)texture_fmt_, mip_levels_);
     // Transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating
     // mipmaps.
 
@@ -1176,87 +1177,91 @@ class HelloTriangleApp {
   }
 
   void createImage(
-      uint32_t width, uint32_t height, VkFormat format, uint32_t mip_levels,
-      VkSampleCountFlagBits num_samples, VkImageTiling tiling,
-      VkImageUsageFlags usage, VkMemoryPropertyFlags props, VkImage& img,
-      VkDeviceMemory& img_mem) {
-    VkImageCreateInfo img_ci{};
-    img_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    img_ci.imageType = VK_IMAGE_TYPE_2D;
-    img_ci.extent.width = width;
-    img_ci.extent.height = height;
-    img_ci.extent.depth = 1;
-    img_ci.mipLevels = mip_levels;
-    img_ci.arrayLayers = 1;
-    img_ci.format = format;
-    img_ci.tiling = tiling;
-    img_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    img_ci.usage = usage;
-    img_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    img_ci.samples = num_samples;
-    VKASSERT(vkCreateImage(device_, &img_ci, nullptr, &img));
+      uint32_t width, uint32_t height, vk::Format format, uint32_t mip_levels,
+      vk::SampleCountFlagBits num_samples, vk::ImageTiling tiling,
+      vk::ImageUsageFlags usage, vk::MemoryPropertyFlags props, vk::Image& img,
+      vk::DeviceMemory& img_mem) {
+    vk::ImageCreateInfo img_ci{
+        .imageType = vk::ImageType::e2D,
+        .format = format,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mipLevels = mip_levels,
+        .arrayLayers = 1,
+        .samples = num_samples,
+        .tiling = tiling,
+        .usage = usage,
+        .sharingMode = vk::SharingMode::eExclusive,
+        .initialLayout = vk::ImageLayout::eUndefined,
+    };
+    img = device_.createImage(img_ci).value;
 
-    VkMemoryRequirements mem_reqs;
-    vkGetImageMemoryRequirements(device_, img, &mem_reqs);
+    vk::MemoryRequirements mem_reqs = device_.getImageMemoryRequirements(img);
 
-    VkMemoryAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = mem_reqs.size;
-    alloc_info.memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props);
-    VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &img_mem));
+    vk::MemoryAllocateInfo alloc_info{
+        .allocationSize = mem_reqs.size,
+        .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
+    };
+    img_mem = device_.allocateMemory(alloc_info).value;
 
-    VKASSERT(vkBindImageMemory(device_, img, img_mem, 0));
+    std::ignore = device_.bindImageMemory(img, img_mem, 0);
   }
 
   void transitionImageLayout(
-      VkImage img, VkFormat format, uint32_t mip_levels,
-      VkImageLayout old_layout, VkImageLayout new_layout) {
-    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+      vk::Image img, vk::Format format, uint32_t mip_levels,
+      vk::ImageLayout old_layout, vk::ImageLayout new_layout) {
+    vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = old_layout;
-    barrier.newLayout = new_layout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = img;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = mip_levels;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    vk::ImageMemoryBarrier barrier{
+        .oldLayout = old_layout,
+        .newLayout = new_layout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = img,
+        .subresourceRange = {
+            .baseMipLevel = 0,
+            .levelCount = mip_levels,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        }};
 
-    if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-      barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if (new_layout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+      barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
       if (hasStencilComponent(format)) {
-        barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        barrier.subresourceRange.aspectMask |=
+            vk::ImageAspectFlagBits::eStencil;
       }
     } else {
-      barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
     }
 
-    VkPipelineStageFlags src_stage;
-    VkPipelineStageFlags dst_stage;
-    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-      barrier.srcAccessMask = 0;
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-      dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    vk::PipelineStageFlags src_stage;
+    vk::PipelineStageFlags dst_stage;
+    if (old_layout == vk::ImageLayout::eUndefined &&
+        new_layout == vk::ImageLayout::eTransferDstOptimal) {
+      barrier.srcAccessMask = {};
+      barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+      src_stage = vk::PipelineStageFlagBits::eTopOfPipe;
+      dst_stage = vk::PipelineStageFlagBits::eTransfer;
     } else if (
-        old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-        new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        old_layout == vk::ImageLayout::eTransferDstOptimal &&
+        new_layout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+      barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+      src_stage = vk::PipelineStageFlagBits::eTransfer;
+      dst_stage = vk::PipelineStageFlagBits::eFragmentShader;
     } else if (
-        old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-      barrier.srcAccessMask = 0;
-      barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-      dst_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        old_layout == vk::ImageLayout::eUndefined &&
+        new_layout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+      barrier.srcAccessMask = {};
+      barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead |
+                              vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+      src_stage = vk::PipelineStageFlagBits::eTopOfPipe;
+      dst_stage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
     } else {
       printf(
           "Unsupported layout transition! (%d -> %d)\n", old_layout,
@@ -1264,8 +1269,8 @@ class HelloTriangleApp {
       ASSERT(false);
     }
 
-    vkCmdPipelineBarrier(
-        cmd_buf, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    cmd_buf.pipelineBarrier(
+        src_stage, dst_stage, {}, nullptr, nullptr, barrier);
 
     endSingleTimeCommands(cmd_buf);
   }
@@ -1380,7 +1385,8 @@ class HelloTriangleApp {
 
   void createTextureImageView() {
     texture_img_view_ = createImageView(
-        texture_img_, texture_fmt_, mip_levels_, VK_IMAGE_ASPECT_COLOR_BIT);
+        texture_img_, texture_fmt_, mip_levels_,
+        vk::ImageAspectFlagBits::eColor);
   }
 
   void createTextureSampler() {
@@ -1556,14 +1562,15 @@ class HelloTriangleApp {
     VkMemoryAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = mem_reqs.size;
-    alloc_info.memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props);
+    alloc_info.memoryTypeIndex =
+        findMemoryType(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlags(props));
     VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &buf_mem));
     VKASSERT(vkBindBufferMemory(device_, buf, buf_mem, 0));
   }
 
-  uint32_t findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags props) {
-    VkPhysicalDeviceMemoryProperties mem_props;
-    vkGetPhysicalDeviceMemoryProperties(physical_device_, &mem_props);
+  uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props) {
+    vk::PhysicalDeviceMemoryProperties mem_props =
+        physical_device_.getMemoryProperties();
 
     for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
       if (type_filter & (1 << i) &&
@@ -1856,19 +1863,19 @@ class HelloTriangleApp {
   VkDeviceMemory vert_buf_mem_;
   VkBuffer ind_buf_;
   VkDeviceMemory ind_buf_mem_;
-  VkFormat texture_fmt_;
+  vk::Format texture_fmt_;
   uint32_t mip_levels_;
-  VkImage texture_img_;
-  VkDeviceMemory texture_img_mem_;
-  VkImageView texture_img_view_;
+  vk::Image texture_img_;
+  vk::DeviceMemory texture_img_mem_;
+  vk::ImageView texture_img_view_;
   VkSampler texture_sampler_;
-  VkImage color_img_;
-  VkDeviceMemory color_img_mem_;
-  VkImageView color_img_view_;
+  vk::Image color_img_;
+  vk::DeviceMemory color_img_mem_;
+  vk::ImageView color_img_view_;
   vk::Format depth_fmt_;
-  VkImage depth_img_;
-  VkDeviceMemory depth_img_mem_;
-  VkImageView depth_img_view_;
+  vk::Image depth_img_;
+  vk::DeviceMemory depth_img_mem_;
+  vk::ImageView depth_img_view_;
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   Geometry geom;
