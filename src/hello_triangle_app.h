@@ -389,7 +389,7 @@ class HelloTriangleApp {
     present_info.waitSemaphoreCount = 1;
     present_info.pWaitSemaphores = &render_sems_[frame];
     present_info.swapchainCount = 1;
-    present_info.pSwapchains = &swapchain_;
+    present_info.pSwapchains = (VkSwapchainKHR*)&swapchain_;
     present_info.pImageIndices = &img_ind;
 
     result = vkQueuePresentKHR(present_q_, &present_info);
@@ -662,40 +662,31 @@ class HelloTriangleApp {
   }
 
   void createLogicalDevice() {
-    std::vector<VkDeviceQueueCreateInfo> device_q_cis;
     std::set<int> unique_q_indices = {
         q_indices_.gfx_family, q_indices_.present_family};
     float q_prio = 1.0f;
+    std::vector<vk::DeviceQueueCreateInfo> device_q_cis;
     for (int q_index : unique_q_indices) {
-      VkDeviceQueueCreateInfo device_q_ci{};
-      device_q_ci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-      device_q_ci.queueFamilyIndex = q_index;
-      device_q_ci.queueCount = 1;
-      device_q_ci.pQueuePriorities = &q_prio;
-      device_q_cis.push_back(device_q_ci);
+      device_q_cis.push_back({
+          .queueFamilyIndex = static_cast<uint32_t>(q_index),
+          .queueCount = 1,
+          .pQueuePriorities = &q_prio,
+      });
     }
 
-    VkPhysicalDeviceFeatures device_features{};
-    device_features.samplerAnisotropy = VK_TRUE;
+    vk::PhysicalDeviceFeatures device_features{.samplerAnisotropy = VK_TRUE};
 
-    VkDeviceCreateInfo device_ci{};
-    device_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_ci.queueCreateInfoCount = device_q_cis.size();
-    device_ci.pQueueCreateInfos = device_q_cis.data();
-    device_ci.pEnabledFeatures = &device_features;
-    device_ci.enabledExtensionCount = device_extensions.size();
-    device_ci.ppEnabledExtensionNames = device_extensions.data();
+    vk::DeviceCreateInfo device_ci{.pEnabledFeatures = &device_features};
+    device_ci.setPEnabledExtensionNames(device_extensions);
+    device_ci.setQueueCreateInfos(device_q_cis);
     if (enable_validation_layers_) {
-      device_ci.enabledLayerCount = validation_layers.size();
-      device_ci.ppEnabledLayerNames = validation_layers.data();
-    } else {
-      device_ci.enabledLayerCount = 0;
+      device_ci.setPEnabledLayerNames(validation_layers);
     }
+    device_ = physical_device_.createDevice(device_ci).value;
 
-    VKASSERT(vkCreateDevice(physical_device_, &device_ci, nullptr, &device_));
-    vkGetDeviceQueue(device_, q_indices_.gfx_family, 0, &gfx_q_);
+    gfx_q_ = device_.getQueue(q_indices_.gfx_family, 0);
     ASSERT(gfx_q_);
-    vkGetDeviceQueue(device_, q_indices_.present_family, 0, &present_q_);
+    present_q_ = device_.getQueue(q_indices_.present_family, 0);
     ASSERT(present_q_);
   }
 
@@ -723,14 +714,14 @@ class HelloTriangleApp {
     return vk::PresentModeKHR::eFifo;
   }
 
-  VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& caps) {
+  vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& caps) {
     if (caps.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
       return caps.currentExtent;
     } else {
       int width = 0;
       int height = 0;
       SDL_GL_GetDrawableSize(window_, &width, &height);
-      VkExtent2D extent = {
+      vk::Extent2D extent{
           static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
       extent.width = std::clamp(
           extent.width, caps.minImageExtent.width, caps.maxImageExtent.width);
@@ -752,44 +743,34 @@ class HelloTriangleApp {
           std::min(image_count, swapchain_support_.caps.maxImageCount);
     }
 
-    VkSwapchainCreateInfoKHR swapchain_ci{};
-    swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_ci.surface = surface_;
-    swapchain_ci.minImageCount = image_count;
-    swapchain_ci.imageFormat = (VkFormat)format.format;
-    swapchain_ci.imageColorSpace = (VkColorSpaceKHR)format.colorSpace;
-    swapchain_ci.imageExtent = extent;
-    swapchain_ci.imageArrayLayers = 1;
-    swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    swapchain_ci.preTransform =
-        (VkSurfaceTransformFlagBitsKHR)swapchain_support_.caps.currentTransform;
-    swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_ci.presentMode = (VkPresentModeKHR)present_mode;
-    swapchain_ci.clipped = VK_TRUE;
-    swapchain_ci.oldSwapchain = VK_NULL_HANDLE;
+    vk::SwapchainCreateInfoKHR swapchain_ci{
+        .surface = surface_,
+        .minImageCount = image_count,
+        .imageFormat = format.format,
+        .imageColorSpace = format.colorSpace,
+        .imageExtent = extent,
+        .imageArrayLayers = 1,
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+        .preTransform = swapchain_support_.caps.currentTransform,
+        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        .presentMode = present_mode,
+        .clipped = VK_TRUE,
+        .oldSwapchain = VK_NULL_HANDLE,
+    };
 
-    uint32_t queue_family_indices[] = {
+    std::array<uint32_t, 2> queue_family_indices{
         static_cast<uint32_t>(q_indices_.gfx_family),
         static_cast<uint32_t>(q_indices_.present_family)};
     if (q_indices_.gfx_family != q_indices_.present_family) {
-      swapchain_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-      swapchain_ci.queueFamilyIndexCount = 2;
-      swapchain_ci.pQueueFamilyIndices = queue_family_indices;
+      swapchain_ci.imageSharingMode = vk::SharingMode::eConcurrent;
+      swapchain_ci.setQueueFamilyIndices(queue_family_indices);
     } else {
-      swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-      swapchain_ci.queueFamilyIndexCount = 0;
-      swapchain_ci.pQueueFamilyIndices = nullptr;
+      swapchain_ci.imageSharingMode = vk::SharingMode::eExclusive;
     }
 
-    VKASSERT(
-        vkCreateSwapchainKHR(device_, &swapchain_ci, nullptr, &swapchain_));
-
-    vkGetSwapchainImagesKHR(device_, swapchain_, &image_count, nullptr);
-    swapchain_images_.resize(image_count);
-    vkGetSwapchainImagesKHR(
-        device_, swapchain_, &image_count, swapchain_images_.data());
-
-    swapchain_format_ = (VkFormat)format.format;
+    swapchain_ = device_.createSwapchainKHR(swapchain_ci).value;
+    swapchain_images_ = device_.getSwapchainImagesKHR(swapchain_).value;
+    swapchain_format_ = format.format;
     swapchain_extent_ = extent;
     printf(
         "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
@@ -800,7 +781,7 @@ class HelloTriangleApp {
     swapchain_views_.resize(swapchain_images_.size());
     for (size_t i = 0; i < swapchain_images_.size(); i++) {
       swapchain_views_[i] = createImageView(
-          swapchain_images_[i], swapchain_format_, 1,
+          swapchain_images_[i], (VkFormat)swapchain_format_, 1,
           VK_IMAGE_ASPECT_COLOR_BIT);
     }
   }
@@ -827,7 +808,7 @@ class HelloTriangleApp {
 
   void createRenderPass() {
     VkAttachmentDescription color_att{};
-    color_att.format = swapchain_format_;
+    color_att.format = (VkFormat)swapchain_format_;
     color_att.samples = (VkSampleCountFlagBits)msaa_samples_;
     color_att.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -856,7 +837,7 @@ class HelloTriangleApp {
     depth_att_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentDescription color_resolve_att{};
-    color_resolve_att.format = swapchain_format_;
+    color_resolve_att.format = (VkFormat)swapchain_format_;
     color_resolve_att.samples = VK_SAMPLE_COUNT_1_BIT;
     color_resolve_att.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_resolve_att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1095,7 +1076,7 @@ class HelloTriangleApp {
   }
 
   void createColorResources() {
-    VkFormat color_fmt = swapchain_format_;
+    VkFormat color_fmt = (VkFormat)swapchain_format_;
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, color_fmt, 1,
         (VkSampleCountFlagBits)msaa_samples_, VK_IMAGE_TILING_OPTIMAL,
@@ -1870,15 +1851,15 @@ class HelloTriangleApp {
   vk::PhysicalDeviceProperties device_props_;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
-  VkDevice device_;
-  VkQueue gfx_q_ = VK_NULL_HANDLE;
-  VkQueue present_q_ = VK_NULL_HANDLE;
+  vk::Device device_;
+  vk::Queue gfx_q_;
+  vk::Queue present_q_;
   SwapchainSupportDetails swapchain_support_;
-  VkSwapchainKHR swapchain_;
-  std::vector<VkImage> swapchain_images_;
-  VkFormat swapchain_format_;
-  VkExtent2D swapchain_extent_;
-  std::vector<VkImageView> swapchain_views_;
+  vk::SwapchainKHR swapchain_;
+  std::vector<vk::Image> swapchain_images_;
+  vk::Format swapchain_format_;
+  vk::Extent2D swapchain_extent_;
+  std::vector<vk::ImageView> swapchain_views_;
   VkRenderPass render_pass_;
   VkDescriptorSetLayout desc_set_layout_;
   VkDescriptorPool desc_pool_;
