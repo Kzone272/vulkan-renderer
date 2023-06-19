@@ -595,8 +595,8 @@ class HelloTriangleApp {
   }
 
   struct QueueFamilyIndices {
-    int gfx_family = -1;
-    int present_family = -1;
+    uint32_t gfx_family = -1;
+    uint32_t present_family = -1;
 
     bool isComplete() {
       return gfx_family != -1 && present_family != -1;
@@ -607,7 +607,7 @@ class HelloTriangleApp {
     auto q_families = device.getQueueFamilyProperties();
 
     QueueFamilyIndices indices;
-    int i = 0;
+    uint32_t i = 0;
     for (const auto& q_family : q_families) {
       if (q_family.queueFlags & vk::QueueFlagBits::eGraphics) {
         indices.gfx_family = i;
@@ -665,13 +665,13 @@ class HelloTriangleApp {
   }
 
   void createLogicalDevice() {
-    std::set<int> unique_q_indices = {
+    std::set<uint32_t> unique_q_indices = {
         q_indices_.gfx_family, q_indices_.present_family};
     float q_prio = 1.0f;
     std::vector<vk::DeviceQueueCreateInfo> device_q_cis;
-    for (int q_index : unique_q_indices) {
+    for (uint32_t q_index : unique_q_indices) {
       device_q_cis.push_back({
-          .queueFamilyIndex = static_cast<uint32_t>(q_index),
+          .queueFamilyIndex = q_index,
           .queueCount = 1,
           .pQueuePriorities = &q_prio,
       });
@@ -762,8 +762,7 @@ class HelloTriangleApp {
     };
 
     std::array<uint32_t, 2> queue_family_indices{
-        static_cast<uint32_t>(q_indices_.gfx_family),
-        static_cast<uint32_t>(q_indices_.present_family)};
+        q_indices_.gfx_family, q_indices_.present_family};
     if (q_indices_.gfx_family != q_indices_.present_family) {
       swapchain_ci.imageSharingMode = vk::SharingMode::eConcurrent;
       swapchain_ci.setQueueFamilyIndices(queue_family_indices);
@@ -1050,11 +1049,11 @@ class HelloTriangleApp {
   }
 
   void createCommandPool() {
-    VkCommandPoolCreateInfo pool_ci{};
-    pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    pool_ci.queueFamilyIndex = q_indices_.gfx_family;
-    VKASSERT(vkCreateCommandPool(device_, &pool_ci, nullptr, &cmd_pool_));
+    vk::CommandPoolCreateInfo ci{
+        .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        .queueFamilyIndex = q_indices_.gfx_family,
+    };
+    cmd_pool_ = device_.createCommandPool(ci).value;
   }
 
   void createColorResources() {
@@ -1848,7 +1847,7 @@ class HelloTriangleApp {
   vk::PipelineLayout pipeline_layout_;
   vk::Pipeline gfx_pipeline_;
   std::vector<VkFramebuffer> swapchain_fbs_;
-  VkCommandPool cmd_pool_;
+  vk::CommandPool cmd_pool_;
   std::vector<VkCommandBuffer> cmd_bufs_;
   std::vector<VkSemaphore> img_sems_;
   std::vector<VkSemaphore> render_sems_;
