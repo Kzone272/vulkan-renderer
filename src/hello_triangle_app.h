@@ -887,28 +887,26 @@ class HelloTriangleApp {
   }
 
   void createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding ubo_binding{};
-    ubo_binding.binding = 0;
-    ubo_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ubo_binding.descriptorCount = 1;
-    ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    vk::DescriptorSetLayoutBinding ubo_binding{
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+    };
 
-    VkDescriptorSetLayoutBinding sampler_binding{};
-    sampler_binding.binding = 1;
-    sampler_binding.descriptorCount = 1;
-    sampler_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    sampler_binding.pImmutableSamplers = nullptr;
-    sampler_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    vk::DescriptorSetLayoutBinding sampler_binding{
+        .binding = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment,
+    };
 
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {
+    std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {
         ubo_binding, sampler_binding};
 
-    VkDescriptorSetLayoutCreateInfo layout_ci{};
-    layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_ci.bindingCount = bindings.size();
-    layout_ci.pBindings = bindings.data();
-    VKASSERT(vkCreateDescriptorSetLayout(
-        device_, &layout_ci, nullptr, &desc_set_layout_));
+    vk::DescriptorSetLayoutCreateInfo layout_ci{};
+    layout_ci.setBindings(bindings);
+    desc_set_layout_ = device_.createDescriptorSetLayout(layout_ci).value;
   }
 
   void createGraphicsPipeline() {
@@ -1012,7 +1010,7 @@ class HelloTriangleApp {
     VkPipelineLayoutCreateInfo pipeline_layout_ci{};
     pipeline_layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipeline_layout_ci.setLayoutCount = 1;
-    pipeline_layout_ci.pSetLayouts = &desc_set_layout_;
+    pipeline_layout_ci.pSetLayouts = (VkDescriptorSetLayout*)&desc_set_layout_;
 
     VKASSERT(vkCreatePipelineLayout(
         device_, &pipeline_layout_ci, nullptr, &pipeline_layout_));
@@ -1863,7 +1861,7 @@ class HelloTriangleApp {
   vk::Extent2D swapchain_extent_;
   std::vector<vk::ImageView> swapchain_views_;
   vk::RenderPass render_pass_;
-  VkDescriptorSetLayout desc_set_layout_;
+  vk::DescriptorSetLayout desc_set_layout_;
   VkDescriptorPool desc_pool_;
   VkPipelineLayout pipeline_layout_;
   VkPipeline gfx_pipeline_;
