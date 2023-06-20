@@ -1030,19 +1030,17 @@ class HelloTriangleApp {
   void createFrameBuffers() {
     swapchain_fbs_.resize(swapchain_views_.size());
     for (size_t i = 0; i < swapchain_views_.size(); i++) {
-      std::array<VkImageView, 3> atts = {
+      std::array<vk::ImageView, 3> atts = {
           color_img_view_, depth_img_view_, swapchain_views_[i]};
 
-      VkFramebufferCreateInfo fb_ci{};
-      fb_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-      fb_ci.renderPass = render_pass_;
-      fb_ci.attachmentCount = atts.size();
-      fb_ci.pAttachments = atts.data();
-      fb_ci.width = swapchain_extent_.width;
-      fb_ci.height = swapchain_extent_.height;
-      fb_ci.layers = 1;
-      VKASSERT(
-          vkCreateFramebuffer(device_, &fb_ci, nullptr, &swapchain_fbs_[i]));
+      vk::FramebufferCreateInfo fb_ci{
+          .renderPass = render_pass_,
+          .width = swapchain_extent_.width,
+          .height = swapchain_extent_.height,
+          .layers = 1,
+      };
+      fb_ci.setAttachments(atts);
+      swapchain_fbs_[i] = device_.createFramebuffer(fb_ci).value;
     }
   }
 
@@ -1136,21 +1134,20 @@ class HelloTriangleApp {
     }
     uint32_t width = texture->w;
     uint32_t height = texture->h;
-    VkDeviceSize image_size = width * height * 4;
+    vk::DeviceSize image_size = width * height * 4;
     mip_levels_ = std::floor(std::log2(std::max(width, height))) + 1;
 
-    VkBuffer staging_buf;
-    VkDeviceMemory staging_buf_mem;
+    vk::Buffer staging_buf;
+    vk::DeviceMemory staging_buf_mem;
     createBuffer(
-        image_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        image_size, vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible |
+            vk::MemoryPropertyFlagBits::eHostCoherent,
         staging_buf, staging_buf_mem);
 
-    void* data;
-    vkMapMemory(device_, staging_buf_mem, 0, image_size, 0, &data);
+    void* data = device_.mapMemory(staging_buf_mem, 0, image_size).value;
     memcpy(data, texture->pixels, static_cast<size_t>(image_size));
-    vkUnmapMemory(device_, staging_buf_mem);
+    device_.unmapMemory(staging_buf_mem);
     SDL_FreeSurface(texture);
 
     texture_fmt_ = vk::Format::eR8G8B8A8Srgb;
@@ -1167,13 +1164,12 @@ class HelloTriangleApp {
         texture_img_, texture_fmt_, mip_levels_, vk::ImageLayout::eUndefined,
         vk::ImageLayout::eTransferDstOptimal);
     copyBufferToImage(staging_buf, texture_img_, width, height);
-    generateMipmaps(
-        texture_img_, width, height, (VkFormat)texture_fmt_, mip_levels_);
-    // Transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating
+    generateMipmaps(texture_img_, width, height, texture_fmt_, mip_levels_);
+    // Transitioned to vk::ImageLayout::eShaderReadOnlyOptimal while generating
     // mipmaps.
 
-    vkDestroyBuffer(device_, staging_buf, nullptr);
-    vkFreeMemory(device_, staging_buf_mem, nullptr);
+    device_.destroyBuffer(staging_buf);
+    device_.freeMemory(staging_buf_mem);
   }
 
   void createImage(
@@ -1276,61 +1272,66 @@ class HelloTriangleApp {
   }
 
   void copyBufferToImage(
-      VkBuffer buf, VkImage img, uint32_t width, uint32_t height) {
-    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+      vk::Buffer buf, vk::Image img, uint32_t width, uint32_t height) {
+    vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
-    VkBufferImageCopy region{};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = {0, 0, 0};
-    region.imageExtent = {width, height, 1};
+    vk::BufferImageCopy region{
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource =
+            {
+                .aspectMask = vk::ImageAspectFlagBits::eColor,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {width, height, 1},
+    };
 
-    vkCmdCopyBufferToImage(
-        cmd_buf, buf, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    cmd_buf.copyBufferToImage(
+        buf, img, vk::ImageLayout::eTransferDstOptimal, region);
 
     endSingleTimeCommands(cmd_buf);
   }
 
   void generateMipmaps(
-      VkImage img, int32_t width, int32_t height, VkFormat format,
+      vk::Image img, int32_t width, int32_t height, vk::Format format,
       uint32_t mip_levels) {
-    VkFormatProperties format_props;
-    vkGetPhysicalDeviceFormatProperties(
-        physical_device_, format, &format_props);
+    vk::FormatProperties format_props =
+        physical_device_.getFormatProperties(format);
     ASSERT(
         format_props.optimalTilingFeatures &
-        VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+        vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
 
-    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+    vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.image = img;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.levelCount = 1;
+    vk::ImageMemoryBarrier barrier{
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = img,
+        .subresourceRange =
+            {
+                .aspectMask = vk::ImageAspectFlagBits::eColor,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+    };
 
     int32_t mip_width = width;
     int32_t mip_height = height;
     for (uint32_t i = 0; i < mip_levels - 1; i++) {
       // Transition mip i to to be a copy source.
       barrier.subresourceRange.baseMipLevel = i;
-      barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-      barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-      vkCmdPipelineBarrier(
-          cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-          &barrier);
+      barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+      barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+      barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+      cmd_buf.pipelineBarrier(
+          vk::PipelineStageFlagBits::eTransfer,
+          vk::PipelineStageFlagBits::eTransfer, {}, nullptr, nullptr, barrier);
 
       int32_t src_width = mip_width;
       int32_t src_height = mip_height;
@@ -1342,43 +1343,53 @@ class HelloTriangleApp {
       }
 
       // Blit from mip i to mip i+1 at half the size.
-      VkImageBlit blit{};
-      blit.srcOffsets[0] = {0, 0, 0};
-      blit.srcOffsets[1] = {src_width, src_height, 1};
-      blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      blit.srcSubresource.mipLevel = i;
-      blit.srcSubresource.layerCount = 1;
-      blit.srcSubresource.baseArrayLayer = 0;
-      blit.dstOffsets[0] = {0, 0, 0};
-      blit.dstOffsets[1] = {mip_width, mip_height, 1};
-      blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      blit.dstSubresource.mipLevel = i + 1;
-      blit.dstSubresource.layerCount = 1;
-      blit.dstSubresource.baseArrayLayer = 0;
-      vkCmdBlitImage(
-          cmd_buf, img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, img,
-          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+      vk::ImageBlit blit{
+          .srcSubresource =
+              {
+                  .aspectMask = vk::ImageAspectFlagBits::eColor,
+                  .mipLevel = i,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
+          .srcOffsets = {{
+              vk::Offset3D{0, 0, 0},
+              vk::Offset3D{src_width, src_height, 1},
+          }},
+          .dstSubresource =
+              {
+                  .aspectMask = vk::ImageAspectFlagBits::eColor,
+                  .mipLevel = i + 1,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
+          .dstOffsets = {{
+              vk::Offset3D{0, 0, 0},
+              vk::Offset3D{mip_width, mip_height, 1},
+          }}};
+      cmd_buf.blitImage(
+          img, vk::ImageLayout::eTransferSrcOptimal, img,
+          vk::ImageLayout::eTransferDstOptimal, blit, vk::Filter::eLinear);
 
       // Transition mip i to be shader readable.
-      barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-      barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      vkCmdPipelineBarrier(
-          cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-          &barrier);
+      barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+      barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+      barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+      cmd_buf.pipelineBarrier(
+          vk::PipelineStageFlagBits::eTransfer,
+          vk::PipelineStageFlagBits::eFragmentShader, {}, nullptr, nullptr,
+          barrier);
     }
     // Transition last mip level to be shader readable.
     barrier.subresourceRange.baseMipLevel = mip_levels - 1;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    vkCmdPipelineBarrier(
-        cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-        &barrier);
+    barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+    barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+    cmd_buf.pipelineBarrier(
+        vk::PipelineStageFlagBits::eTransfer,
+        vk::PipelineStageFlagBits::eFragmentShader, {}, nullptr, nullptr,
+        barrier);
 
     endSingleTimeCommands(cmd_buf);
   }
@@ -1452,65 +1463,64 @@ class HelloTriangleApp {
   void createVertexBuffer() {
     VkDeviceSize size = sizeof(Vertex) * geom.vertices.size();
     stageBuffer(
-        size, (void*)geom.vertices.data(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        vert_buf_, vert_buf_mem_);
+        size, (void*)geom.vertices.data(),
+        vk::BufferUsageFlagBits::eVertexBuffer, vert_buf_, vert_buf_mem_);
   }
 
   void createIndexBuffer() {
     VkDeviceSize size = sizeof(uint32_t) * geom.indices.size();
     stageBuffer(
-        size, (void*)geom.indices.data(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        size, (void*)geom.indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,
         ind_buf_, ind_buf_mem_);
   }
 
   void createUniformBuffers() {
-    VkDeviceSize buf_size = sizeof(UniformBufferObject);
+    vk::DeviceSize buf_size = sizeof(UniformBufferObject);
     uniform_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
       createBuffer(
-          buf_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+          buf_size, vk::BufferUsageFlagBits::eUniformBuffer,
+          vk::MemoryPropertyFlagBits::eHostVisible |
+              vk::MemoryPropertyFlagBits::eHostCoherent,
           uniform_bufs_[i].buf, uniform_bufs_[i].buf_mem);
-      VKASSERT(vkMapMemory(
-          device_, uniform_bufs_[i].buf_mem, 0, buf_size, 0,
-          &uniform_bufs_[i].buf_mapped));
+      uniform_bufs_[i].buf_mapped =
+          device_.mapMemory(uniform_bufs_[i].buf_mem, 0, buf_size).value;
     }
   }
 
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
   // from the staging_buf to dst_buf.
   void stageBuffer(
-      VkDeviceSize size, void* data, VkBufferUsageFlags usage,
-      VkBuffer& dst_buf, VkDeviceMemory& dst_buf_mem) {
-    VkBuffer staging_buf;
-    VkDeviceMemory staging_buf_mem;
+      vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
+      vk::Buffer& dst_buf, vk::DeviceMemory& dst_buf_mem) {
+    vk::Buffer staging_buf;
+    vk::DeviceMemory staging_buf_mem;
     createBuffer(
-        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        size, vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible |
+            vk::MemoryPropertyFlagBits::eHostCoherent,
         staging_buf, staging_buf_mem);
 
-    void* staging_data;
-    VKASSERT(vkMapMemory(device_, staging_buf_mem, 0, size, 0, &staging_data));
+    void* staging_data = device_.mapMemory(staging_buf_mem, 0, size).value;
     memcpy(staging_data, data, (size_t)size);
-    vkUnmapMemory(device_, staging_buf_mem);
+    device_.unmapMemory(staging_buf_mem);
 
     createBuffer(
-        size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dst_buf, dst_buf_mem);
+        size, usage | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal, dst_buf, dst_buf_mem);
     copyBuffer(staging_buf, dst_buf, size);
 
-    vkDestroyBuffer(device_, staging_buf, nullptr);
-    vkFreeMemory(device_, staging_buf_mem, nullptr);
+    device_.destroyBuffer(staging_buf);
+    device_.freeMemory(staging_buf_mem);
   }
 
-  void copyBuffer(VkBuffer src_buf, VkBuffer dst_buf, VkDeviceSize size) {
-    VkCommandBuffer cmd_buf = beginSingleTimeCommands();
+  void copyBuffer(vk::Buffer src_buf, vk::Buffer dst_buf, vk::DeviceSize size) {
+    vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
-    VkBufferCopy copy_region{};
-    copy_region.size = size;
-    vkCmdCopyBuffer(cmd_buf, src_buf, dst_buf, 1, &copy_region);
+    vk::BufferCopy copy_region{
+        .size = size,
+    };
+    cmd_buf.copyBuffer(src_buf, dst_buf, copy_region);
 
     endSingleTimeCommands(cmd_buf);
   }
@@ -1547,25 +1557,24 @@ class HelloTriangleApp {
   }
 
   void createBuffer(
-      VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags props,
-      VkBuffer& buf, VkDeviceMemory& buf_mem) {
-    VkBufferCreateInfo buffer_ci{};
-    buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_ci.size = size;
-    buffer_ci.usage = usage;
-    buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    VKASSERT(vkCreateBuffer(device_, &buffer_ci, nullptr, &buf));
+      vk::DeviceSize size, vk::BufferUsageFlags usage,
+      vk::MemoryPropertyFlags props, vk::Buffer& buf,
+      vk::DeviceMemory& buf_mem) {
+    vk::BufferCreateInfo buffer_ci{
+        .size = size,
+        .usage = usage,
+        .sharingMode = vk::SharingMode::eExclusive,
+    };
+    buf = device_.createBuffer(buffer_ci).value;
 
-    VkMemoryRequirements mem_reqs;
-    vkGetBufferMemoryRequirements(device_, buf, &mem_reqs);
+    vk::MemoryRequirements mem_reqs = device_.getBufferMemoryRequirements(buf);
 
-    VkMemoryAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = mem_reqs.size;
-    alloc_info.memoryTypeIndex =
-        findMemoryType(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlags(props));
-    VKASSERT(vkAllocateMemory(device_, &alloc_info, nullptr, &buf_mem));
-    VKASSERT(vkBindBufferMemory(device_, buf, buf_mem, 0));
+    vk::MemoryAllocateInfo alloc_info{
+        .allocationSize = mem_reqs.size,
+        .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
+    };
+    buf_mem = device_.allocateMemory(alloc_info).value;
+    std::ignore = device_.bindBufferMemory(buf, buf_mem, 0);
   }
 
   uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props) {
@@ -1696,10 +1705,10 @@ class HelloTriangleApp {
     auto buf_state = uniform_bufs_[frame_num_ % MAX_FRAMES_IN_FLIGHT];
     vkCmdBindDescriptorSets(
         cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1,
-        &buf_state.desc_set, 0, nullptr);
+        (VkDescriptorSet*)&buf_state.desc_set, 0, nullptr);
 
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &vert_buf_, offsets);
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, (VkBuffer*)&vert_buf_, offsets);
     vkCmdBindIndexBuffer(cmd_buf, ind_buf_, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdDrawIndexed(cmd_buf, geom.indices.size(), 1, 0, 0, 0);
@@ -1853,16 +1862,16 @@ class HelloTriangleApp {
   VkDescriptorPool desc_pool_;
   vk::PipelineLayout pipeline_layout_;
   vk::Pipeline gfx_pipeline_;
-  std::vector<VkFramebuffer> swapchain_fbs_;
+  std::vector<vk::Framebuffer> swapchain_fbs_;
   vk::CommandPool cmd_pool_;
   std::vector<VkCommandBuffer> cmd_bufs_;
   std::vector<VkSemaphore> img_sems_;
   std::vector<VkSemaphore> render_sems_;
   std::vector<VkFence> in_flight_fences_;
-  VkBuffer vert_buf_;
-  VkDeviceMemory vert_buf_mem_;
-  VkBuffer ind_buf_;
-  VkDeviceMemory ind_buf_mem_;
+  vk::Buffer vert_buf_;
+  vk::DeviceMemory vert_buf_mem_;
+  vk::Buffer ind_buf_;
+  vk::DeviceMemory ind_buf_mem_;
   vk::Format texture_fmt_;
   uint32_t mip_levels_;
   vk::Image texture_img_;
@@ -1881,10 +1890,10 @@ class HelloTriangleApp {
   Geometry geom;
 
   struct UniformBufferState {
-    VkBuffer buf;
-    VkDeviceMemory buf_mem;
+    vk::Buffer buf;
+    vk::DeviceMemory buf_mem;
     void* buf_mapped;
-    VkDescriptorSet desc_set;
+    vk::DescriptorSet desc_set;
   };
   std::vector<UniformBufferState> uniform_bufs_;
 
