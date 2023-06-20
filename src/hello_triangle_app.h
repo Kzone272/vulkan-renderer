@@ -237,7 +237,7 @@ class HelloTriangleApp {
       update();
     }
 
-    std::ignore = device_.waitIdle();
+    std::ignore = device_->waitIdle();
   }
 
   void processEvents() {
@@ -353,10 +353,10 @@ class HelloTriangleApp {
     int frame = frame_num_ % MAX_FRAMES_IN_FLIGHT;
 
     std::ignore =
-        device_.waitForFences(in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
+        device_->waitForFences(*in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
 
-    auto [result, img_ind] = device_.acquireNextImageKHR(
-        swapchain_, UINT64_MAX, img_sems_[frame], {});
+    auto [result, img_ind] = device_->acquireNextImageKHR(
+        *swapchain_, UINT64_MAX, *img_sems_[frame], {});
     if (result == vk::Result::eErrorOutOfDateKHR) {
       recreateSwapchain();
       return;
@@ -367,25 +367,25 @@ class HelloTriangleApp {
     ASSERT(img_ind < swapchain_images_.size());
 
     // Only reset the fence if we're submitting work.
-    device_.resetFences(in_flight_fences_[frame]);
+    device_->resetFences(*in_flight_fences_[frame]);
 
     updateUniformBuffer();
 
-    cmd_bufs_[frame].reset();
-    recordCommandBuffer(cmd_bufs_[frame], img_ind);
+    cmd_bufs_[frame]->reset();
+    recordCommandBuffer(*cmd_bufs_[frame], img_ind);
 
     vk::SubmitInfo submit_info{};
     vk::PipelineStageFlags wait_stages =
         vk::PipelineStageFlagBits::eColorAttachmentOutput;
     submit_info.setWaitDstStageMask(wait_stages);
-    submit_info.setWaitSemaphores(img_sems_[frame]);
-    submit_info.setCommandBuffers(cmd_bufs_[frame]);
-    submit_info.setSignalSemaphores(render_sems_[frame]);
-    std::ignore = gfx_q_.submit(submit_info, in_flight_fences_[frame]);
+    submit_info.setWaitSemaphores(*img_sems_[frame]);
+    submit_info.setCommandBuffers(*cmd_bufs_[frame]);
+    submit_info.setSignalSemaphores(*render_sems_[frame]);
+    std::ignore = gfx_q_.submit(submit_info, *in_flight_fences_[frame]);
 
     vk::PresentInfoKHR present_info{};
-    present_info.setWaitSemaphores(render_sems_[frame]);
-    present_info.setSwapchains(swapchain_);
+    present_info.setWaitSemaphores(*render_sems_[frame]);
+    present_info.setSwapchains(*swapchain_);
     present_info.setImageIndices(img_ind);
 
     // For some reason Vulkan.hpp asserts on eErrorOutOfDateKHR, so until that's
@@ -427,7 +427,8 @@ class HelloTriangleApp {
     instance_ci.flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
 #endif
 
-    instance_ = vk::createInstance(instance_ci).value;
+    instance_ = vk::createInstanceUnique(instance_ci).value;
+    dldi_ = {*instance_, vkGetInstanceProcAddr};
   }
 
   std::vector<const char*> getRequiredExtensions() {
@@ -500,8 +501,6 @@ class HelloTriangleApp {
     return validation_layers;
   }
 
-#define LOAD_VK_FN(fn) (PFN_##fn) vkGetInstanceProcAddr(instance_, #fn);
-
   vk::DebugUtilsMessengerCreateInfoEXT makeDbgMessengerCi() {
     vk::DebugUtilsMessengerCreateInfoEXT ci{
         .messageSeverity =
@@ -518,20 +517,19 @@ class HelloTriangleApp {
 
   void setupDebugMessenger() {
     auto ci = makeDbgMessengerCi();
-    vk::DispatchLoaderDynamic dldi(instance_, vkGetInstanceProcAddr);
     dbg_messenger_ =
-        instance_.createDebugUtilsMessengerEXT(ci, nullptr, dldi).value;
+        instance_->createDebugUtilsMessengerEXTUnique(ci, nullptr, dldi_).value;
   }
 
   void createSurface() {
     VkSurfaceKHR surface;
-    ASSERT(SDL_Vulkan_CreateSurface(window_, instance_, &surface));
-    surface_ = surface;
+    ASSERT(SDL_Vulkan_CreateSurface(window_, *instance_, &surface));
+    surface_ = vk::UniqueSurfaceKHR(surface, *instance_);
   }
 
   void pickPhysicalDevice() {
     std::vector<vk::PhysicalDevice> devices =
-        instance_.enumeratePhysicalDevices().value;
+        instance_->enumeratePhysicalDevices().value;
     ASSERT(devices.size() > 0);
 
     for (const auto& device : devices) {
@@ -608,7 +606,7 @@ class HelloTriangleApp {
       }
 
       vk::Bool32 present_support =
-          device.getSurfaceSupportKHR(i, surface_).value;
+          device.getSurfaceSupportKHR(i, *surface_).value;
       if (present_support) {
         indices.present_family = i;
       }
@@ -651,9 +649,9 @@ class HelloTriangleApp {
 
   SwapchainSupportDetails querySwapchainSupport(vk::PhysicalDevice device) {
     SwapchainSupportDetails details;
-    details.caps = device.getSurfaceCapabilitiesKHR(surface_).value;
-    details.formats = device.getSurfaceFormatsKHR(surface_).value;
-    details.present_modes = device.getSurfacePresentModesKHR(surface_).value;
+    details.caps = device.getSurfaceCapabilitiesKHR(*surface_).value;
+    details.formats = device.getSurfaceFormatsKHR(*surface_).value;
+    details.present_modes = device.getSurfacePresentModesKHR(*surface_).value;
 
     return details;
   }
@@ -679,11 +677,11 @@ class HelloTriangleApp {
     if (enable_validation_layers_) {
       device_ci.setPEnabledLayerNames(validation_layers);
     }
-    device_ = physical_device_.createDevice(device_ci).value;
+    device_ = physical_device_.createDeviceUnique(device_ci).value;
 
-    gfx_q_ = device_.getQueue(q_indices_.gfx_family, 0);
+    gfx_q_ = device_->getQueue(q_indices_.gfx_family, 0);
     ASSERT(gfx_q_);
-    present_q_ = device_.getQueue(q_indices_.present_family, 0);
+    present_q_ = device_->getQueue(q_indices_.present_family, 0);
     ASSERT(present_q_);
   }
 
@@ -741,7 +739,7 @@ class HelloTriangleApp {
     }
 
     vk::SwapchainCreateInfoKHR swapchain_ci{
-        .surface = surface_,
+        .surface = *surface_,
         .minImageCount = image_count,
         .imageFormat = format.format,
         .imageColorSpace = format.colorSpace,
@@ -764,8 +762,8 @@ class HelloTriangleApp {
       swapchain_ci.imageSharingMode = vk::SharingMode::eExclusive;
     }
 
-    swapchain_ = device_.createSwapchainKHR(swapchain_ci).value;
-    swapchain_images_ = device_.getSwapchainImagesKHR(swapchain_).value;
+    swapchain_ = device_->createSwapchainKHRUnique(swapchain_ci).value;
+    swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_).value;
     swapchain_format_ = format.format;
     swapchain_extent_ = extent;
     printf(
@@ -782,7 +780,7 @@ class HelloTriangleApp {
     }
   }
 
-  vk::ImageView createImageView(
+  vk::UniqueImageView createImageView(
       vk::Image img, vk::Format format, uint32_t mip_levels,
       vk::ImageAspectFlags aspect_flags) {
     vk::ImageViewCreateInfo ci{
@@ -797,7 +795,7 @@ class HelloTriangleApp {
             .layerCount = 1,
         }};
 
-    return device_.createImageView(ci).value;
+    return device_->createImageViewUnique(ci).value;
   }
 
   void createRenderPass() {
@@ -877,7 +875,7 @@ class HelloTriangleApp {
     rp_ci.setAttachments(atts);
     rp_ci.setSubpasses(subpass);
     rp_ci.setDependencies(dep);
-    render_pass_ = device_.createRenderPass(rp_ci).value;
+    render_pass_ = device_->createRenderPassUnique(rp_ci).value;
   }
 
   void createDescriptorSetLayout() {
@@ -900,25 +898,26 @@ class HelloTriangleApp {
 
     vk::DescriptorSetLayoutCreateInfo layout_ci{};
     layout_ci.setBindings(bindings);
-    desc_set_layout_ = device_.createDescriptorSetLayout(layout_ci).value;
+    desc_set_layout_ =
+        device_->createDescriptorSetLayoutUnique(layout_ci).value;
   }
 
   void createGraphicsPipeline() {
     auto vert_shader_code = readFile("shaders/shader.vert.spv");
     auto frag_shader_code = readFile("shaders/shader.frag.spv");
 
-    vk::ShaderModule vert_shader = createShaderModule(vert_shader_code);
-    vk::ShaderModule frag_shader = createShaderModule(frag_shader_code);
+    vk::UniqueShaderModule vert_shader = createShaderModule(vert_shader_code);
+    vk::UniqueShaderModule frag_shader = createShaderModule(frag_shader_code);
 
     vk::PipelineShaderStageCreateInfo vert_shader_stage_ci{
         .stage = vk::ShaderStageFlagBits::eVertex,
-        .module = vert_shader,
+        .module = *vert_shader,
         .pName = "main",
     };
 
     vk::PipelineShaderStageCreateInfo frag_shader_stage_ci{
         .stage = vk::ShaderStageFlagBits::eFragment,
-        .module = frag_shader,
+        .module = *frag_shader,
         .pName = "main",
     };
     std::array<vk::PipelineShaderStageCreateInfo, 2> shader_stages = {
@@ -988,8 +987,9 @@ class HelloTriangleApp {
     };
 
     vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-    pipeline_layout_ci.setSetLayouts(desc_set_layout_);
-    pipeline_layout_ = device_.createPipelineLayout(pipeline_layout_ci).value;
+    pipeline_layout_ci.setSetLayouts(*desc_set_layout_);
+    pipeline_layout_ =
+        device_->createPipelineLayoutUnique(pipeline_layout_ci).value;
 
     vk::GraphicsPipelineCreateInfo pipeline_ci{
         .pVertexInputState = &vert_in_info,
@@ -1000,41 +1000,38 @@ class HelloTriangleApp {
         .pDepthStencilState = &depth_ci,
         .pColorBlendState = &color_blending,
         .pDynamicState = &dyn_state,
-        .layout = pipeline_layout_,
-        .renderPass = render_pass_,
+        .layout = *pipeline_layout_,
+        .renderPass = *render_pass_,
         .subpass = 0,
     };
     pipeline_ci.setStages(shader_stages);
     gfx_pipeline_ =
-        device_.createGraphicsPipeline(VK_NULL_HANDLE, pipeline_ci).value;
-
-    // Cleanup
-    device_.destroyShaderModule(vert_shader);
-    device_.destroyShaderModule(frag_shader);
+        device_->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipeline_ci)
+            .value;
   }
 
-  vk::ShaderModule createShaderModule(const std::vector<char>& code) {
+  vk::UniqueShaderModule createShaderModule(const std::vector<char>& code) {
     vk::ShaderModuleCreateInfo ci{
         .codeSize = code.size(),
         .pCode = reinterpret_cast<const uint32_t*>(code.data()),
     };
-    return device_.createShaderModule(ci).value;
+    return device_->createShaderModuleUnique(ci).value;
   }
 
   void createFrameBuffers() {
     swapchain_fbs_.resize(swapchain_views_.size());
     for (size_t i = 0; i < swapchain_views_.size(); i++) {
       std::array<vk::ImageView, 3> atts = {
-          color_img_view_, depth_img_view_, swapchain_views_[i]};
+          *color_img_view_, *depth_img_view_, *swapchain_views_[i]};
 
       vk::FramebufferCreateInfo fb_ci{
-          .renderPass = render_pass_,
+          .renderPass = *render_pass_,
           .width = swapchain_extent_.width,
           .height = swapchain_extent_.height,
           .layers = 1,
       };
       fb_ci.setAttachments(atts);
-      swapchain_fbs_[i] = device_.createFramebuffer(fb_ci).value;
+      swapchain_fbs_[i] = device_->createFramebufferUnique(fb_ci).value;
     }
   }
 
@@ -1043,7 +1040,7 @@ class HelloTriangleApp {
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
         .queueFamilyIndex = q_indices_.gfx_family,
     };
-    cmd_pool_ = device_.createCommandPool(ci).value;
+    cmd_pool_ = device_->createCommandPoolUnique(ci).value;
   }
 
   void createColorResources() {
@@ -1055,7 +1052,7 @@ class HelloTriangleApp {
             vk::ImageUsageFlagBits::eColorAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal, color_img_, color_img_mem_);
     color_img_view_ = createImageView(
-        color_img_, color_fmt, 1, vk::ImageAspectFlagBits::eColor);
+        *color_img_, color_fmt, 1, vk::ImageAspectFlagBits::eColor);
   }
 
   void createDepthResources() {
@@ -1065,9 +1062,9 @@ class HelloTriangleApp {
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal, depth_img_, depth_img_mem_);
     depth_img_view_ = createImageView(
-        depth_img_, depth_fmt_, 1, vk::ImageAspectFlagBits::eDepth);
+        *depth_img_, depth_fmt_, 1, vk::ImageAspectFlagBits::eDepth);
     transitionImageLayout(
-        depth_img_, depth_fmt_, 1, vk::ImageLayout::eUndefined,
+        *depth_img_, depth_fmt_, 1, vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthStencilAttachmentOptimal);
   }
 
@@ -1131,17 +1128,17 @@ class HelloTriangleApp {
     vk::DeviceSize image_size = width * height * 4;
     mip_levels_ = std::floor(std::log2(std::max(width, height))) + 1;
 
-    vk::Buffer staging_buf;
-    vk::DeviceMemory staging_buf_mem;
+    vk::UniqueBuffer staging_buf;
+    vk::UniqueDeviceMemory staging_buf_mem;
     createBuffer(
         image_size, vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible |
             vk::MemoryPropertyFlagBits::eHostCoherent,
         staging_buf, staging_buf_mem);
 
-    void* data = device_.mapMemory(staging_buf_mem, 0, image_size).value;
+    void* data = device_->mapMemory(*staging_buf_mem, 0, image_size).value;
     memcpy(data, texture->pixels, static_cast<size_t>(image_size));
-    device_.unmapMemory(staging_buf_mem);
+    device_->unmapMemory(*staging_buf_mem);
     SDL_FreeSurface(texture);
 
     texture_fmt_ = vk::Format::eR8G8B8A8Srgb;
@@ -1155,22 +1152,19 @@ class HelloTriangleApp {
         texture_img_mem_);
 
     transitionImageLayout(
-        texture_img_, texture_fmt_, mip_levels_, vk::ImageLayout::eUndefined,
+        *texture_img_, texture_fmt_, mip_levels_, vk::ImageLayout::eUndefined,
         vk::ImageLayout::eTransferDstOptimal);
-    copyBufferToImage(staging_buf, texture_img_, width, height);
-    generateMipmaps(texture_img_, width, height, texture_fmt_, mip_levels_);
+    copyBufferToImage(*staging_buf, *texture_img_, width, height);
+    generateMipmaps(*texture_img_, width, height, texture_fmt_, mip_levels_);
     // Transitioned to vk::ImageLayout::eShaderReadOnlyOptimal while generating
     // mipmaps.
-
-    device_.destroyBuffer(staging_buf);
-    device_.freeMemory(staging_buf_mem);
   }
 
   void createImage(
       uint32_t width, uint32_t height, vk::Format format, uint32_t mip_levels,
       vk::SampleCountFlagBits num_samples, vk::ImageTiling tiling,
-      vk::ImageUsageFlags usage, vk::MemoryPropertyFlags props, vk::Image& img,
-      vk::DeviceMemory& img_mem) {
+      vk::ImageUsageFlags usage, vk::MemoryPropertyFlags props,
+      vk::UniqueImage& img, vk::UniqueDeviceMemory& img_mem) {
     vk::ImageCreateInfo img_ci{
         .imageType = vk::ImageType::e2D,
         .format = format,
@@ -1188,17 +1182,17 @@ class HelloTriangleApp {
         .sharingMode = vk::SharingMode::eExclusive,
         .initialLayout = vk::ImageLayout::eUndefined,
     };
-    img = device_.createImage(img_ci).value;
+    img = device_->createImageUnique(img_ci).value;
 
-    vk::MemoryRequirements mem_reqs = device_.getImageMemoryRequirements(img);
+    vk::MemoryRequirements mem_reqs = device_->getImageMemoryRequirements(*img);
 
     vk::MemoryAllocateInfo alloc_info{
         .allocationSize = mem_reqs.size,
         .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
     };
-    img_mem = device_.allocateMemory(alloc_info).value;
+    img_mem = device_->allocateMemoryUnique(alloc_info).value;
 
-    std::ignore = device_.bindImageMemory(img, img_mem, 0);
+    std::ignore = device_->bindImageMemory(*img, *img_mem, 0);
   }
 
   void transitionImageLayout(
@@ -1390,7 +1384,7 @@ class HelloTriangleApp {
 
   void createTextureImageView() {
     texture_img_view_ = createImageView(
-        texture_img_, texture_fmt_, mip_levels_,
+        *texture_img_, texture_fmt_, mip_levels_,
         vk::ImageAspectFlagBits::eColor);
   }
 
@@ -1412,7 +1406,7 @@ class HelloTriangleApp {
         .borderColor = vk::BorderColor::eIntOpaqueBlack,
         .unnormalizedCoordinates = VK_FALSE,
     };
-    texture_sampler_ = device_.createSampler(ci).value;
+    texture_sampler_ = device_->createSamplerUnique(ci).value;
   }
 
   void loadModel() {
@@ -1478,7 +1472,7 @@ class HelloTriangleApp {
               vk::MemoryPropertyFlagBits::eHostCoherent,
           uniform_bufs_[i].buf, uniform_bufs_[i].buf_mem);
       uniform_bufs_[i].buf_mapped =
-          device_.mapMemory(uniform_bufs_[i].buf_mem, 0, buf_size).value;
+          device_->mapMemory(*uniform_bufs_[i].buf_mem, 0, buf_size).value;
     }
   }
 
@@ -1486,26 +1480,23 @@ class HelloTriangleApp {
   // from the staging_buf to dst_buf.
   void stageBuffer(
       vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
-      vk::Buffer& dst_buf, vk::DeviceMemory& dst_buf_mem) {
-    vk::Buffer staging_buf;
-    vk::DeviceMemory staging_buf_mem;
+      vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem) {
+    vk::UniqueBuffer staging_buf;
+    vk::UniqueDeviceMemory staging_buf_mem;
     createBuffer(
         size, vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible |
             vk::MemoryPropertyFlagBits::eHostCoherent,
         staging_buf, staging_buf_mem);
 
-    void* staging_data = device_.mapMemory(staging_buf_mem, 0, size).value;
+    void* staging_data = device_->mapMemory(*staging_buf_mem, 0, size).value;
     memcpy(staging_data, data, (size_t)size);
-    device_.unmapMemory(staging_buf_mem);
+    device_->unmapMemory(*staging_buf_mem);
 
     createBuffer(
         size, usage | vk::BufferUsageFlagBits::eTransferDst,
         vk::MemoryPropertyFlagBits::eDeviceLocal, dst_buf, dst_buf_mem);
-    copyBuffer(staging_buf, dst_buf, size);
-
-    device_.destroyBuffer(staging_buf);
-    device_.freeMemory(staging_buf_mem);
+    copyBuffer(*staging_buf, *dst_buf, size);
   }
 
   void copyBuffer(vk::Buffer src_buf, vk::Buffer dst_buf, vk::DeviceSize size) {
@@ -1521,13 +1512,13 @@ class HelloTriangleApp {
 
   vk::CommandBuffer beginSingleTimeCommands() {
     vk::CommandBufferAllocateInfo alloc_info{
-        .commandPool = cmd_pool_,
+        .commandPool = *cmd_pool_,
         .level = vk::CommandBufferLevel::ePrimary,
         .commandBufferCount = 1,
     };
 
     vk::CommandBuffer cmd_buf =
-        device_.allocateCommandBuffers(alloc_info).value[0];
+        device_->allocateCommandBuffers(alloc_info).value[0];
 
     vk::CommandBufferBeginInfo begin_info{
         .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
@@ -1544,28 +1535,29 @@ class HelloTriangleApp {
     std::ignore = gfx_q_.submit(submit);
     std::ignore = gfx_q_.waitIdle();
 
-    device_.freeCommandBuffers(cmd_pool_, cmd_buf);
+    device_->freeCommandBuffers(*cmd_pool_, cmd_buf);
   }
 
   void createBuffer(
       vk::DeviceSize size, vk::BufferUsageFlags usage,
-      vk::MemoryPropertyFlags props, vk::Buffer& buf,
-      vk::DeviceMemory& buf_mem) {
+      vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
+      vk::UniqueDeviceMemory& buf_mem) {
     vk::BufferCreateInfo buffer_ci{
         .size = size,
         .usage = usage,
         .sharingMode = vk::SharingMode::eExclusive,
     };
-    buf = device_.createBuffer(buffer_ci).value;
+    buf = device_->createBufferUnique(buffer_ci).value;
 
-    vk::MemoryRequirements mem_reqs = device_.getBufferMemoryRequirements(buf);
+    vk::MemoryRequirements mem_reqs =
+        device_->getBufferMemoryRequirements(*buf);
 
     vk::MemoryAllocateInfo alloc_info{
         .allocationSize = mem_reqs.size,
         .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
     };
-    buf_mem = device_.allocateMemory(alloc_info).value;
-    std::ignore = device_.bindBufferMemory(buf, buf_mem, 0);
+    buf_mem = device_->allocateMemoryUnique(alloc_info).value;
+    std::ignore = device_->bindBufferMemory(*buf, *buf_mem, 0);
   }
 
   uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props) {
@@ -1597,29 +1589,29 @@ class HelloTriangleApp {
         .maxSets = MAX_FRAMES_IN_FLIGHT,
     };
     pool_ci.setPoolSizes(pool_sizes);
-    desc_pool_ = device_.createDescriptorPool(pool_ci).value;
+    desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
   }
 
   void createDescriptorSets() {
     std::vector<vk::DescriptorSetLayout> layouts(
-        MAX_FRAMES_IN_FLIGHT, desc_set_layout_);
+        MAX_FRAMES_IN_FLIGHT, *desc_set_layout_);
     vk::DescriptorSetAllocateInfo alloc_info{
-        .descriptorPool = desc_pool_,
+        .descriptorPool = *desc_pool_,
     };
     alloc_info.setSetLayouts(layouts);
 
     std::vector<vk::DescriptorSet> desc_sets =
-        device_.allocateDescriptorSets(alloc_info).value;
+        device_->allocateDescriptorSets(alloc_info).value;
     ASSERT(desc_sets.size() == uniform_bufs_.size());
 
     for (int i = 0; i < uniform_bufs_.size(); i++) {
       auto& buf_state = uniform_bufs_[i];
-      buf_state.desc_set = desc_sets[i];
+      buf_state.desc_set = std::move(desc_sets[i]);
 
       std::array<vk::WriteDescriptorSet, 2> desc_writes{};
 
       vk::DescriptorBufferInfo buffer_info{
-          .buffer = buf_state.buf,
+          .buffer = *buf_state.buf,
           .offset = 0,
           .range = sizeof(UniformBufferObject),
       };
@@ -1632,8 +1624,8 @@ class HelloTriangleApp {
       desc_writes[0].setBufferInfo(buffer_info);
 
       vk::DescriptorImageInfo image_info{
-          .sampler = texture_sampler_,
-          .imageView = texture_img_view_,
+          .sampler = *texture_sampler_,
+          .imageView = *texture_img_view_,
           .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
       };
       desc_writes[1] = {
@@ -1644,17 +1636,17 @@ class HelloTriangleApp {
       };
       desc_writes[1].setImageInfo(image_info);
 
-      device_.updateDescriptorSets(desc_writes, nullptr);
+      device_->updateDescriptorSets(desc_writes, nullptr);
     }
   }
 
   void createCommandBuffers() {
     vk::CommandBufferAllocateInfo alloc_info{
-        .commandPool = cmd_pool_,
+        .commandPool = *cmd_pool_,
         .level = vk::CommandBufferLevel::ePrimary,
         .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
     };
-    cmd_bufs_ = device_.allocateCommandBuffers(alloc_info).value;
+    cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
   }
 
   void recordCommandBuffer(vk::CommandBuffer cmd_buf, uint32_t img_ind) {
@@ -1662,8 +1654,8 @@ class HelloTriangleApp {
     std::ignore = cmd_buf.begin(begin_info);
 
     vk::RenderPassBeginInfo rp_info{
-        .renderPass = render_pass_,
-        .framebuffer = swapchain_fbs_[img_ind],
+        .renderPass = *render_pass_,
+        .framebuffer = *swapchain_fbs_[img_ind],
         .renderArea = {
             .offset = {0, 0},
             .extent = swapchain_extent_,
@@ -1676,7 +1668,7 @@ class HelloTriangleApp {
     rp_info.setClearValues(clear_values);
 
     cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, gfx_pipeline_);
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *gfx_pipeline_);
 
     vk::Viewport viewport{
         .x = 0.0f,
@@ -1694,14 +1686,14 @@ class HelloTriangleApp {
     };
     cmd_buf.setScissor(0, scissor);
 
-    auto buf_state = uniform_bufs_[frame_num_ % MAX_FRAMES_IN_FLIGHT];
+    auto& buf_state = uniform_bufs_[frame_num_ % MAX_FRAMES_IN_FLIGHT];
     cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, pipeline_layout_, 0,
+        vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
         buf_state.desc_set, nullptr);
 
     vk::DeviceSize offsets[] = {0};
-    cmd_buf.bindVertexBuffers(0, vert_buf_, offsets);
-    cmd_buf.bindIndexBuffer(ind_buf_, 0, vk::IndexType::eUint32);
+    cmd_buf.bindVertexBuffers(0, *vert_buf_, offsets);
+    cmd_buf.bindIndexBuffer(*ind_buf_, 0, vk::IndexType::eUint32);
 
     cmd_buf.drawIndexed(geom.indices.size(), 1, 0, 0, 0);
     cmd_buf.endRenderPass();
@@ -1716,9 +1708,9 @@ class HelloTriangleApp {
     render_sems_.resize(MAX_FRAMES_IN_FLIGHT);
     in_flight_fences_.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      img_sems_[i] = device_.createSemaphore(sem_ci).value;
-      render_sems_[i] = device_.createSemaphore(sem_ci).value;
-      in_flight_fences_[i] = device_.createFence(fence_ci).value;
+      img_sems_[i] = device_->createSemaphoreUnique(sem_ci).value;
+      render_sems_[i] = device_->createSemaphoreUnique(sem_ci).value;
+      in_flight_fences_[i] = device_->createFenceUnique(fence_ci).value;
     }
   }
 
@@ -1736,7 +1728,7 @@ class HelloTriangleApp {
       return;
     }
 
-    std::ignore = device_.waitIdle();
+    std::ignore = device_->waitIdle();
 
     cleanupSwapchain();
 
@@ -1749,63 +1741,20 @@ class HelloTriangleApp {
   }
 
   void cleanupSwapchain() {
-    vkDestroyImageView(device_, depth_img_view_, nullptr);
-    vkDestroyImage(device_, depth_img_, nullptr);
-    vkFreeMemory(device_, depth_img_mem_, nullptr);
+    depth_img_view_.reset();
+    depth_img_.reset();
+    depth_img_mem_.reset();
 
-    vkDestroyImageView(device_, color_img_view_, nullptr);
-    vkDestroyImage(device_, color_img_, nullptr);
-    vkFreeMemory(device_, color_img_mem_, nullptr);
+    color_img_view_.reset();
+    color_img_.reset();
+    color_img_mem_.reset();
 
-    for (auto fb : swapchain_fbs_) {
-      vkDestroyFramebuffer(device_, fb, nullptr);
-    }
-    for (auto image_view : swapchain_views_) {
-      vkDestroyImageView(device_, image_view, nullptr);
-    }
-    vkDestroySwapchainKHR(device_, swapchain_, nullptr);
+    swapchain_fbs_.clear();
+    swapchain_views_.clear();
+    swapchain_.reset();
   }
 
   void cleanup() {
-    cleanupSwapchain();
-
-    vkDestroyBuffer(device_, vert_buf_, nullptr);
-    vkFreeMemory(device_, vert_buf_mem_, nullptr);
-    vkDestroyBuffer(device_, ind_buf_, nullptr);
-    vkFreeMemory(device_, ind_buf_mem_, nullptr);
-    vkDestroySampler(device_, texture_sampler_, nullptr);
-    vkDestroyImageView(device_, texture_img_view_, nullptr);
-    vkDestroyImage(device_, texture_img_, nullptr);
-    vkFreeMemory(device_, texture_img_mem_, nullptr);
-
-    for (auto& buf_state : uniform_bufs_) {
-      vkDestroyBuffer(device_, buf_state.buf, nullptr);
-      vkFreeMemory(device_, buf_state.buf_mem, nullptr);
-      // paranoia
-      buf_state.buf_mapped = nullptr;
-      buf_state.desc_set = VK_NULL_HANDLE;  // cleaned up by the pool
-    }
-
-    vkDestroyDescriptorPool(device_, desc_pool_, nullptr);
-    vkDestroyDescriptorSetLayout(device_, desc_set_layout_, nullptr);
-    vkDestroyPipeline(device_, gfx_pipeline_, nullptr);
-    vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
-    vkDestroyRenderPass(device_, render_pass_, nullptr);
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      vkDestroySemaphore(device_, img_sems_[i], nullptr);
-      vkDestroySemaphore(device_, render_sems_[i], nullptr);
-      vkDestroyFence(device_, in_flight_fences_[i], nullptr);
-    }
-    vkDestroyCommandPool(device_, cmd_pool_, nullptr);
-    vkDestroyDevice(device_, nullptr);
-    if (enable_validation_layers_) {
-      auto destroy_dbg_fn = LOAD_VK_FN(vkDestroyDebugUtilsMessengerEXT);
-      ASSERT(destroy_dbg_fn);
-      destroy_dbg_fn(instance_, dbg_messenger_, nullptr);
-    }
-    vkDestroySurfaceKHR(instance_, surface_, nullptr);
-    vkDestroyInstance(instance_, nullptr);
-
     SDL_DestroyWindow(window_);
     SDL_Quit();
   }
@@ -1828,57 +1777,59 @@ class HelloTriangleApp {
 
   AnimationState anim_;
 
-  vk::Instance instance_;
-  vk::DebugUtilsMessengerEXT dbg_messenger_;
-  vk::SurfaceKHR surface_;
+  vk::UniqueInstance instance_;
+  vk::DispatchLoaderDynamic dldi_;
+  vk::UniqueSurfaceKHR surface_;
+  vk::UniqueHandle<vk::DebugUtilsMessengerEXT, vk::DispatchLoaderDynamic>
+      dbg_messenger_;
   vk::PhysicalDevice physical_device_;
   vk::PhysicalDeviceProperties device_props_;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
-  vk::Device device_;
+  vk::UniqueDevice device_;
   vk::Queue gfx_q_;
   vk::Queue present_q_;
   SwapchainSupportDetails swapchain_support_;
-  vk::SwapchainKHR swapchain_;
+  vk::UniqueSwapchainKHR swapchain_;
   std::vector<vk::Image> swapchain_images_;
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
-  std::vector<vk::ImageView> swapchain_views_;
-  vk::RenderPass render_pass_;
-  vk::DescriptorSetLayout desc_set_layout_;
-  vk::DescriptorPool desc_pool_;
-  vk::PipelineLayout pipeline_layout_;
-  vk::Pipeline gfx_pipeline_;
-  std::vector<vk::Framebuffer> swapchain_fbs_;
-  vk::CommandPool cmd_pool_;
-  std::vector<vk::CommandBuffer> cmd_bufs_;
-  std::vector<vk::Semaphore> img_sems_;
-  std::vector<vk::Semaphore> render_sems_;
-  std::vector<vk::Fence> in_flight_fences_;
-  vk::Buffer vert_buf_;
-  vk::DeviceMemory vert_buf_mem_;
-  vk::Buffer ind_buf_;
-  vk::DeviceMemory ind_buf_mem_;
+  std::vector<vk::UniqueImageView> swapchain_views_;
+  vk::UniqueRenderPass render_pass_;
+  vk::UniqueDescriptorSetLayout desc_set_layout_;
+  vk::UniqueDescriptorPool desc_pool_;
+  vk::UniquePipelineLayout pipeline_layout_;
+  vk::UniquePipeline gfx_pipeline_;
+  std::vector<vk::UniqueFramebuffer> swapchain_fbs_;
+  vk::UniqueCommandPool cmd_pool_;
+  std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
+  std::vector<vk::UniqueSemaphore> img_sems_;
+  std::vector<vk::UniqueSemaphore> render_sems_;
+  std::vector<vk::UniqueFence> in_flight_fences_;
+  vk::UniqueBuffer vert_buf_;
+  vk::UniqueDeviceMemory vert_buf_mem_;
+  vk::UniqueBuffer ind_buf_;
+  vk::UniqueDeviceMemory ind_buf_mem_;
   vk::Format texture_fmt_;
   uint32_t mip_levels_;
-  vk::Image texture_img_;
-  vk::DeviceMemory texture_img_mem_;
-  vk::ImageView texture_img_view_;
-  vk::Sampler texture_sampler_;
-  vk::Image color_img_;
-  vk::DeviceMemory color_img_mem_;
-  vk::ImageView color_img_view_;
+  vk::UniqueImage texture_img_;
+  vk::UniqueDeviceMemory texture_img_mem_;
+  vk::UniqueImageView texture_img_view_;
+  vk::UniqueSampler texture_sampler_;
+  vk::UniqueImage color_img_;
+  vk::UniqueDeviceMemory color_img_mem_;
+  vk::UniqueImageView color_img_view_;
   vk::Format depth_fmt_;
-  vk::Image depth_img_;
-  vk::DeviceMemory depth_img_mem_;
-  vk::ImageView depth_img_view_;
+  vk::UniqueImage depth_img_;
+  vk::UniqueDeviceMemory depth_img_mem_;
+  vk::UniqueImageView depth_img_view_;
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   Geometry geom;
 
   struct UniformBufferState {
-    vk::Buffer buf;
-    vk::DeviceMemory buf_mem;
+    vk::UniqueBuffer buf;
+    vk::UniqueDeviceMemory buf_mem;
     void* buf_mapped;
     vk::DescriptorSet desc_set;
   };
