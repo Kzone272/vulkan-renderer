@@ -5,7 +5,7 @@
 #define vulkanHppAssert(x)                                               \
   if (!(x)) {                                                            \
     printf("Assertion failed in \"%s\", line %d\n", __FILE__, __LINE__); \
-    exit(1);                                                             \
+    throw;                                                               \
   } else  // This 'else' exists to catch the user's following semicolon
 
 #define VULKAN_HPP_ASSERT vulkanHppAssert
