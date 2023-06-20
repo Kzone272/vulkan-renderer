@@ -237,7 +237,7 @@ class HelloTriangleApp {
       update();
     }
 
-    vkDeviceWaitIdle(device_);
+    std::ignore = device_.waitIdle();
   }
 
   void processEvents() {
@@ -352,56 +352,50 @@ class HelloTriangleApp {
   void drawFrame() {
     int frame = frame_num_ % MAX_FRAMES_IN_FLIGHT;
 
-    vkWaitForFences(device_, 1, &in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
+    std::ignore =
+        device_.waitForFences(in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
 
-    uint32_t img_ind = -1;
-    VkResult result = vkAcquireNextImageKHR(
-        device_, swapchain_, UINT64_MAX, img_sems_[frame], VK_NULL_HANDLE,
-        &img_ind);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    auto [result, img_ind] = device_.acquireNextImageKHR(
+        swapchain_, UINT64_MAX, img_sems_[frame], {});
+    if (result == vk::Result::eErrorOutOfDateKHR) {
       recreateSwapchain();
       return;
     }
-    ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR);
+    ASSERT(
+        result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR);
     ASSERT(img_ind >= 0);
     ASSERT(img_ind < swapchain_images_.size());
 
     // Only reset the fence if we're submitting work.
-    VKASSERT(vkResetFences(device_, 1, &in_flight_fences_[frame]));
+    device_.resetFences(in_flight_fences_[frame]);
 
     updateUniformBuffer();
 
-    VKASSERT(vkResetCommandBuffer(cmd_bufs_[frame], 0));
+    cmd_bufs_[frame].reset();
     recordCommandBuffer(cmd_bufs_[frame], img_ind);
 
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    VkPipelineStageFlags wait_stages[] = {
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = &img_sems_[frame];
-    submit_info.pWaitDstStageMask = wait_stages;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &cmd_bufs_[frame];
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &render_sems_[frame];
-    VKASSERT(vkQueueSubmit(gfx_q_, 1, &submit_info, in_flight_fences_[frame]));
+    vk::SubmitInfo submit_info{};
+    vk::PipelineStageFlags wait_stages =
+        vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    submit_info.setWaitDstStageMask(wait_stages);
+    submit_info.setWaitSemaphores(img_sems_[frame]);
+    submit_info.setCommandBuffers(cmd_bufs_[frame]);
+    submit_info.setSignalSemaphores(render_sems_[frame]);
+    std::ignore = gfx_q_.submit(submit_info, in_flight_fences_[frame]);
 
-    VkPresentInfoKHR present_info{};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &render_sems_[frame];
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = (VkSwapchainKHR*)&swapchain_;
-    present_info.pImageIndices = &img_ind;
+    vk::PresentInfoKHR present_info{};
+    present_info.setWaitSemaphores(render_sems_[frame]);
+    present_info.setSwapchains(swapchain_);
+    present_info.setImageIndices(img_ind);
 
-    result = vkQueuePresentKHR(present_q_, &present_info);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-        window_resized_) {
+    // For some reason Vulkan.hpp asserts on eErrorOutOfDateKHR, so until that's
+    // dealt with, I need to use the C interface for present.
+    result = (vk::Result)vkQueuePresentKHR(
+        present_q_, (VkPresentInfoKHR*)&present_info);
+    if (result == vk::Result::eErrorOutOfDateKHR ||
+        result == vk::Result::eSuboptimalKHR || window_resized_) {
       window_resized_ = false;
       recreateSwapchain();
-    } else {
-      VKASSERT(result);
     }
   }
 
@@ -1121,7 +1115,7 @@ class HelloTriangleApp {
     ASSERT(texture);
     ASSERT(texture->pixels);
     // Vulkan likes images to have alpha channels. The SDL byte order is also
-    // defined opposite to VkFormat.
+    // defined opposite to vk::Format.
     SDL_PixelFormatEnum desired_fmt = SDL_PIXELFORMAT_ABGR8888;
     if (texture->format->format != desired_fmt) {
       printf(
@@ -1401,24 +1395,24 @@ class HelloTriangleApp {
   }
 
   void createTextureSampler() {
-    VkSamplerCreateInfo ci{};
-    ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    ci.magFilter = VK_FILTER_LINEAR;
-    ci.minFilter = VK_FILTER_LINEAR;
-    ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    ci.anisotropyEnable = VK_TRUE;
-    ci.maxAnisotropy = device_props_.limits.maxSamplerAnisotropy;
-    ci.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    ci.unnormalizedCoordinates = VK_FALSE;
-    ci.compareEnable = VK_FALSE;
-    ci.compareOp = VK_COMPARE_OP_ALWAYS;
-    ci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    ci.mipLodBias = 0.f;
-    ci.minLod = 0.f;
-    ci.maxLod = mip_levels_;
-    VKASSERT(vkCreateSampler(device_, &ci, nullptr, &texture_sampler_));
+    vk::SamplerCreateInfo ci{
+        .magFilter = vk::Filter::eLinear,
+        .minFilter = vk::Filter::eLinear,
+        .mipmapMode = vk::SamplerMipmapMode::eLinear,
+        .addressModeU = vk::SamplerAddressMode::eRepeat,
+        .addressModeV = vk::SamplerAddressMode::eRepeat,
+        .addressModeW = vk::SamplerAddressMode::eRepeat,
+        .mipLodBias = 0.f,
+        .anisotropyEnable = VK_TRUE,
+        .maxAnisotropy = device_props_.limits.maxSamplerAnisotropy,
+        .compareEnable = VK_FALSE,
+        .compareOp = vk::CompareOp::eAlways,
+        .minLod = 0.f,
+        .maxLod = static_cast<float>(mip_levels_),
+        .borderColor = vk::BorderColor::eIntOpaqueBlack,
+        .unnormalizedCoordinates = VK_FALSE,
+    };
+    texture_sampler_ = device_.createSampler(ci).value;
   }
 
   void loadModel() {
@@ -1461,14 +1455,14 @@ class HelloTriangleApp {
   }
 
   void createVertexBuffer() {
-    VkDeviceSize size = sizeof(Vertex) * geom.vertices.size();
+    vk::DeviceSize size = sizeof(Vertex) * geom.vertices.size();
     stageBuffer(
         size, (void*)geom.vertices.data(),
         vk::BufferUsageFlagBits::eVertexBuffer, vert_buf_, vert_buf_mem_);
   }
 
   void createIndexBuffer() {
-    VkDeviceSize size = sizeof(uint32_t) * geom.indices.size();
+    vk::DeviceSize size = sizeof(uint32_t) * geom.indices.size();
     stageBuffer(
         size, (void*)geom.indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,
         ind_buf_, ind_buf_mem_);
@@ -1525,35 +1519,32 @@ class HelloTriangleApp {
     endSingleTimeCommands(cmd_buf);
   }
 
-  VkCommandBuffer beginSingleTimeCommands() {
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandPool = cmd_pool_;
-    alloc_info.commandBufferCount = 1;
+  vk::CommandBuffer beginSingleTimeCommands() {
+    vk::CommandBufferAllocateInfo alloc_info{
+        .commandPool = cmd_pool_,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1,
+    };
 
-    VkCommandBuffer cmd_buf;
-    VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, &cmd_buf));
+    vk::CommandBuffer cmd_buf =
+        device_.allocateCommandBuffers(alloc_info).value[0];
 
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    VKASSERT(vkBeginCommandBuffer(cmd_buf, &begin_info));
+    vk::CommandBufferBeginInfo begin_info{
+        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
+    std::ignore = cmd_buf.begin(begin_info);
 
     return cmd_buf;
   }
 
-  void endSingleTimeCommands(VkCommandBuffer cmd_buf) {
-    VKASSERT(vkEndCommandBuffer(cmd_buf));
+  void endSingleTimeCommands(vk::CommandBuffer cmd_buf) {
+    std::ignore = cmd_buf.end();
 
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd_buf;
-    VKASSERT(vkQueueSubmit(gfx_q_, 1, &submit, VK_NULL_HANDLE));
-    VKASSERT(vkQueueWaitIdle(gfx_q_));
+    vk::SubmitInfo submit{};
+    submit.setCommandBuffers(cmd_buf);
+    std::ignore = gfx_q_.submit(submit);
+    std::ignore = gfx_q_.waitIdle();
 
-    vkFreeCommandBuffers(device_, cmd_pool_, 1, &cmd_buf);
+    device_.freeCommandBuffers(cmd_pool_, cmd_buf);
   }
 
   void createBuffer(
@@ -1591,147 +1582,143 @@ class HelloTriangleApp {
   }
 
   void createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 2> pool_sizes{};
-    pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    pool_sizes[0].descriptorCount = MAX_FRAMES_IN_FLIGHT;
-    pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    pool_sizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+    std::array<vk::DescriptorPoolSize, 2> pool_sizes{{
+        {
+            .type = vk::DescriptorType::eUniformBuffer,
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+        },
+        {
+            .type = vk::DescriptorType::eCombinedImageSampler,
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+        },
+    }};
 
-    VkDescriptorPoolCreateInfo pool_ci{};
-    pool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_ci.poolSizeCount = pool_sizes.size();
-    pool_ci.pPoolSizes = pool_sizes.data();
-    pool_ci.maxSets = MAX_FRAMES_IN_FLIGHT;
-    VKASSERT(vkCreateDescriptorPool(device_, &pool_ci, nullptr, &desc_pool_));
+    vk::DescriptorPoolCreateInfo pool_ci{
+        .maxSets = MAX_FRAMES_IN_FLIGHT,
+    };
+    pool_ci.setPoolSizes(pool_sizes);
+    desc_pool_ = device_.createDescriptorPool(pool_ci).value;
   }
 
   void createDescriptorSets() {
-    std::vector<VkDescriptorSetLayout> layouts(
+    std::vector<vk::DescriptorSetLayout> layouts(
         MAX_FRAMES_IN_FLIGHT, desc_set_layout_);
-    VkDescriptorSetAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = desc_pool_;
-    alloc_info.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-    alloc_info.pSetLayouts = layouts.data();
+    vk::DescriptorSetAllocateInfo alloc_info{
+        .descriptorPool = desc_pool_,
+    };
+    alloc_info.setSetLayouts(layouts);
 
-    std::vector<VkDescriptorSet> desc_sets(MAX_FRAMES_IN_FLIGHT);
-    VKASSERT(vkAllocateDescriptorSets(device_, &alloc_info, desc_sets.data()));
-
+    std::vector<vk::DescriptorSet> desc_sets =
+        device_.allocateDescriptorSets(alloc_info).value;
     ASSERT(desc_sets.size() == uniform_bufs_.size());
+
     for (int i = 0; i < uniform_bufs_.size(); i++) {
       auto& buf_state = uniform_bufs_[i];
       buf_state.desc_set = desc_sets[i];
 
-      std::array<VkWriteDescriptorSet, 2> desc_writes{};
+      std::array<vk::WriteDescriptorSet, 2> desc_writes{};
 
-      VkDescriptorBufferInfo buffer_info{};
-      buffer_info.buffer = buf_state.buf;
-      buffer_info.offset = 0;
-      buffer_info.range = sizeof(UniformBufferObject);
+      vk::DescriptorBufferInfo buffer_info{
+          .buffer = buf_state.buf,
+          .offset = 0,
+          .range = sizeof(UniformBufferObject),
+      };
+      desc_writes[0] = {
+          .dstSet = buf_state.desc_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorType = vk::DescriptorType::eUniformBuffer,
+      };
+      desc_writes[0].setBufferInfo(buffer_info);
 
-      desc_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      desc_writes[0].dstSet = buf_state.desc_set;
-      desc_writes[0].dstBinding = 0;
-      desc_writes[0].dstArrayElement = 0;
-      desc_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      desc_writes[0].descriptorCount = 1;
-      desc_writes[0].pBufferInfo = &buffer_info;
+      vk::DescriptorImageInfo image_info{
+          .sampler = texture_sampler_,
+          .imageView = texture_img_view_,
+          .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      };
+      desc_writes[1] = {
+          .dstSet = buf_state.desc_set,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+      };
+      desc_writes[1].setImageInfo(image_info);
 
-      VkDescriptorImageInfo image_info{};
-      image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      image_info.imageView = texture_img_view_;
-      image_info.sampler = texture_sampler_;
-
-      desc_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      desc_writes[1].dstSet = buf_state.desc_set;
-      desc_writes[1].dstBinding = 1;
-      desc_writes[1].dstArrayElement = 0;
-      desc_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      desc_writes[1].descriptorCount = 1;
-      desc_writes[1].pImageInfo = &image_info;
-
-      vkUpdateDescriptorSets(
-          device_, desc_writes.size(), desc_writes.data(), 0, nullptr);
+      device_.updateDescriptorSets(desc_writes, nullptr);
     }
   }
 
   void createCommandBuffers() {
-    cmd_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
-
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = cmd_pool_;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = cmd_bufs_.size();
-    VKASSERT(vkAllocateCommandBuffers(device_, &alloc_info, cmd_bufs_.data()));
+    vk::CommandBufferAllocateInfo alloc_info{
+        .commandPool = cmd_pool_,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+    };
+    cmd_bufs_ = device_.allocateCommandBuffers(alloc_info).value;
   }
 
-  void recordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_ind) {
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    VKASSERT(vkBeginCommandBuffer(cmd_buf, &begin_info));
+  void recordCommandBuffer(vk::CommandBuffer cmd_buf, uint32_t img_ind) {
+    vk::CommandBufferBeginInfo begin_info{};
+    std::ignore = cmd_buf.begin(begin_info);
 
-    VkRenderPassBeginInfo rp_info{};
-    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rp_info.renderPass = render_pass_;
-    rp_info.framebuffer = swapchain_fbs_[img_ind];
-    rp_info.renderArea.offset = {0, 0};
-    rp_info.renderArea.extent = swapchain_extent_;
+    vk::RenderPassBeginInfo rp_info{
+        .renderPass = render_pass_,
+        .framebuffer = swapchain_fbs_[img_ind],
+        .renderArea = {
+            .offset = {0, 0},
+            .extent = swapchain_extent_,
+        }};
     // float val = anim_.clear_val;
     float val = 0.f;
-    std::array<VkClearValue, 2> clear_values{};
-    clear_values[0].color = {{val, val, val, 1.0f}};
+    std::array<vk::ClearValue, 2> clear_values{};
+    clear_values[0].color = {val, val, val, 1.0f};
     clear_values[1].depthStencil = {1.f, 0};
-    rp_info.clearValueCount = clear_values.size();
-    rp_info.pClearValues = clear_values.data();
-    vkCmdBeginRenderPass(cmd_buf, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
+    rp_info.setClearValues(clear_values);
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, gfx_pipeline_);
+    cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, gfx_pipeline_);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)swapchain_extent_.width;
-    viewport.height = (float)swapchain_extent_.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+    vk::Viewport viewport{
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(swapchain_extent_.width),
+        .height = static_cast<float>(swapchain_extent_.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    cmd_buf.setViewport(0, viewport);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = swapchain_extent_;
-    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+    vk::Rect2D scissor{
+        .offset = {0, 0},
+        .extent = swapchain_extent_,
+    };
+    cmd_buf.setScissor(0, scissor);
 
     auto buf_state = uniform_bufs_[frame_num_ % MAX_FRAMES_IN_FLIGHT];
-    vkCmdBindDescriptorSets(
-        cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1,
-        (VkDescriptorSet*)&buf_state.desc_set, 0, nullptr);
+    cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, pipeline_layout_, 0,
+        buf_state.desc_set, nullptr);
 
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, (VkBuffer*)&vert_buf_, offsets);
-    vkCmdBindIndexBuffer(cmd_buf, ind_buf_, 0, VK_INDEX_TYPE_UINT32);
+    vk::DeviceSize offsets[] = {0};
+    cmd_buf.bindVertexBuffers(0, vert_buf_, offsets);
+    cmd_buf.bindIndexBuffer(ind_buf_, 0, vk::IndexType::eUint32);
 
-    vkCmdDrawIndexed(cmd_buf, geom.indices.size(), 1, 0, 0, 0);
-    vkCmdEndRenderPass(cmd_buf);
-    VKASSERT(vkEndCommandBuffer(cmd_buf));
+    cmd_buf.drawIndexed(geom.indices.size(), 1, 0, 0, 0);
+    cmd_buf.endRenderPass();
+    std::ignore = cmd_buf.end();
   }
 
   void createSyncObjects() {
-    VkSemaphoreCreateInfo sem_ci{};
-    sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fence_ci{};
-    fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    vk::SemaphoreCreateInfo sem_ci{};
+    vk::FenceCreateInfo fence_ci{.flags = vk::FenceCreateFlagBits::eSignaled};
 
     img_sems_.resize(MAX_FRAMES_IN_FLIGHT);
     render_sems_.resize(MAX_FRAMES_IN_FLIGHT);
     in_flight_fences_.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &img_sems_[i]));
-      VKASSERT(vkCreateSemaphore(device_, &sem_ci, nullptr, &render_sems_[i]));
-      VKASSERT(
-          vkCreateFence(device_, &fence_ci, nullptr, &in_flight_fences_[i]));
+      img_sems_[i] = device_.createSemaphore(sem_ci).value;
+      render_sems_[i] = device_.createSemaphore(sem_ci).value;
+      in_flight_fences_[i] = device_.createFence(fence_ci).value;
     }
   }
 
@@ -1749,7 +1736,7 @@ class HelloTriangleApp {
       return;
     }
 
-    vkDeviceWaitIdle(device_);
+    std::ignore = device_.waitIdle();
 
     cleanupSwapchain();
 
@@ -1859,15 +1846,15 @@ class HelloTriangleApp {
   std::vector<vk::ImageView> swapchain_views_;
   vk::RenderPass render_pass_;
   vk::DescriptorSetLayout desc_set_layout_;
-  VkDescriptorPool desc_pool_;
+  vk::DescriptorPool desc_pool_;
   vk::PipelineLayout pipeline_layout_;
   vk::Pipeline gfx_pipeline_;
   std::vector<vk::Framebuffer> swapchain_fbs_;
   vk::CommandPool cmd_pool_;
-  std::vector<VkCommandBuffer> cmd_bufs_;
-  std::vector<VkSemaphore> img_sems_;
-  std::vector<VkSemaphore> render_sems_;
-  std::vector<VkFence> in_flight_fences_;
+  std::vector<vk::CommandBuffer> cmd_bufs_;
+  std::vector<vk::Semaphore> img_sems_;
+  std::vector<vk::Semaphore> render_sems_;
+  std::vector<vk::Fence> in_flight_fences_;
   vk::Buffer vert_buf_;
   vk::DeviceMemory vert_buf_mem_;
   vk::Buffer ind_buf_;
@@ -1877,7 +1864,7 @@ class HelloTriangleApp {
   vk::Image texture_img_;
   vk::DeviceMemory texture_img_mem_;
   vk::ImageView texture_img_view_;
-  VkSampler texture_sampler_;
+  vk::Sampler texture_sampler_;
   vk::Image color_img_;
   vk::DeviceMemory color_img_mem_;
   vk::ImageView color_img_view_;
