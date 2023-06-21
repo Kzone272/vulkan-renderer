@@ -1,10 +1,14 @@
 #pragma once
 
+#include <boost/stacktrace.hpp>
+#include <iostream>
+
 // TODO: I want to print a stacktrace in this function. I'll probably use
 //       boost-stacktrace.
 #define vulkanHppAssert(x)                                               \
   if (!(x)) {                                                            \
     printf("Assertion failed in \"%s\", line %d\n", __FILE__, __LINE__); \
+    std::cout << boost::stacktrace::stacktrace();                        \
     throw;                                                               \
   } else  // This 'else' exists to catch the user's following semicolon
 

@@ -15,5 +15,6 @@ These should be globally installed. I'm using vcpkg on Windows and brew on Mac.
 - glm @ 0.9.9.8
 - VulkanSDK @ 1.3.236.0
 - tinyobjloader @ 2.0.0-rc9
+- boost-stacktrace @ 1.81.0
 
 Exact versions may not matter, but this is what I'm using.

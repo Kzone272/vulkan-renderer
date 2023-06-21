@@ -12,9 +12,12 @@ target_include_directories(main PRIVATE
   ${SDL2_INCLUDE_DIRS}
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}
 )
 
 target_precompile_headers(main
+  PUBLIC
+  "<boost/stacktrace.hpp>"
   PRIVATE
   "vulkan-include.h"
 )
@@ -24,6 +27,7 @@ target_link_libraries(main PRIVATE
   SDL2_image::SDL2_image
   glm::glm
   ${Vulkan_LIBRARIES}
+  ${Boost_LIBRARIES}
 )
 
 # Copy assets directory to build directory.
