@@ -392,6 +392,7 @@ class HelloTriangleApp {
     // dealt with, I need to use the C interface for present.
     result = (vk::Result)vkQueuePresentKHR(
         present_q_, (VkPresentInfoKHR*)&present_info);
+    // result = present_q_.presentKHR(present_info); // This crashes.
     if (result == vk::Result::eErrorOutOfDateKHR ||
         result == vk::Result::eSuboptimalKHR || window_resized_) {
       window_resized_ = false;
