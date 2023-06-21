@@ -16,7 +16,7 @@ target_include_directories(main PRIVATE
 )
 
 # Needed to satisfy boost-stacktrace
-set(CMAKE_CXX_FLAGS -D_GNU_SOURCE=1)
+set(CMAKE_CXX_FLAGS "-D_GNU_SOURCE")
 
 target_precompile_headers(main
   PUBLIC

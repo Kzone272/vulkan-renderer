@@ -19,7 +19,6 @@ find_package(Boost
     stacktrace_noop
   OPTIONAL_COMPONENTS
     stacktrace_windbg
-    stacktrace_addr2line
     stacktrace_basic
 )
 message("stack ${Boost_LIBRARIES} | ${Boost_INCLUDE_DIRS}")
