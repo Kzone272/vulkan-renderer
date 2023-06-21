@@ -15,6 +15,9 @@ target_include_directories(main PRIVATE
   ${Boost_INCLUDE_DIRS}
 )
 
+# Needed to satisfy boost-stacktrace
+set(CMAKE_CXX_FLAGS -D_GNU_SOURCE=1)
+
 target_precompile_headers(main
   PUBLIC
   "<boost/stacktrace.hpp>"
