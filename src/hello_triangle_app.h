@@ -6,7 +6,6 @@
 #include <SDL_vulkan.h>
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-#include <vulkan/vulkan.h>
 
 #include <algorithm>
 #include <array>
@@ -15,6 +14,7 @@
 #include <fstream>
 
 #include "asserts.h"
+#include "vulkan-include.h"
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -751,7 +751,7 @@ class HelloTriangleApp {
         .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
         .presentMode = present_mode,
         .clipped = VK_TRUE,
-        .oldSwapchain = VK_NULL_HANDLE,
+        .oldSwapchain = nullptr,
     };
 
     std::array<uint32_t, 2> queue_family_indices{
@@ -1007,8 +1007,7 @@ class HelloTriangleApp {
     };
     pipeline_ci.setStages(shader_stages);
     gfx_pipeline_ =
-        device_->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipeline_ci)
-            .value;
+        device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
   }
 
   vk::UniqueShaderModule createShaderModule(const std::vector<char>& code) {
@@ -1102,6 +1101,7 @@ class HelloTriangleApp {
 
     printf("failed to find supported format!\n");
     ASSERT(false);
+    return vk::Format::eUndefined;
   }
 
   void createTextureImage() {
@@ -1290,9 +1290,9 @@ class HelloTriangleApp {
       uint32_t mip_levels) {
     vk::FormatProperties format_props =
         physical_device_.getFormatProperties(format);
-    ASSERT(
+    ASSERT(static_cast<bool>(
         format_props.optimalTilingFeatures &
-        vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
+        vk::FormatFeatureFlagBits::eSampledImageFilterLinear));
 
     vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
@@ -1572,6 +1572,7 @@ class HelloTriangleApp {
       }
     }
     ASSERT(false);
+    return 0;
   }
 
   void createDescriptorPool() {

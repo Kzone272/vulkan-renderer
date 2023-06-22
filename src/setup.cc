@@ -4,8 +4,6 @@
 
 #include <iostream>
 
-#include "utils.h"
-
 using std::cout;
 using std::endl;
 
@@ -17,7 +15,6 @@ void vulkan_test() {
 }
 
 int main() {
-  utils::PrintMatrix();
   vulkan_test();
 
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {

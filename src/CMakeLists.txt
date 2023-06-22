@@ -3,7 +3,10 @@ add_executable(main
   main.cc
   hello_triangle_app.h
   asserts.h
+  asserts.cc
   defines.h
+  vulkan-include.h
+  utils.h
 )
 target_compile_features(main PRIVATE cxx_std_20)
 add_dependencies(main shaders)
@@ -19,10 +22,8 @@ target_include_directories(main PRIVATE
 set(CMAKE_CXX_FLAGS "-D_GNU_SOURCE")
 
 target_precompile_headers(main
-  PUBLIC
-  "<boost/stacktrace.hpp>"
   PRIVATE
-  "vulkan-include.h"
+    vulkan-include.h
 )
 
 target_link_libraries(main PRIVATE
@@ -47,7 +48,6 @@ add_dependencies(main assets)
 # App for testing that the project setup works.
 add_executable(setup
   setup.cc
-  utils.h
 )
 target_compile_features(setup PRIVATE cxx_std_17)
 
