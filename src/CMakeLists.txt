@@ -8,7 +8,8 @@ add_executable(main
   defines.h
   vulkan-include.h
   utils.h
-  frame-state.h
+  glm-include.h
+  world.h
 )
 target_compile_features(main PRIVATE cxx_std_20)
 add_dependencies(main shaders)
