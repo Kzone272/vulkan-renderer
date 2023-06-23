@@ -2,11 +2,13 @@
 add_executable(main
   main.cc
   hello_triangle_app.h
+  renderer.h
   asserts.h
   asserts.cc
   defines.h
   vulkan-include.h
   utils.h
+  frame-state.h
 )
 target_compile_features(main PRIVATE cxx_std_20)
 add_dependencies(main shaders)
