@@ -10,6 +10,7 @@ add_executable(main
   utils.h
   glm-include.h
   world.h
+  render-objects.h
 )
 target_compile_features(main PRIVATE cxx_std_20)
 add_dependencies(main shaders)

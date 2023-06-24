@@ -20,6 +20,7 @@
 #include "defines.h"
 #include "frame-state.h"
 #include "glm-include.h"
+#include "render-objects.h"
 #include "vulkan-include.h"
 
 using std::cerr;
@@ -183,17 +184,21 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createFrameBuffers();
-    createTextureImage();
-    createTextureImageView();
-    createTextureSampler();
-    loadModel();
-    createVertexBuffer();
-    createIndexBuffer();
+
     createUniformBuffers();
+    createTextureSampler();
+    initSdlImage();
+    texture_ = createTexture(TEXTURE_PATH);
     createDescriptorPool();
+    // The descriptor set references texture_->image_view
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
+
+    // TODO: Make these one function, called whenever you want to load a model.
+    loadModel();
+    createVertexBuffer();
+    createIndexBuffer();
   }
 
   struct AnimationState {
@@ -962,30 +967,36 @@ class Renderer {
     return vk::Format::eUndefined;
   }
 
-  void createTextureImage() {
+  void initSdlImage() {
     if (!IMG_Init(IMG_INIT_JPG)) {
       printf("%s", IMG_GetError());
       ASSERT(false);
     }
-    SDL_Surface* texture = IMG_Load(TEXTURE_PATH.c_str());
-    ASSERT(texture);
-    ASSERT(texture->pixels);
+  }
+
+  std::unique_ptr<Texture> createTexture(std::string texture_path) {
+    auto texture = std::make_unique<Texture>();
+
+    SDL_Surface* texture_surface = IMG_Load(texture_path.c_str());
+    ASSERT(texture_surface);
+    ASSERT(texture_surface->pixels);
     // Vulkan likes images to have alpha channels. The SDL byte order is also
     // defined opposite to vk::Format.
     SDL_PixelFormatEnum desired_fmt = SDL_PIXELFORMAT_ABGR8888;
-    if (texture->format->format != desired_fmt) {
+    if (texture_surface->format->format != desired_fmt) {
       printf(
           "converting image pixel format from %s to %s\n",
-          SDL_GetPixelFormatName(texture->format->format),
+          SDL_GetPixelFormatName(texture_surface->format->format),
           SDL_GetPixelFormatName(desired_fmt));
-      auto* new_surface = SDL_ConvertSurfaceFormat(texture, desired_fmt, 0);
-      SDL_FreeSurface(texture);
-      texture = new_surface;
+      auto* new_surface =
+          SDL_ConvertSurfaceFormat(texture_surface, desired_fmt, 0);
+      SDL_FreeSurface(texture_surface);
+      texture_surface = new_surface;
     }
-    uint32_t width = texture->w;
-    uint32_t height = texture->h;
+    uint32_t width = texture_surface->w;
+    uint32_t height = texture_surface->h;
     vk::DeviceSize image_size = width * height * 4;
-    mip_levels_ = std::floor(std::log2(std::max(width, height))) + 1;
+    texture->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
 
     vk::UniqueBuffer staging_buf;
     vk::UniqueDeviceMemory staging_buf_mem;
@@ -996,27 +1007,34 @@ class Renderer {
         staging_buf, staging_buf_mem);
 
     void* data = device_->mapMemory(*staging_buf_mem, 0, image_size).value;
-    memcpy(data, texture->pixels, static_cast<size_t>(image_size));
+    memcpy(data, texture_surface->pixels, static_cast<size_t>(image_size));
     device_->unmapMemory(*staging_buf_mem);
-    SDL_FreeSurface(texture);
+    SDL_FreeSurface(texture_surface);
 
-    texture_fmt_ = vk::Format::eR8G8B8A8Srgb;
+    texture->format = vk::Format::eR8G8B8A8Srgb;
     createImage(
-        width, height, texture_fmt_, mip_levels_, vk::SampleCountFlagBits::e1,
-        vk::ImageTiling::eOptimal,
+        width, height, texture->format, texture->mip_levels,
+        vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransferSrc |
             vk::ImageUsageFlagBits::eTransferDst |
             vk::ImageUsageFlagBits::eSampled,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, texture_img_,
-        texture_img_mem_);
+        vk::MemoryPropertyFlagBits::eDeviceLocal, texture->image,
+        texture->image_mem);
 
     transitionImageLayout(
-        *texture_img_, texture_fmt_, mip_levels_, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eTransferDstOptimal);
-    copyBufferToImage(*staging_buf, *texture_img_, width, height);
-    generateMipmaps(*texture_img_, width, height, texture_fmt_, mip_levels_);
+        *texture->image, texture->format, texture->mip_levels,
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    copyBufferToImage(*staging_buf, *texture->image, width, height);
+    generateMipmaps(
+        *texture->image, width, height, texture->format, texture->mip_levels);
     // Transitioned to vk::ImageLayout::eShaderReadOnlyOptimal while generating
     // mipmaps.
+
+    texture->image_view = createImageView(
+        *texture->image, texture->format, texture->mip_levels,
+        vk::ImageAspectFlagBits::eColor);
+
+    return texture;
   }
 
   void createImage(
@@ -1241,12 +1259,6 @@ class Renderer {
     endSingleTimeCommands(cmd_buf);
   }
 
-  void createTextureImageView() {
-    texture_img_view_ = createImageView(
-        *texture_img_, texture_fmt_, mip_levels_,
-        vk::ImageAspectFlagBits::eColor);
-  }
-
   void createTextureSampler() {
     vk::SamplerCreateInfo ci{
         .magFilter = vk::Filter::eLinear,
@@ -1261,7 +1273,7 @@ class Renderer {
         .compareEnable = VK_FALSE,
         .compareOp = vk::CompareOp::eAlways,
         .minLod = 0.f,
-        .maxLod = static_cast<float>(mip_levels_),
+        .maxLod = 13.f,  // Somewhat arbitrary, based on log2(4096) + 1
         .borderColor = vk::BorderColor::eIntOpaqueBlack,
         .unnormalizedCoordinates = VK_FALSE,
     };
@@ -1485,7 +1497,7 @@ class Renderer {
 
       vk::DescriptorImageInfo image_info{
           .sampler = *texture_sampler_,
-          .imageView = *texture_img_view_,
+          .imageView = *texture_->image_view,
           .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
       };
       desc_writes[1] = {
@@ -1641,11 +1653,6 @@ class Renderer {
   vk::UniqueDeviceMemory vert_buf_mem_;
   vk::UniqueBuffer ind_buf_;
   vk::UniqueDeviceMemory ind_buf_mem_;
-  vk::Format texture_fmt_;
-  uint32_t mip_levels_;
-  vk::UniqueImage texture_img_;
-  vk::UniqueDeviceMemory texture_img_mem_;
-  vk::UniqueImageView texture_img_view_;
   vk::UniqueSampler texture_sampler_;
   vk::UniqueImage color_img_;
   vk::UniqueDeviceMemory color_img_mem_;
@@ -1656,6 +1663,7 @@ class Renderer {
   vk::UniqueImageView depth_img_view_;
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
+  std::unique_ptr<Texture> texture_;
   Geometry geom;
 
   FrameState* frame_state_ = nullptr;
