@@ -176,14 +176,15 @@ class Renderer {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+    createCommandPool();
+    createCommandBuffers();
     createSwapchain();
     createImageViews();
+    createColorResources();
+    createDepthResources();
     createRenderPass();
     createDescriptorSetLayout();
     createGraphicsPipeline();
-    createCommandPool();
-    createColorResources();
-    createDepthResources();
     createFrameBuffers();
 
     createUniformBuffers();
@@ -193,7 +194,6 @@ class Renderer {
     createDescriptorPool();
     // The descriptor set references texture_->image_view
     createDescriptorSets();
-    createCommandBuffers();
     createSyncObjects();
 
     // TODO: Make these one function, called whenever you want to load a model.
@@ -679,9 +679,8 @@ class Renderer {
         .layout = vk::ImageLayout::eColorAttachmentOptimal,
     };
 
-    depth_fmt_ = findDepthFormat();
     vk::AttachmentDescription depth_att{
-        .format = depth_fmt_,
+        .format = depth_->format,
         .samples = msaa_samples_,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
@@ -925,7 +924,7 @@ class Renderer {
 
   void createDepthResources() {
     depth_ = std::make_unique<Texture>();
-    depth_->format = depth_fmt_;
+    depth_->format = findDepthFormat();
     depth_->mip_levels = 1;
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, depth_->format,
@@ -1660,13 +1659,12 @@ class Renderer {
   vk::UniqueBuffer ind_buf_;
   vk::UniqueDeviceMemory ind_buf_mem_;
   vk::UniqueSampler texture_sampler_;
-  vk::Format depth_fmt_;
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
+  std::unique_ptr<Texture> texture_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
-  std::unique_ptr<Texture> texture_;
   Geometry geom;
 
   FrameState* frame_state_ = nullptr;
