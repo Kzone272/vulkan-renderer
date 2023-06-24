@@ -1,5 +1,8 @@
 #pragma once
 
+// Rough ideas for how rendering a world of objects might be set up.
+// None of this code is used yet.
+
 #include <map>
 #include <string>
 
