@@ -13,6 +13,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <set>
 #include <vector>
 
@@ -885,7 +886,7 @@ class Renderer {
     swapchain_fbs_.resize(swapchain_views_.size());
     for (size_t i = 0; i < swapchain_views_.size(); i++) {
       std::array<vk::ImageView, 3> atts = {
-          *color_img_view_, *depth_img_view_, *swapchain_views_[i]};
+          *color_->image_view, *depth_->image_view, *swapchain_views_[i]};
 
       vk::FramebufferCreateInfo fb_ci{
           .renderPass = *render_pass_,
@@ -907,27 +908,37 @@ class Renderer {
   }
 
   void createColorResources() {
-    vk::Format color_fmt = swapchain_format_;
+    color_ = std::make_unique<Texture>();
+    color_->format = swapchain_format_;
+    color_->mip_levels = 1;
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, color_fmt, 1,
-        msaa_samples_, vk::ImageTiling::eOptimal,
+        swapchain_extent_.width, swapchain_extent_.height, color_->format,
+        color_->mip_levels, msaa_samples_, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransientAttachment |
             vk::ImageUsageFlagBits::eColorAttachment,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, color_img_, color_img_mem_);
-    color_img_view_ = createImageView(
-        *color_img_, color_fmt, 1, vk::ImageAspectFlagBits::eColor);
+        vk::MemoryPropertyFlagBits::eDeviceLocal, color_->image,
+        color_->image_mem);
+    color_->image_view = createImageView(
+        *color_->image, color_->format, color_->mip_levels,
+        vk::ImageAspectFlagBits::eColor);
   }
 
   void createDepthResources() {
+    depth_ = std::make_unique<Texture>();
+    depth_->format = depth_fmt_;
+    depth_->mip_levels = 1;
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, depth_fmt_, 1,
-        msaa_samples_, vk::ImageTiling::eOptimal,
+        swapchain_extent_.width, swapchain_extent_.height, depth_->format,
+        depth_->mip_levels, msaa_samples_, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, depth_img_, depth_img_mem_);
-    depth_img_view_ = createImageView(
-        *depth_img_, depth_fmt_, 1, vk::ImageAspectFlagBits::eDepth);
+        vk::MemoryPropertyFlagBits::eDeviceLocal, depth_->image,
+        depth_->image_mem);
+    depth_->image_view = createImageView(
+        *depth_->image, depth_->format, depth_->mip_levels,
+        vk::ImageAspectFlagBits::eDepth);
     transitionImageLayout(
-        *depth_img_, depth_fmt_, 1, vk::ImageLayout::eUndefined,
+        *depth_->image, depth_->format, depth_->mip_levels,
+        vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthStencilAttachmentOptimal);
   }
 
@@ -1601,13 +1612,8 @@ class Renderer {
   }
 
   void cleanupSwapchain() {
-    depth_img_view_.reset();
-    depth_img_.reset();
-    depth_img_mem_.reset();
-
-    color_img_view_.reset();
-    color_img_.reset();
-    color_img_mem_.reset();
+    depth_.reset();
+    color_.reset();
 
     swapchain_fbs_.clear();
     swapchain_views_.clear();
@@ -1654,13 +1660,10 @@ class Renderer {
   vk::UniqueBuffer ind_buf_;
   vk::UniqueDeviceMemory ind_buf_mem_;
   vk::UniqueSampler texture_sampler_;
-  vk::UniqueImage color_img_;
-  vk::UniqueDeviceMemory color_img_mem_;
-  vk::UniqueImageView color_img_view_;
   vk::Format depth_fmt_;
-  vk::UniqueImage depth_img_;
-  vk::UniqueDeviceMemory depth_img_mem_;
-  vk::UniqueImageView depth_img_view_;
+  std::unique_ptr<Texture> color_;
+  std::unique_ptr<Texture> depth_;
+
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   std::unique_ptr<Texture> texture_;
