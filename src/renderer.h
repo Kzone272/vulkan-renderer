@@ -143,8 +143,10 @@ struct Geometry {
 
 class Renderer {
  public:
-  Renderer(SDL_Window* window) {
+  Renderer(SDL_Window* window, uint32_t width, uint32_t height) {
     window_ = window;
+    width_ = width;
+    height_ = height;
   }
 
   void init(FrameState* frame_state) {
@@ -159,6 +161,15 @@ class Renderer {
 
   void cleanup() {
     std::ignore = device_->waitIdle();
+  }
+
+  void resizeWindow(uint32_t width, uint32_t height) {
+    if (width_ == width && height_ == height) {
+      return;
+    }
+    window_resized_ = true;
+    width_ = width;
+    height_ = height;
   }
 
  private:
@@ -204,6 +215,10 @@ class Renderer {
   }
 
   void drawFrame() {
+    if (window_resized_) {
+      recreateSwapchain();
+    }
+
     int frame = frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT;
 
     std::ignore =
@@ -212,7 +227,7 @@ class Renderer {
     auto [result, img_ind] = device_->acquireNextImageKHR(
         *swapchain_, UINT64_MAX, *img_sems_[frame], {});
     if (result == vk::Result::eErrorOutOfDateKHR) {
-      recreateSwapchain();
+      window_resized_ = true;
       return;
     }
     ASSERT(
@@ -248,9 +263,9 @@ class Renderer {
         present_q_, (VkPresentInfoKHR*)&present_info);
     // result = present_q_.presentKHR(present_info); // This crashes.
     if (result == vk::Result::eErrorOutOfDateKHR ||
-        result == vk::Result::eSuboptimalKHR || frame_state_->window_resized) {
-      frame_state_->window_resized = false;
-      recreateSwapchain();
+        result == vk::Result::eSuboptimalKHR) {
+      window_resized_ = true;
+      return;
     }
   }
 
@@ -568,11 +583,7 @@ class Renderer {
     if (caps.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
       return caps.currentExtent;
     } else {
-      int width = 0;
-      int height = 0;
-      SDL_GL_GetDrawableSize(window_, &width, &height);
-      vk::Extent2D extent{
-          static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+      vk::Extent2D extent{width_, height_};
       extent.width = std::clamp(
           extent.width, caps.minImageExtent.width, caps.maxImageExtent.width);
       extent.height = std::clamp(
@@ -621,8 +632,6 @@ class Renderer {
     swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_).value;
     swapchain_format_ = format.format;
     swapchain_extent_ = extent;
-    frame_state_->width = extent.width;
-    frame_state_->height = extent.height;
     printf(
         "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
         swapchain_format_, swapchain_extent_.width, swapchain_extent_.height);
@@ -1574,21 +1583,7 @@ class Renderer {
   }
 
   void recreateSwapchain() {
-    int width = 0;
-    int height = 0;
-    SDL_GL_GetDrawableSize(window_, &width, &height);
-    if (width == 0 || height == 0) {
-      frame_state_->empty_window = true;
-      return;
-    }
-
-    if (swapchain_extent_.width == width &&
-        swapchain_extent_.height == height) {
-      return;
-    }
-
     std::ignore = device_->waitIdle();
-
     cleanupSwapchain();
 
     swapchain_support_ = querySwapchainSupport(physical_device_);
@@ -1597,6 +1592,7 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createFrameBuffers();
+    window_resized_ = false;
   }
 
   void cleanupSwapchain() {
@@ -1613,7 +1609,11 @@ class Renderer {
     swapchain_.reset();
   }
 
+  // The window should only be used in createSurface().
   SDL_Window* window_ = nullptr;
+  bool window_resized_ = false;
+  uint32_t width_ = 100;
+  uint32_t height_ = 100;
 
   vk::UniqueInstance instance_;
   vk::DispatchLoaderDynamic dldi_;

@@ -21,9 +21,4 @@ struct FrameState {
   uint64_t frame_num = 0;
   AnimationState anim;
   UniformBufferObject ubo;
-
-  uint32_t width = 1;
-  uint32_t height = 1;
-  bool window_resized = false;
-  bool empty_window = false;
 };

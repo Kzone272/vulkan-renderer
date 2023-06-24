@@ -51,7 +51,7 @@ class HelloTriangleApp {
  public:
   void run() {
     initWindow();
-    renderer_ = std::make_unique<Renderer>(window_);
+    renderer_ = std::make_unique<Renderer>(window_, width_, height_);
     renderer_->init(&frame_state_);
     mainLoop();
     cleanup();
@@ -71,10 +71,7 @@ class HelloTriangleApp {
   }
 
   void WindowResized() {
-    frame_state_.window_resized = true;
-    // This might not be correct, but we'll check the windows size again in
-    // recreateSwapchain().
-    frame_state_.empty_window = false;
+    window_resized_ = true;
     update();
   }
 
@@ -116,7 +113,7 @@ class HelloTriangleApp {
           quit_ = true;
           break;
         } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
-          frame_state_.window_resized = true;
+          window_resized_ = true;
         } else if (event.window.event == SDL_WINDOWEVENT_MINIMIZED) {
           window_minimized_ = true;
         } else if (event.window.event == SDL_WINDOWEVENT_RESTORED) {
@@ -126,11 +123,30 @@ class HelloTriangleApp {
     }
   }
 
+  void updateWindowSize() {
+    int width = 0;
+    int height = 0;
+    SDL_GL_GetDrawableSize(window_, &width, &height);
+    if (width == 0 || height == 0) {
+      window_empty_ = true;
+      return;
+    }
+    width_ = width;
+    height_ = height;
+    window_empty_ = false;
+  }
+
   void update() {
     timeTick();
     animate();
-    if (!window_minimized_ && !frame_state_.empty_window) {
-      drawFrame();
+
+    if (window_resized_) {
+      updateWindowSize();
+      renderer_->resizeWindow(width_, height_);
+      window_resized_ = false;
+    }
+    if (!window_minimized_ && !window_empty_) {
+      renderer_->drawFrame(&frame_state_);
       frame_state_.frame_num++;
     }
   }
@@ -204,15 +220,10 @@ class HelloTriangleApp {
         glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0));
     ubo.view = glm::lookAt(vec3(0, 1.25, -2.5), vec3(0), vec3(0, 1, 0));
     ubo.proj = glm::perspective(
-        glm::radians(45.0f),
-        (float)frame_state_.width / (float)frame_state_.height, 0.1f, 100.0f);
+        glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100.0f);
     // Invert y-axis because Vulkan is opposite GL.
     ubo.proj[1][1] *= -1;
     frame_state_.ubo = ubo;
-  }
-
-  void drawFrame() {
-    renderer_->drawFrame(&frame_state_);
   }
 
   void cleanup() {
@@ -226,6 +237,10 @@ class HelloTriangleApp {
 
   bool quit_ = false;
   bool window_minimized_ = false;
+  bool window_empty_ = false;
+  bool window_resized_ = false;
+  uint32_t width_ = WIDTH;
+  uint32_t height_ = HEIGHT;
 
   Time last_frame_time_;
   // Time in ms since the last draw, as a float
