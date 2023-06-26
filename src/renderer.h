@@ -21,6 +21,7 @@
 #include "defines.h"
 #include "frame-state.h"
 #include "glm-include.h"
+#include "imgui/imgui.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
 
@@ -34,6 +35,8 @@ using Clock = std::chrono::steady_clock;
 using Time = std::chrono::time_point<Clock>;
 
 namespace {
+
+ImGuiCol some_imgui_var;
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
