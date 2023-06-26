@@ -20,6 +20,7 @@ target_include_directories(main PRIVATE
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
+  ${DEPS_INCLUDE_DIRS}
 )
 
 # Needed to satisfy boost-stacktrace
