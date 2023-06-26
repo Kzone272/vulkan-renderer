@@ -20,7 +20,7 @@ target_include_directories(main PRIVATE
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
-  ${imgui_INCLUDE_DIRS}
+  ${DEPS_INCLUDE_DIRS}
 )
 
 # Needed to satisfy boost-stacktrace
@@ -37,7 +37,7 @@ target_link_libraries(main PRIVATE
   glm::glm
   ${Vulkan_LIBRARIES}
   ${Boost_LIBRARIES}
-  ${imgui_LIBRARIES}
+  imgui::imgui
 )
 
 # Copy assets directory to build directory.

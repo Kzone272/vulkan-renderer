@@ -23,6 +23,5 @@ find_package(Boost
     stacktrace_windbg
     stacktrace_basic
 )
-find_package(imgui REQUIRED)
 
 add_subdirectory(src)
