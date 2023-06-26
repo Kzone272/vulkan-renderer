@@ -1,3 +1,4 @@
 set(DEPS_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
 
 add_subdirectory(glm)
+add_subdirectory(SDL)
