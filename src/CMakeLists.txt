@@ -16,7 +16,6 @@ target_compile_features(main PRIVATE cxx_std_20)
 add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
-  ${SDL2_INCLUDE_DIRS}
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
