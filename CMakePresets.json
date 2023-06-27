@@ -5,7 +5,8 @@
       "name": "default",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH":"${sourceDir}/deps/install"
+        "CMAKE_PREFIX_PATH":"${sourceDir}/deps/install",
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     }
   ],
