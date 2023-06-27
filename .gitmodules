@@ -7,3 +7,6 @@
 [submodule "deps/SDL_image"]
 	path = deps/SDL_image
 	url = git@github.com:libsdl-org/SDL_image.git
+[submodule "deps/tinyobjloader"]
+	path = deps/tinyobjloader
+	url = git@github.com:tinyobjloader/tinyobjloader.git

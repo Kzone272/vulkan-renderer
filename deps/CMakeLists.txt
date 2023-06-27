@@ -26,3 +26,9 @@ ExternalProject_Add(SDL_image
   CMAKE_ARGS ${CMAKE_ARGS}
   BINARY_DIR SDL_image
 )
+
+ExternalProject_Add(tinyobjloader
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tinyobjloader
+  CMAKE_ARGS ${CMAKE_ARGS}
+  BINARY_DIR tinyobjloader
+)
