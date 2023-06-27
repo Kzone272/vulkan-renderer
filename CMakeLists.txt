@@ -6,8 +6,6 @@ project(VulkanTutorial
   LANGUAGES CXX
 )
 
-add_subdirectory(deps)
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/")
 
 find_package(glm REQUIRED)

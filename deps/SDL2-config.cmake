@@ -1,4 +1,0 @@
-if (NOT TARGET SDL2::SDL2)
-  SET(BUILD_SHARED_LIBS TRUE)
-  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SDL)
-endif()
