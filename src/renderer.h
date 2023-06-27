@@ -23,6 +23,7 @@
 #include "glm-include.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
+#include "world.h"
 
 using std::cerr;
 using std::cout;
@@ -36,9 +37,6 @@ using Time = std::chrono::time_point<Clock>;
 namespace {
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-
-const std::string MODEL_PATH = "assets/models/viking_room.obj";
-const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
 
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -167,6 +165,14 @@ class Renderer {
     height_ = height;
   }
 
+  std::unique_ptr<Model> loadModel(ModelInfo model_info) {
+    auto model = std::make_unique<Model>();
+    model->texture = createTexture(model_info.texture_path);
+    loadObj(model_info.obj_path, *model);
+
+    return model;
+  }
+
  private:
   void initVulkan() {
     createInstance();
@@ -189,16 +195,11 @@ class Renderer {
     createUniformBuffers();
     createTextureSampler();
     initSdlImage();
-    texture_ = createTexture(TEXTURE_PATH);
     createDescriptorPool();
-    // The descriptor set references texture_->image_view
+    model_ = loadModel(viking_model);
+    // The descriptor set references model_->texture->image_view
     createDescriptorSets();
     createSyncObjects();
-
-    // TODO: Make these one function, called whenever you want to load a model.
-    loadModel();
-    createVertexBuffer();
-    createIndexBuffer();
   }
 
   struct AnimationState {
@@ -1287,14 +1288,17 @@ class Renderer {
     texture_sampler_ = device_->createSamplerUnique(ci).value;
   }
 
-  void loadModel() {
+  void loadObj(std::string obj_path, Model& model) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn;
     std::string err;
     ASSERT(tinyobj::LoadObj(
-        &attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()));
+        &attrib, &shapes, &materials, &warn, &err, obj_path.c_str()));
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
 
     std::unordered_map<Vertex, uint32_t> uniq_verts;
     for (const auto& shape : shapes) {
@@ -1316,28 +1320,32 @@ class Renderer {
           it = uniq_verts
                    .insert({vert, static_cast<uint32_t>(uniq_verts.size())})
                    .first;
-          geom.vertices.push_back(vert);
+          vertices.push_back(vert);
         }
-        geom.indices.push_back(it->second);
+        indices.push_back(it->second);
       }
     }
+
+    model.index_count = indices.size();
+    stageVertices(vertices, model);
+    stageIndices(indices, model);
+
     printf(
-        "loaded %zd vertices, %zd indices\n", geom.vertices.size(),
-        geom.indices.size());
+        "loaded %zd vertices, %zd indices\n", vertices.size(), indices.size());
   }
 
-  void createVertexBuffer() {
-    vk::DeviceSize size = sizeof(Vertex) * geom.vertices.size();
+  void stageVertices(std::vector<Vertex> vertices, Model& model) {
+    vk::DeviceSize size = sizeof(Vertex) * vertices.size();
     stageBuffer(
-        size, (void*)geom.vertices.data(),
-        vk::BufferUsageFlagBits::eVertexBuffer, vert_buf_, vert_buf_mem_);
+        size, (void*)vertices.data(), vk::BufferUsageFlagBits::eVertexBuffer,
+        model.vert_buf, model.vert_buf_mem);
   }
 
-  void createIndexBuffer() {
-    vk::DeviceSize size = sizeof(uint32_t) * geom.indices.size();
+  void stageIndices(std::vector<uint32_t> indices, Model& model) {
+    vk::DeviceSize size = sizeof(uint32_t) * indices.size();
     stageBuffer(
-        size, (void*)geom.indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,
-        ind_buf_, ind_buf_mem_);
+        size, (void*)indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,
+        model.ind_buf, model.ind_buf_mem);
   }
 
   void createUniformBuffers() {
@@ -1504,7 +1512,7 @@ class Renderer {
 
       vk::DescriptorImageInfo image_info{
           .sampler = *texture_sampler_,
-          .imageView = *texture_->image_view,
+          .imageView = *model_->texture->image_view,
           .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
       };
       desc_writes[1] = {
@@ -1572,10 +1580,10 @@ class Renderer {
         buf_state.desc_set, nullptr);
 
     vk::DeviceSize offsets[] = {0};
-    cmd_buf.bindVertexBuffers(0, *vert_buf_, offsets);
-    cmd_buf.bindIndexBuffer(*ind_buf_, 0, vk::IndexType::eUint32);
+    cmd_buf.bindVertexBuffers(0, *model_->vert_buf, offsets);
+    cmd_buf.bindIndexBuffer(*model_->ind_buf, 0, vk::IndexType::eUint32);
+    cmd_buf.drawIndexed(model_->index_count, 1, 0, 0, 0);
 
-    cmd_buf.drawIndexed(geom.indices.size(), 1, 0, 0, 0);
     cmd_buf.endRenderPass();
     std::ignore = cmd_buf.end();
   }
@@ -1649,18 +1657,12 @@ class Renderer {
   std::vector<vk::UniqueSemaphore> img_sems_;
   std::vector<vk::UniqueSemaphore> render_sems_;
   std::vector<vk::UniqueFence> in_flight_fences_;
-  vk::UniqueBuffer vert_buf_;
-  vk::UniqueDeviceMemory vert_buf_mem_;
-  vk::UniqueBuffer ind_buf_;
-  vk::UniqueDeviceMemory ind_buf_mem_;
   vk::UniqueSampler texture_sampler_;
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
-  std::unique_ptr<Texture> texture_;
+  std::unique_ptr<Model> model_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
-
-  Geometry geom;
 
   FrameState* frame_state_ = nullptr;
 

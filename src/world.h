@@ -14,13 +14,15 @@ enum class ModelId {
 };
 
 struct ModelInfo {
-  std::string model_path;
+  std::string obj_path;
   std::string texture_path;
 };
 
+ModelInfo viking_model{
+    "assets/models/viking_room.obj", "assets/textures/viking_room.png"};
+
 std::map<ModelId, ModelInfo> models = {
-    {ModelId::VIKING,
-     {"assets/models/viking_room.obj", "assets/textures/viking_room.png"}},
+    {ModelId::VIKING, viking_model},
 };
 
 class Object {
