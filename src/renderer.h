@@ -179,7 +179,6 @@ class Renderer {
     createCommandPool();
     createCommandBuffers();
     createSwapchain();
-    createImageViews();
     createColorResources();
     createDepthResources();
     createRenderPass();
@@ -232,7 +231,7 @@ class Renderer {
     ASSERT(
         result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR);
     ASSERT(img_ind >= 0);
-    ASSERT(img_ind < swapchain_images_.size());
+    ASSERT(img_ind < swapchain_views_.size());
 
     // Only reset the fence if we're submitting work.
     device_->resetFences(*in_flight_fences_[frame]);
@@ -594,8 +593,9 @@ class Renderer {
 
   void createSwapchain() {
     auto format = chooseSwapSurfaceFormat(swapchain_support_.formats);
+    swapchain_format_ = format.format;
     auto present_mode = chooseSwapPresentMode(swapchain_support_.present_modes);
-    auto extent = chooseSwapExtent(swapchain_support_.caps);
+    swapchain_extent_ = chooseSwapExtent(swapchain_support_.caps);
 
     uint32_t image_count = swapchain_support_.caps.minImageCount + 1;
     if (swapchain_support_.caps.maxImageCount > 0) {
@@ -606,9 +606,9 @@ class Renderer {
     vk::SwapchainCreateInfoKHR swapchain_ci{
         .surface = *surface_,
         .minImageCount = image_count,
-        .imageFormat = format.format,
+        .imageFormat = swapchain_format_,
         .imageColorSpace = format.colorSpace,
-        .imageExtent = extent,
+        .imageExtent = swapchain_extent_,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
         .preTransform = swapchain_support_.caps.currentTransform,
@@ -628,21 +628,18 @@ class Renderer {
     }
 
     swapchain_ = device_->createSwapchainKHRUnique(swapchain_ci).value;
-    swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_).value;
-    swapchain_format_ = format.format;
-    swapchain_extent_ = extent;
+    auto swapchain_images = device_->getSwapchainImagesKHR(*swapchain_).value;
+
+    swapchain_views_.resize(swapchain_images.size());
+    for (size_t i = 0; i < swapchain_images.size(); i++) {
+      swapchain_views_[i] = createImageView(
+          swapchain_images[i], swapchain_format_, 1,
+          vk::ImageAspectFlagBits::eColor);
+    }
+
     printf(
         "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
         swapchain_format_, swapchain_extent_.width, swapchain_extent_.height);
-  }
-
-  void createImageViews() {
-    swapchain_views_.resize(swapchain_images_.size());
-    for (size_t i = 0; i < swapchain_images_.size(); i++) {
-      swapchain_views_[i] = createImageView(
-          swapchain_images_[i], swapchain_format_, 1,
-          vk::ImageAspectFlagBits::eColor);
-    }
   }
 
   vk::UniqueImageView createImageView(
@@ -1603,7 +1600,6 @@ class Renderer {
 
     swapchain_support_ = querySwapchainSupport(physical_device_);
     createSwapchain();
-    createImageViews();
     createColorResources();
     createDepthResources();
     createFrameBuffers();
@@ -1639,7 +1635,6 @@ class Renderer {
   vk::Queue present_q_;
   SwapchainSupportDetails swapchain_support_;
   vk::UniqueSwapchainKHR swapchain_;
-  std::vector<vk::Image> swapchain_images_;
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
