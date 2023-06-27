@@ -1,0 +1,12 @@
+[submodule "deps/glm"]
+	path = deps/glm
+	url = git@github.com:g-truc/glm.git
+[submodule "deps/SDL"]
+	path = deps/SDL
+	url = git@github.com:libsdl-org/SDL.git
+[submodule "deps/SDL_image"]
+	path = deps/SDL_image
+	url = git@github.com:libsdl-org/SDL_image.git
+[submodule "deps/tinyobjloader"]
+	path = deps/tinyobjloader
+	url = git@github.com:tinyobjloader/tinyobjloader.git

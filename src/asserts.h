@@ -5,10 +5,16 @@
 
 #include "defines.h"
 
-// ASSERT(condition) checks if the condition is met, and if not, calls
-// ABORT with an error message indicating the module and line where
-// the error occurred.
-void ASSERT(bool x);
+void ASSERTfn(bool x, std::string assertion);
+
+// ASSERT(condition) checks if the condition is met, and if not, throws an
+// exception with an error message indicating the failed assertion.
+#ifndef ASSERT
+#define ASSERT(x)    \
+  if (!(x)) {        \
+    ASSERTfn(x, #x); \
+  } else  // This 'else' exists to catch the user's following semicolon
+#endif
 
 // DASSERT(condition) is just like ASSERT, except that it is only
 // functional in DEBUG mode, but does nothing when in a non-DEBUG
