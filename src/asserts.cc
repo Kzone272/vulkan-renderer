@@ -1,16 +1,25 @@
 #include "asserts.h"
 
-#include <boost/stacktrace.hpp>
 #include <exception>
 #include <iostream>
 
+#ifdef __cpp_lib_stacktrace
+#include <stacktrace>
+#endif
+
 #include "utils.h"
 
-void ASSERT(bool x) {
+void ASSERTfn(bool x, std::string assertion) {
   if (!(x)) {
-    auto str = strFmt("Assertion failed! Printing stack trace:");
+    auto str = strFmt("ASSERT(%s) failed!", assertion.c_str());
     printf("%s\n", str.c_str());
-    std::cout << boost::stacktrace::stacktrace();
+
+#ifdef __cpp_lib_stacktrace
+    std::cout << std::stacktrace::current() << '\n';
+#else
+    printf("Can't print stacktrace :/\n");
+#endif
+
     throw std::runtime_error(str);
   }
 }

@@ -5,7 +5,7 @@
       "name": "default",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH":"${sourceDir}/deps/install;C:/repos/vcpkg/installed/x64-windows"
+        "CMAKE_PREFIX_PATH":"${sourceDir}/deps/install"
       }
     }
   ],

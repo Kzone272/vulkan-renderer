@@ -12,18 +12,18 @@ add_executable(main
   world.h
   render-objects.h
 )
-target_compile_features(main PRIVATE cxx_std_20)
+
+target_compile_features(main PRIVATE cxx_std_23)
+# Disable C++ modules because it breaks precompiled headers
+set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 0)
+
 add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
-  ${Boost_INCLUDE_DIRS}
   ${DEPS_INCLUDE_DIRS}
 )
-
-# Needed to satisfy boost-stacktrace
-set(CMAKE_CXX_FLAGS "-D_GNU_SOURCE")
 
 target_precompile_headers(main
   PRIVATE
@@ -35,7 +35,6 @@ target_link_libraries(main PRIVATE
   SDL2_image::SDL2_image
   glm::glm
   ${Vulkan_LIBRARIES}
-  ${Boost_LIBRARIES}
 )
 
 # Copy assets directory to build directory.
@@ -47,6 +46,5 @@ add_custom_command(TARGET main POST_BUILD
     "$<TARGET_FILE_DIR:main>/assets"
 )
 add_dependencies(main assets)
-
 
 add_subdirectory(shaders)

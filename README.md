@@ -32,7 +32,6 @@ These should be installed using instructions in deps/README.md, or globally inst
 - SDL2_image[core,libjpeg-turbo] @ 2.6.3
 - glm @ 0.9.9.8
 - VulkanSDK @ 1.3.236.0
-- tinyobjloader @ 2.0.0-rc9
-- boost-stacktrace @ 1.81.0
+- tinyobjloader @ 2.0.0-rc10
 
 Exact versions may not matter, but this is what I'm using.
