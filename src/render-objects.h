@@ -5,6 +5,14 @@
 #include "glm-include.h"
 #include "vulkan-include.h"
 
+struct UniformBufferData {
+  alignas(16) glm::mat4 proj_view;
+};
+
+struct PushData {
+  mat4 model;
+};
+
 struct Texture {
   vk::UniqueImage image;
   vk::UniqueDeviceMemory image_mem;

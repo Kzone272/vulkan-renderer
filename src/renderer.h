@@ -148,8 +148,10 @@ class Renderer {
 
   void updateUniformBuffer() {
     auto& buf = uniform_bufs_[frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT];
-    auto& ubo = frame_state_->ubo;
-    memcpy(buf.buf_mapped, &ubo, sizeof(ubo));
+
+    UniformBufferData data;
+    data.proj_view = frame_state_->proj * frame_state_->view;
+    memcpy(buf.buf_mapped, &data, sizeof(data));
   }
 
   void drawFrame() {
@@ -787,8 +789,15 @@ class Renderer {
         .stencilTestEnable = VK_FALSE,
     };
 
+    vk::PushConstantRange push_range{
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(PushData),
+    };
+
     vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
     pipeline_layout_ci.setSetLayouts(*desc_set_layout_);
+    pipeline_layout_ci.setPushConstantRanges(push_range);
     pipeline_layout_ =
         device_->createPipelineLayoutUnique(pipeline_layout_ci).value;
 
@@ -1288,7 +1297,7 @@ class Renderer {
   }
 
   void createUniformBuffers() {
-    vk::DeviceSize buf_size = sizeof(UniformBufferObject);
+    vk::DeviceSize buf_size = sizeof(UniformBufferData);
     uniform_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
       createBuffer(
@@ -1298,6 +1307,7 @@ class Renderer {
           uniform_bufs_[i].buf, uniform_bufs_[i].buf_mem);
       uniform_bufs_[i].buf_mapped =
           device_->mapMemory(*uniform_bufs_[i].buf_mem, 0, buf_size).value;
+      updateUniformBuffer();
     }
   }
 
@@ -1439,7 +1449,7 @@ class Renderer {
       vk::DescriptorBufferInfo buffer_info{
           .buffer = *buf_state.buf,
           .offset = 0,
-          .range = sizeof(UniformBufferObject),
+          .range = sizeof(UniformBufferData),
       };
       desc_writes[0] = {
           .dstSet = buf_state.desc_set,
@@ -1517,6 +1527,10 @@ class Renderer {
     cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
         buf_state.desc_set, nullptr);
+
+    PushData push_data{frame_state_->model};
+    cmd_buf.pushConstants<PushData>(
+        *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
     vk::DeviceSize offsets[] = {0};
     cmd_buf.bindVertexBuffers(0, *model_->vert_buf, offsets);

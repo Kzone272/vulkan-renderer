@@ -206,19 +206,18 @@ class HelloTriangleApp {
   }
 
   void updateUniformBuffer() {
-    UniformBufferObject ubo;
-    ubo.model =
+    frame_state_.model =
         // spin model
         glm::rotate(
             mat4(1), glm::radians(frame_state_.anim.model_rot), vec3(0, 1, 0)) *
         // reorient model
         glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0));
-    ubo.view = glm::lookAt(vec3(0, 1.25, -2.5), vec3(0), vec3(0, 1, 0));
-    ubo.proj = glm::perspective(
+    frame_state_.view =
+        glm::lookAt(vec3(0, 1.25, -2.5), vec3(0), vec3(0, 1, 0));
+    frame_state_.proj = glm::perspective(
         glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100.0f);
     // Invert y-axis because Vulkan is opposite GL.
-    ubo.proj[1][1] *= -1;
-    frame_state_.ubo = ubo;
+    frame_state_.proj[1][1] *= -1;
   }
 
   void cleanup() {
