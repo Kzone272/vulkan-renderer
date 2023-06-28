@@ -156,6 +156,8 @@ class HelloTriangleApp {
 
     auto time_delta = now - last_frame_time_;
     time_delta_ms_ = float_ms(time_delta).count();
+    frame_times_.push_back(time_delta_ms_);
+
     last_frame_time_ = now;
 
     checkFps(now);
@@ -168,8 +170,15 @@ class HelloTriangleApp {
     }
 
     if (now > next_fps_time_) {
+      float time_sum = 0.f;
+      for (auto time : frame_times_) {
+        time_sum += time;
+      }
+      float avg_time = time_sum / frame_times_.size();
+      frame_times_.clear();
+
       int fps = frame_state_.frame_num - last_fps_frame_;
-      printf("fps: %d\n", fps);
+      printf("%.2fms avg frame (%d fps)\n", avg_time, fps);
 
       next_fps_time_ = now + 1s;
       last_fps_frame_ = frame_state_.frame_num;
@@ -242,6 +251,8 @@ class HelloTriangleApp {
   // Used to calculate FPS
   uint64_t last_fps_frame_ = 0;
   Time next_fps_time_;
+  // Last 1s of frame times.
+  std::vector<float> frame_times_;
 
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
