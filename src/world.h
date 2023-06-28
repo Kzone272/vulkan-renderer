@@ -7,43 +7,27 @@
 #include <string>
 
 #include "glm-include.h"
-
-enum class ModelId {
-  UNKNOWN,
-  VIKING,
-};
-
-struct ModelInfo {
-  std::string obj_path;
-  std::string texture_path;
-};
-
-ModelInfo viking_model{
-    "assets/models/viking_room.obj", "assets/textures/viking_room.png"};
-
-std::map<ModelId, ModelInfo> models = {
-    {ModelId::VIKING, viking_model},
-};
+#include "render-objects.h"
 
 class Object {
  public:
-  void setScale(const glm::vec3& scale) {
+  void setScale(const vec3& scale) {
     scale_ = scale;
     dirty_ = true;
   }
 
-  void setRot(float angle, const glm::vec3& axis) {
+  void setRot(float angle, const vec3& axis) {
     rot_angle_ = angle;
     rot_axis_ = axis;
     dirty_ = true;
   }
 
-  void setPos(const glm::vec3& pos) {
+  void setPos(const vec3& pos) {
     pos_ = pos;
     dirty_ = true;
   }
 
-  glm::mat4 getTransform() {
+  mat4 getTransform() {
     if (dirty_) {
       updateTransform();
       dirty_ = false;
@@ -66,11 +50,11 @@ class Object {
   ModelId model_;
 
   bool dirty_ = false;
-  glm::mat4 transform_;
-  glm::vec3 scale_;
+  mat4 transform_;
+  vec3 scale_;
   float rot_angle_;
-  glm::vec3 rot_axis_;
-  glm::vec3 pos_;
+  vec3 rot_axis_;
+  vec3 pos_;
 
   std::vector<std::unique_ptr<Object>> children_;
 };
@@ -81,9 +65,9 @@ struct ModelVulkan {
 };
 
 struct Camera {
-  glm::vec3 pos;
-  glm::vec3 focus;
-  glm::vec3 up;
+  vec3 pos;
+  vec3 focus;
+  vec3 up;
 };
 
 class World {

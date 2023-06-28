@@ -69,71 +69,6 @@ static std::vector<char> readFile(const std::string& filename) {
 
 }  // namespace
 
-using glm::mat4;
-using glm::vec2;
-using glm::vec3;
-
-struct Vertex {
-  vec3 pos;
-  vec3 color;
-  vec2 uv;
-
-  bool operator==(const Vertex& other) const {
-    return pos == other.pos && color == other.color && uv == other.uv;
-  }
-
-  static vk::VertexInputBindingDescription getBindingDesc() {
-    return {
-        .binding = 0,
-        .stride = sizeof(Vertex),
-        .inputRate = vk::VertexInputRate::eVertex,
-    };
-  }
-
-  static std::array<vk::VertexInputAttributeDescription, 3> getAttrDescs() {
-    std::array<vk::VertexInputAttributeDescription, 3> attrs{};
-    attrs[0] = {
-        .location = 0,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,  // vec3
-        .offset = offsetof(Vertex, pos),
-    };
-    attrs[1] = {
-        .location = 1,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,  // vec3
-        .offset = offsetof(Vertex, color),
-    };
-    attrs[2] = {
-        .location = 2,
-        .binding = 0,
-        .format = vk::Format::eR32G32Sfloat,  // vec2
-        .offset = offsetof(Vertex, uv),
-    };
-
-    return attrs;
-  }
-};
-
-namespace std {
-
-template <>
-struct hash<Vertex> {
-  size_t operator()(Vertex const& vertex) const {
-    return ((hash<glm::vec3>()(vertex.pos) ^
-             (hash<glm::vec3>()(vertex.color) << 1)) >>
-            1) ^
-           (hash<glm::vec2>()(vertex.uv) << 1);
-  }
-};
-
-}  // namespace std
-
-struct Geometry {
-  std::vector<Vertex> vertices;
-  std::vector<uint32_t> indices;
-};
-
 class Renderer {
  public:
   Renderer(SDL_Window* window, uint32_t width, uint32_t height) {
@@ -165,7 +100,11 @@ class Renderer {
     height_ = height;
   }
 
-  std::unique_ptr<Model> loadModel(ModelInfo model_info) {
+  std::unique_ptr<Model> loadModel(ModelId model_id) {
+    auto it = model_registry.find(model_id);
+    ASSERT(it != model_registry.end());
+    auto& model_info = it->second;
+
     auto model = std::make_unique<Model>();
     model->texture = createTexture(model_info.texture_path);
     loadObj(model_info.obj_path, *model);
@@ -196,7 +135,7 @@ class Renderer {
     createTextureSampler();
     initSdlImage();
     createDescriptorPool();
-    model_ = loadModel(viking_model);
+    model_ = loadModel(ModelId::VIKING);
     // The descriptor set references model_->texture->image_view
     createDescriptorSets();
     createSyncObjects();

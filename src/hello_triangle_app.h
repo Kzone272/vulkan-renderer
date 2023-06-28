@@ -244,7 +244,6 @@ class HelloTriangleApp {
   uint64_t last_fps_frame_ = 0;
   Time next_fps_time_;
 
-  Geometry geom;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
 

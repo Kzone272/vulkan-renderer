@@ -5,3 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
+
+using glm::mat4;
+using glm::vec2;
+using glm::vec3;
