@@ -47,7 +47,9 @@ class HelloTriangleApp {
   void run() {
     initWindow();
     renderer_ = std::make_unique<Renderer>(window_, width_, height_);
+    frame_state_.world = &world_;
     renderer_->init(&frame_state_);
+    setupWorld();
     mainLoop();
     cleanup();
   }
@@ -88,6 +90,31 @@ class HelloTriangleApp {
       ASSERT(false);
     }
     SDL_AddEventWatch(SdlEventWatcher, this);
+  }
+
+  void setupWorld() {
+    const int grid = 20;
+    for (int i = 0; i < grid; i++) {
+      for (int j = 0; j < grid; j++) {
+        auto obj = std::make_unique<Object>(ModelId::VIKING);
+        obj->setPos(vec3(i - grid / 2, 0, j - grid / 2));
+        obj->setScale(vec3{0.5f});
+        addObject(std::move(obj));
+      }
+    }
+  }
+
+  void addObject(std::unique_ptr<Object> obj) {
+    auto model_id = obj->getModel();
+    if (!world_.loaded_models.contains(model_id)) {
+      loadModel(model_id);
+    }
+    world_.objects.push_back(std::move(obj));
+  }
+
+  void loadModel(ModelId model_id) {
+    auto model = renderer_->loadModel(model_id);
+    world_.loaded_models.insert({model_id, std::move(model)});
   }
 
   void mainLoop() {
@@ -147,12 +174,16 @@ class HelloTriangleApp {
   }
 
   using float_ms = std::chrono::duration<float, std::ratio<1, 1000>>;
+  using float_s = std::chrono::duration<float, std::chrono::seconds::period>;
 
   void timeTick() {
     Time now = Clock::now();
     if (frame_state_.frame_num == 0) {
+      start_ = now;
       last_frame_time_ = now;
     }
+
+    time_s_ = float_s(now - start_).count();
 
     auto time_delta = now - last_frame_time_;
     time_delta_ms_ = float_ms(time_delta).count();
@@ -189,6 +220,7 @@ class HelloTriangleApp {
     frame_state_.anim.clear_val = updateClearValue();
     frame_state_.anim.model_rot = updateModelRotation();
 
+    updateObjects();
     updateUniformBuffer();
   }
 
@@ -214,15 +246,35 @@ class HelloTriangleApp {
     return seq * total_rot;
   }
 
+  void updateObjects() {
+    for (auto& object : world_.objects) {
+      vec3 pos = object->getPos();
+      pos.y = 0.f;
+
+      float dist = glm::length(pos);
+      float t = dist / 2.f + 4 * time_s_;
+      float height = sinf(t);
+      pos.y = height;
+      object->setPos(pos);
+
+      auto spin = glm::angleAxis(
+          glm::radians(frame_state_.anim.model_rot), vec3(0, 1, 0));
+      auto orient = glm::angleAxis(glm::radians(-90.f), vec3(1, 0, 0));
+      auto quat = spin * orient;
+
+      object->setRot(glm::angle(quat), glm::axis(quat));
+    }
+  }
+
   void updateUniformBuffer() {
-    frame_state_.model =
-        // spin model
-        glm::rotate(
-            mat4(1), glm::radians(frame_state_.anim.model_rot), vec3(0, 1, 0)) *
-        // reorient model
-        glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0));
-    frame_state_.view =
-        glm::lookAt(vec3(0, 1.25, -2.5), vec3(0), vec3(0, 1, 0));
+    Camera c;
+    float t = time_s_;
+    float r = 8 * cosf(t / 3.f) + 9;
+    float t2 = time_s_;
+    c.pos = vec3{r * cosf(t2), cosf(t) + 1.1, r * sinf(t2)};
+    c.focus = vec3{0};
+    c.up = vec3(0, 1, 0);
+    frame_state_.view = glm::lookAt(c.pos, c.focus, c.up);
     frame_state_.proj = glm::perspective(
         glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100.0f);
     // Invert y-axis because Vulkan is opposite GL.
@@ -231,6 +283,7 @@ class HelloTriangleApp {
 
   void cleanup() {
     renderer_->cleanup();
+    world_.loaded_models.clear();
     renderer_.reset();
     SDL_DestroyWindow(window_);
     SDL_Quit();
@@ -245,6 +298,8 @@ class HelloTriangleApp {
   uint32_t width_ = WIDTH;
   uint32_t height_ = HEIGHT;
 
+  Time start_;
+  float time_s_;
   Time last_frame_time_;
   // Time in ms since the last draw, as a float
   float time_delta_ms_ = 0.0f;
@@ -256,6 +311,7 @@ class HelloTriangleApp {
 
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
+  World world_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

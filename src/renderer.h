@@ -135,16 +135,11 @@ class Renderer {
     createTextureSampler();
     initSdlImage();
     createDescriptorPool();
-    model_ = loadModel(ModelId::VIKING);
-    // The descriptor set references model_->texture->image_view
+    texture_ = createTexture("assets/textures/viking_room.png");
+    // The descriptor set references texture_->image_view
     createDescriptorSets();
     createSyncObjects();
   }
-
-  struct AnimationState {
-    float clear_val = 0.0f;
-    float model_rot = 0.0f;
-  };
 
   void updateUniformBuffer() {
     auto& buf = uniform_bufs_[frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT];
@@ -1461,7 +1456,7 @@ class Renderer {
 
       vk::DescriptorImageInfo image_info{
           .sampler = *texture_sampler_,
-          .imageView = *model_->texture->image_view,
+          .imageView = *texture_->image_view,
           .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
       };
       desc_writes[1] = {
@@ -1528,14 +1523,20 @@ class Renderer {
         vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
         buf_state.desc_set, nullptr);
 
-    PushData push_data{frame_state_->model};
-    cmd_buf.pushConstants<PushData>(
-        *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
+    for (auto& obj : frame_state_->world->objects) {
+      auto it = frame_state_->world->loaded_models.find(obj->getModel());
+      ASSERT(it != frame_state_->world->loaded_models.end());
+      auto* model = it->second.get();
 
-    vk::DeviceSize offsets[] = {0};
-    cmd_buf.bindVertexBuffers(0, *model_->vert_buf, offsets);
-    cmd_buf.bindIndexBuffer(*model_->ind_buf, 0, vk::IndexType::eUint32);
-    cmd_buf.drawIndexed(model_->index_count, 1, 0, 0, 0);
+      PushData push_data{obj->getTransform()};
+      cmd_buf.pushConstants<PushData>(
+          *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
+
+      vk::DeviceSize offsets[] = {0};
+      cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
+      cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
+      cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
+    }
 
     cmd_buf.endRenderPass();
     std::ignore = cmd_buf.end();
@@ -1614,6 +1615,7 @@ class Renderer {
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
   std::unique_ptr<Model> model_;
+  std::unique_ptr<Texture> texture_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
