@@ -4,6 +4,7 @@
 
 #include "glm-include.h"
 #include "vulkan-include.h"
+#include "world.h"
 
 struct UniformBufferData {
   alignas(16) glm::mat4 proj_view;
@@ -28,21 +29,6 @@ struct Model {
   vk::UniqueDeviceMemory ind_buf_mem;
   uint32_t index_count;
   std::unique_ptr<Texture> texture;
-};
-
-enum class ModelId {
-  UNKNOWN,
-  VIKING,
-};
-
-struct ModelInfo {
-  std::string obj_path;
-  std::string texture_path;
-};
-
-std::map<ModelId, ModelInfo> model_registry = {
-    {ModelId::VIKING,
-     {"assets/models/viking_room.obj", "assets/textures/viking_room.png"}},
 };
 
 struct Vertex {

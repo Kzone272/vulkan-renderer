@@ -100,16 +100,11 @@ class Renderer {
     height_ = height;
   }
 
-  std::unique_ptr<Model> loadModel(ModelId model_id) {
-    auto it = model_registry.find(model_id);
-    ASSERT(it != model_registry.end());
-    auto& model_info = it->second;
-
-    auto model = std::make_unique<Model>();
-    model->texture = createTexture(model_info.texture_path);
-    loadObj(model_info.obj_path, *model);
-
-    return model;
+  void useModel(ModelId model_id) {
+    if (!loaded_models_.contains(model_id)) {
+      auto model = loadModel(model_id);
+      loaded_models_.insert({model_id, std::move(model)});
+    }
   }
 
  private:
@@ -1231,6 +1226,18 @@ class Renderer {
     texture_sampler_ = device_->createSamplerUnique(ci).value;
   }
 
+  std::unique_ptr<Model> loadModel(ModelId model_id) {
+    auto it = model_registry.find(model_id);
+    ASSERT(it != model_registry.end());
+    auto& model_info = it->second;
+
+    auto model = std::make_unique<Model>();
+    model->texture = createTexture(model_info.texture_path);
+    loadObj(model_info.obj_path, *model);
+
+    return model;
+  }
+
   void loadObj(std::string obj_path, Model& model) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -1525,8 +1532,8 @@ class Renderer {
 
     bool bound = false;
     for (auto& obj : frame_state_->world->objects) {
-      auto it = frame_state_->world->loaded_models.find(obj->getModel());
-      ASSERT(it != frame_state_->world->loaded_models.end());
+      auto it = loaded_models_.find(obj->getModel());
+      ASSERT(it != loaded_models_.end());
       auto* model = it->second.get();
 
       PushData push_data{obj->getTransform()};
@@ -1635,6 +1642,7 @@ class Renderer {
     vk::DescriptorSet desc_set;
   };
   std::vector<UniformBufferState> uniform_bufs_;
+  std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

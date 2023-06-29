@@ -105,16 +105,8 @@ class HelloTriangleApp {
   }
 
   void addObject(std::unique_ptr<Object> obj) {
-    auto model_id = obj->getModel();
-    if (!world_.loaded_models.contains(model_id)) {
-      loadModel(model_id);
-    }
+    renderer_->useModel(obj->getModel());
     world_.objects.push_back(std::move(obj));
-  }
-
-  void loadModel(ModelId model_id) {
-    auto model = renderer_->loadModel(model_id);
-    world_.loaded_models.insert({model_id, std::move(model)});
   }
 
   void mainLoop() {
@@ -283,7 +275,6 @@ class HelloTriangleApp {
 
   void cleanup() {
     renderer_->cleanup();
-    world_.loaded_models.clear();
     renderer_.reset();
     SDL_DestroyWindow(window_);
     SDL_Quit();

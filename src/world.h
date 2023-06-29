@@ -7,7 +7,21 @@
 #include <string>
 
 #include "glm-include.h"
-#include "render-objects.h"
+
+enum class ModelId {
+  UNKNOWN,
+  VIKING,
+};
+
+struct ModelInfo {
+  std::string obj_path;
+  std::string texture_path;
+};
+
+std::map<ModelId, ModelInfo> model_registry = {
+    {ModelId::VIKING,
+     {"assets/models/viking_room.obj", "assets/textures/viking_room.png"}},
+};
 
 class Object {
  public:
@@ -72,7 +86,5 @@ struct Camera {
 };
 
 struct World {
-  // TODO: World probably shouldn't own the Model render object.
-  std::map<ModelId, std::unique_ptr<Model>> loaded_models;
   std::vector<std::unique_ptr<Object>> objects;
 };
