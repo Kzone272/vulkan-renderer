@@ -72,6 +72,7 @@ struct Camera {
 };
 
 struct World {
+  // TODO: World probably shouldn't own the Model render object.
   std::map<ModelId, std::unique_ptr<Model>> loaded_models;
   std::vector<std::unique_ptr<Object>> objects;
 };
