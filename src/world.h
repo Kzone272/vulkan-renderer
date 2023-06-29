@@ -11,6 +11,7 @@
 enum class ModelId {
   UNKNOWN,
   VIKING,
+  PONY,
 };
 
 struct ModelInfo {
@@ -21,6 +22,9 @@ struct ModelInfo {
 std::map<ModelId, ModelInfo> model_registry = {
     {ModelId::VIKING,
      {"assets/models/viking_room.obj", "assets/textures/viking_room.png"}},
+    {ModelId::PONY,
+     {"assets/models/pony/pony.obj",
+      "assets/models/pony/pony-body-diffuse.jpg"}},
 };
 
 class Object {
