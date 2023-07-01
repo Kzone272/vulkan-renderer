@@ -8,7 +8,12 @@ project(VulkanTutorial
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/")
 
-find_package(glm REQUIRED)
+find_package(glm 0.9.9.9 CONFIG REQUIRED)
+if(NOT DEFINED glm_INCLUDE_DIRS)
+  set(glm_INCLUDE_DIRS 
+    $<TARGET_PROPERTY:glm::glm,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
+
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
 find_package(Vulkan REQUIRED)

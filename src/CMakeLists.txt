@@ -20,9 +20,9 @@ set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 0)
 add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
+  ${glm_INCLUDE_DIRS}
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
-  ${DEPS_INCLUDE_DIRS}
 )
 
 target_precompile_headers(main
@@ -33,7 +33,6 @@ target_precompile_headers(main
 target_link_libraries(main PRIVATE
   SDL2::SDL2
   SDL2_image::SDL2_image
-  glm::glm
   ${Vulkan_LIBRARIES}
 )
 
