@@ -96,10 +96,17 @@ class HelloTriangleApp {
     const int grid = 20;
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
-        auto obj = std::make_unique<Object>(ModelId::VIKING);
-        obj->setPos(vec3(i - grid / 2, 0, j - grid / 2));
-        obj->setScale(vec3{0.5f});
-        addObject(std::move(obj));
+        if ((i + j) % 2 == 0) {
+          auto obj = std::make_unique<Object>(ModelId::VIKING);
+          obj->setPos(vec3(i - grid / 2, 0, j - grid / 2));
+          obj->setScale(vec3{0.5f});
+          addObject(std::move(obj));
+        } else {
+          auto obj = std::make_unique<Object>(ModelId::PONY);
+          obj->setPos(vec3(i - grid / 2, 0, j - grid / 2));
+          obj->setScale(vec3{0.001f});
+          addObject(std::move(obj));
+        }
       }
     }
   }
@@ -239,6 +246,11 @@ class HelloTriangleApp {
   }
 
   void updateObjects() {
+    auto spin = glm::angleAxis(
+        glm::radians(frame_state_.anim.model_rot), vec3(0.f, 1.f, 0.f));
+    auto orient_spin =
+        spin * glm::angleAxis(glm::radians(-90.f), vec3(1, 0, 0));
+
     for (auto& object : world_.objects) {
       vec3 pos = object->getPos();
       pos.y = 0.f;
@@ -249,11 +261,8 @@ class HelloTriangleApp {
       pos.y = height;
       object->setPos(pos);
 
-      auto spin = glm::angleAxis(
-          glm::radians(frame_state_.anim.model_rot), vec3(0, 1, 0));
-      auto orient = glm::angleAxis(glm::radians(-90.f), vec3(1, 0, 0));
-      auto quat = spin * orient;
-
+      // Viking model is off by 90deg.
+      auto quat = object->getModel() == ModelId::VIKING ? orient_spin : spin;
       object->setRot(glm::angle(quat), glm::axis(quat));
     }
   }
@@ -261,9 +270,9 @@ class HelloTriangleApp {
   void updateUniformBuffer() {
     Camera c;
     float t = time_s_;
-    float r = 8 * cosf(t / 3.f) + 9;
+    float r = 8 * cosf(t / 3.f) + 10;
     float t2 = time_s_;
-    c.pos = vec3{r * cosf(t2), cosf(t) + 1.1, r * sinf(t2)};
+    c.pos = vec3{r * cosf(t2), cosf(t) + 2.5, r * sinf(t2)};
     c.focus = vec3{0};
     c.up = vec3(0, 1, 0);
     frame_state_.view = glm::lookAt(c.pos, c.focus, c.up);

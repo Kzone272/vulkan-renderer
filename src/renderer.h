@@ -122,7 +122,7 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createRenderPass();
-    createDescriptorSetLayout();
+    createDescriptorSetLayouts();
     createGraphicsPipeline();
     createFrameBuffers();
 
@@ -130,14 +130,12 @@ class Renderer {
     createTextureSampler();
     initSdlImage();
     createDescriptorPool();
-    texture_ = createTexture("assets/textures/viking_room.png");
-    // The descriptor set references texture_->image_view
-    createDescriptorSets();
+    createFrameDescriptorSet();
     createSyncObjects();
   }
 
-  void updateUniformBuffer() {
-    auto& buf = uniform_bufs_[frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT];
+  void updateUniformBuffer(int frame) {
+    auto& buf = uniform_bufs_[frame];
 
     UniformBufferData data;
     data.proj_view = frame_state_->proj * frame_state_->view;
@@ -168,10 +166,10 @@ class Renderer {
     // Only reset the fence if we're submitting work.
     device_->resetFences(*in_flight_fences_[frame]);
 
-    updateUniformBuffer();
+    updateUniformBuffer(frame);
 
     cmd_bufs_[frame]->reset();
-    recordCommandBuffer(*cmd_bufs_[frame], img_ind);
+    recordCommandBuffer(frame, img_ind);
 
     vk::SubmitInfo submit_info{};
     vk::PipelineStageFlags wait_stages =
@@ -671,28 +669,28 @@ class Renderer {
     render_pass_ = device_->createRenderPassUnique(rp_ci).value;
   }
 
-  void createDescriptorSetLayout() {
-    vk::DescriptorSetLayoutBinding ubo_binding{
+  void createDescriptorSetLayouts() {
+    vk::DescriptorSetLayoutBinding frame_binding{
         .binding = 0,
         .descriptorType = vk::DescriptorType::eUniformBuffer,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eVertex,
     };
+    vk::DescriptorSetLayoutCreateInfo frame_layout_ci{};
+    frame_layout_ci.setBindings(frame_binding);
+    frame_layout_ =
+        device_->createDescriptorSetLayoutUnique(frame_layout_ci).value;
 
-    vk::DescriptorSetLayoutBinding sampler_binding{
-        .binding = 1,
+    vk::DescriptorSetLayoutBinding material_binding{
+        .binding = 0,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment,
     };
-
-    std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {
-        ubo_binding, sampler_binding};
-
-    vk::DescriptorSetLayoutCreateInfo layout_ci{};
-    layout_ci.setBindings(bindings);
-    desc_set_layout_ =
-        device_->createDescriptorSetLayoutUnique(layout_ci).value;
+    vk::DescriptorSetLayoutCreateInfo material_layout_ci{};
+    material_layout_ci.setBindings(material_binding);
+    material_layout_ =
+        device_->createDescriptorSetLayoutUnique(material_layout_ci).value;
   }
 
   void createGraphicsPipeline() {
@@ -786,7 +784,9 @@ class Renderer {
     };
 
     vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-    pipeline_layout_ci.setSetLayouts(*desc_set_layout_);
+    std::vector<vk::DescriptorSetLayout> set_layouts{
+        *frame_layout_, *material_layout_};
+    pipeline_layout_ci.setSetLayouts(set_layouts);
     pipeline_layout_ci.setPushConstantRanges(push_range);
     pipeline_layout_ =
         device_->createPipelineLayoutUnique(pipeline_layout_ci).value;
@@ -979,6 +979,7 @@ class Renderer {
     texture->image_view = createImageView(
         *texture->image, texture->format, texture->mip_levels,
         vk::ImageAspectFlagBits::eColor);
+    texture->desc_set = createMaterialDescriptorSet(*texture->image_view);
 
     return texture;
   }
@@ -1309,7 +1310,7 @@ class Renderer {
           uniform_bufs_[i].buf, uniform_bufs_[i].buf_mem);
       uniform_bufs_[i].buf_mapped =
           device_->mapMemory(*uniform_bufs_[i].buf_mem, 0, buf_size).value;
-      updateUniformBuffer();
+      updateUniformBuffer(i);
     }
   }
 
@@ -1412,6 +1413,9 @@ class Renderer {
   }
 
   void createDescriptorPool() {
+    // Arbitrary. 10 textures seems fine for now.
+    const uint32_t kMaxSamplers = 10;
+
     std::array<vk::DescriptorPoolSize, 2> pool_sizes{{
         {
             .type = vk::DescriptorType::eUniformBuffer,
@@ -1419,20 +1423,20 @@ class Renderer {
         },
         {
             .type = vk::DescriptorType::eCombinedImageSampler,
-            .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+            .descriptorCount = kMaxSamplers,
         },
     }};
 
     vk::DescriptorPoolCreateInfo pool_ci{
-        .maxSets = MAX_FRAMES_IN_FLIGHT,
+        .maxSets = MAX_FRAMES_IN_FLIGHT + kMaxSamplers,
     };
     pool_ci.setPoolSizes(pool_sizes);
     desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
   }
 
-  void createDescriptorSets() {
+  void createFrameDescriptorSet() {
     std::vector<vk::DescriptorSetLayout> layouts(
-        MAX_FRAMES_IN_FLIGHT, *desc_set_layout_);
+        MAX_FRAMES_IN_FLIGHT, *frame_layout_);
     vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = *desc_pool_,
     };
@@ -1446,36 +1450,50 @@ class Renderer {
       auto& buf_state = uniform_bufs_[i];
       buf_state.desc_set = std::move(desc_sets[i]);
 
-      std::array<vk::WriteDescriptorSet, 2> desc_writes{};
-
       vk::DescriptorBufferInfo buffer_info{
           .buffer = *buf_state.buf,
           .offset = 0,
           .range = sizeof(UniformBufferData),
       };
-      desc_writes[0] = {
+      vk::WriteDescriptorSet desc_write{
           .dstSet = buf_state.desc_set,
           .dstBinding = 0,
           .dstArrayElement = 0,
           .descriptorType = vk::DescriptorType::eUniformBuffer,
       };
-      desc_writes[0].setBufferInfo(buffer_info);
+      desc_write.setBufferInfo(buffer_info);
 
-      vk::DescriptorImageInfo image_info{
-          .sampler = *texture_sampler_,
-          .imageView = *texture_->image_view,
-          .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-      };
-      desc_writes[1] = {
-          .dstSet = buf_state.desc_set,
-          .dstBinding = 1,
-          .dstArrayElement = 0,
-          .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-      };
-      desc_writes[1].setImageInfo(image_info);
-
-      device_->updateDescriptorSets(desc_writes, nullptr);
+      device_->updateDescriptorSets(desc_write, nullptr);
     }
+  }
+
+  vk::DescriptorSet createMaterialDescriptorSet(const vk::ImageView& img_view) {
+    vk::DescriptorSetAllocateInfo alloc_info{
+        .descriptorPool = *desc_pool_,
+    };
+    alloc_info.setSetLayouts(*material_layout_);
+
+    std::vector<vk::DescriptorSet> desc_sets =
+        device_->allocateDescriptorSets(alloc_info).value;
+    ASSERT(desc_sets.size() == 1);
+    auto& desc_set = desc_sets[0];
+
+    vk::DescriptorImageInfo image_info{
+        .sampler = *texture_sampler_,
+        .imageView = img_view,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
+    vk::WriteDescriptorSet desc_write{
+        .dstSet = desc_set,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+    };
+    desc_write.setImageInfo(image_info);
+
+    device_->updateDescriptorSets(desc_write, nullptr);
+
+    return desc_set;
   }
 
   void createCommandBuffers() {
@@ -1487,7 +1505,9 @@ class Renderer {
     cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
   }
 
-  void recordCommandBuffer(vk::CommandBuffer cmd_buf, uint32_t img_ind) {
+  void recordCommandBuffer(int frame, uint32_t img_ind) {
+    auto& cmd_buf = *cmd_bufs_[frame];
+
     vk::CommandBufferBeginInfo begin_info{};
     std::ignore = cmd_buf.begin(begin_info);
 
@@ -1524,31 +1544,28 @@ class Renderer {
     };
     cmd_buf.setScissor(0, scissor);
 
-    auto& buf_state =
-        uniform_bufs_[frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT];
+    auto& buf_state = uniform_bufs_[frame];
     cmd_buf.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
         buf_state.desc_set, nullptr);
 
-    bool bound = false;
     for (auto& obj : frame_state_->world->objects) {
       auto it = loaded_models_.find(obj->getModel());
       ASSERT(it != loaded_models_.end());
       auto* model = it->second.get();
+
+      // TODO: Sort objects by material to reduce bindings.
+      cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 1,
+          model->texture->desc_set, nullptr);
 
       PushData push_data{obj->getTransform()};
       cmd_buf.pushConstants<PushData>(
           *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
       vk::DeviceSize offsets[] = {0};
-      // As a temporary optimization, assume all objects use the same model.
-      // Binding only once makes frame time 3.3ms -> 2.4ms with 400 object draw
-      // calls.
-      if (!bound) {
-        cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
-        cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
-        bound = true;
-      }
+      cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
+      cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
       cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
     }
 
@@ -1615,7 +1632,10 @@ class Renderer {
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
   vk::UniqueRenderPass render_pass_;
-  vk::UniqueDescriptorSetLayout desc_set_layout_;
+  // Bound per frame.
+  vk::UniqueDescriptorSetLayout frame_layout_;
+  // Bound per material
+  vk::UniqueDescriptorSetLayout material_layout_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniquePipelineLayout pipeline_layout_;
   vk::UniquePipeline gfx_pipeline_;
@@ -1629,7 +1649,6 @@ class Renderer {
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
   std::unique_ptr<Model> model_;
-  std::unique_ptr<Texture> texture_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 

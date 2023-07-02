@@ -20,6 +20,7 @@ struct Texture {
   vk::UniqueImageView image_view;
   vk::Format format;
   uint32_t mip_levels = 1;
+  vk::DescriptorSet desc_set;
 };
 
 struct Model {
