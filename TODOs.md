@@ -2,6 +2,7 @@ Things I Should Do Soon:
 
 Short-term ideas:
 - Setup imgui
+- Setup basic user input (i.e. trackball rotation, or wasd + mouse camera)
 - Use obj materials info to allow multiple materials per "model"
 
 Medium-term ideas: 

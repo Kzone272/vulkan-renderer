@@ -11,6 +11,7 @@ git submodule update --init
 ```
 cmake --preset default
 cmake --build --preset debug
+cmake --install build
 ```
 
 This will build all deps into deps/build dir and install them locally in the

@@ -32,3 +32,48 @@ ExternalProject_Add(tinyobjloader
   CMAKE_ARGS ${CMAKE_ARGS}
   BINARY_DIR tinyobjloader
 )
+
+find_package(SDL2 CONFIG REQUIRED)
+find_package(Vulkan REQUIRED)
+
+set (IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
+file(GLOB imgui_headers
+  ${IMGUI_DIR}/*.h
+  ${IMGUI_DIR}/backends/imgui_impl_sdl2.h
+  ${IMGUI_DIR}/backends/imgui_impl_vulkan.h
+)
+file(GLOB imgui_cpps
+  ${IMGUI_DIR}/*.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+add_library(imgui STATIC ${imgui_cpps})
+
+target_include_directories(imgui PRIVATE
+  ${IMGUI_DIR}
+  ${Vulkan_INCLUDE_DIRS}
+  ${SDL2_INCLUDE_DIRS}
+)
+target_link_libraries(imgui PRIVATE
+  ${Vulkan_LIBRARIES}
+  ${SDL2_LIBRARIES}
+)
+target_sources(imgui PUBLIC
+  FILE_SET HEADERS
+  FILES ${imgui_headers}
+)
+
+install(TARGETS imgui
+  EXPORT imguiTargets
+  FILE_SET HEADERS
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  PUBLIC_HEADER DESTINATION include
+  INCLUDES DESTINATION include
+)
+
+install(EXPORT imguiTargets
+  FILE imguiConfig.cmake
+  DESTINATION cmake
+)

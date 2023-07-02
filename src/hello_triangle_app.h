@@ -4,6 +4,8 @@
 #undef main  // SDL needs this on Windows
 #include <SDL_image.h>
 #include <SDL_vulkan.h>
+#include <imgui/backends/imgui_impl_sdl2.h>
+#include <imgui/imgui.h>
 
 #include <algorithm>
 #include <array>
@@ -49,6 +51,7 @@ class HelloTriangleApp {
     renderer_ = std::make_unique<Renderer>(window_, width_, height_);
     frame_state_.world = &world_;
     renderer_->init(&frame_state_);
+    initImgui();
     setupWorld();
     mainLoop();
     cleanup();
@@ -90,6 +93,11 @@ class HelloTriangleApp {
       ASSERT(false);
     }
     SDL_AddEventWatch(SdlEventWatcher, this);
+  }
+
+  void initImgui() {
+    ImGui::CreateContext();
+    ImGui_ImplSDL2_InitForVulkan(window_);
   }
 
   void setupWorld() {

@@ -21,6 +21,7 @@ add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
   ${DEPS_INCLUDE_DIR}
+  ${DEPS_INCLUDE_DIR}/imgui
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
 )
@@ -34,6 +35,7 @@ target_link_libraries(main PRIVATE
   SDL2::SDL2
   SDL2_image::SDL2_image
   ${Vulkan_LIBRARIES}
+  imgui
 )
 
 # Copy assets directory to build directory.
