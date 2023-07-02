@@ -33,5 +33,6 @@ These should be installed using instructions in deps/README.md, or globally inst
 - SDL2_image[core,libjpeg-turbo] @ 2.6.3
 - glm @ 0.9.9.9
 - tinyobjloader @ 2.0.0-rc10
+- imgui @ 1.89.6
 
 Exact versions may not matter, but this is what I'm using.
