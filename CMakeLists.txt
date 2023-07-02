@@ -9,9 +9,9 @@ project(VulkanTutorial
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/")
 
 find_package(glm 0.9.9.9 CONFIG REQUIRED)
-find_package(SDL2 CONFIG REQUIRED)
-find_package(SDL2_image CONFIG REQUIRED)
+find_package(SDL2 2.28.0 CONFIG REQUIRED)
+find_package(SDL2_image 2.6.3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
-find_package(tinyobjloader CONFIG REQUIRED)
+find_package(tinyobjloader 2.0.0 CONFIG REQUIRED)
 
 add_subdirectory(src)
