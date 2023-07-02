@@ -5,6 +5,7 @@
 #include <SDL_image.h>
 #include <SDL_vulkan.h>
 #define TINYOBJLOADER_IMPLEMENTATION
+#include <imgui/backends/imgui_impl_vulkan.h>
 #include <tiny_obj_loader.h>
 
 #include <algorithm>
@@ -80,6 +81,7 @@ class Renderer {
   void init(FrameState* frame_state) {
     frame_state_ = frame_state;
     initVulkan();
+    initImgui();
   }
 
   void drawFrame(FrameState* frame_state) {
@@ -130,8 +132,28 @@ class Renderer {
     createTextureSampler();
     initSdlImage();
     createDescriptorPool();
+    createImguiDescriptorPool();
     createFrameDescriptorSet();
     createSyncObjects();
+  }
+
+  void initImgui() {
+    ImGui_ImplVulkan_InitInfo init_info{
+        .Instance = *instance_,
+        .PhysicalDevice = physical_device_,
+        .Device = *device_,
+        .Queue = gfx_q_,
+        .DescriptorPool = *imgui_desc_pool_,
+        .MinImageCount = MAX_FRAMES_IN_FLIGHT,
+        .ImageCount = MAX_FRAMES_IN_FLIGHT,
+        .MSAASamples = (VkSampleCountFlagBits)msaa_samples_,
+    };
+    ImGui_ImplVulkan_Init(&init_info, *render_pass_);
+
+    auto cmd_buf = beginSingleTimeCommands();
+    ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
+    endSingleTimeCommands(cmd_buf);
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
   }
 
   void updateUniformBuffer(int frame) {
@@ -1416,22 +1438,47 @@ class Renderer {
     // Arbitrary. 10 textures seems fine for now.
     const uint32_t kMaxSamplers = 10;
 
-    std::array<vk::DescriptorPoolSize, 2> pool_sizes{{
-        {
-            .type = vk::DescriptorType::eUniformBuffer,
-            .descriptorCount = MAX_FRAMES_IN_FLIGHT,
-        },
-        {
-            .type = vk::DescriptorType::eCombinedImageSampler,
-            .descriptorCount = kMaxSamplers,
-        },
-    }};
+    std::vector<vk::DescriptorPoolSize> pool_sizes{
+        {.type = vk::DescriptorType::eUniformBuffer,
+         .descriptorCount = MAX_FRAMES_IN_FLIGHT},
+        {.type = vk::DescriptorType::eCombinedImageSampler,
+         .descriptorCount = kMaxSamplers},
+    };
 
     vk::DescriptorPoolCreateInfo pool_ci{
         .maxSets = MAX_FRAMES_IN_FLIGHT + kMaxSamplers,
     };
     pool_ci.setPoolSizes(pool_sizes);
     desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
+  }
+
+  void createImguiDescriptorPool() {
+    const uint32_t kCount = 100;
+    std::vector<vk::DescriptorPoolSize> pool_sizes{
+        {.type = vk::DescriptorType::eSampler, .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eCombinedImageSampler,
+         .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eSampledImage, .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eStorageImage, .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eUniformTexelBuffer,
+         .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eStorageTexelBuffer,
+         .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eStorageBuffer, .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eUniformBufferDynamic,
+         .descriptorCount = kCount},
+        {.type = vk::DescriptorType::eInputAttachment,
+         .descriptorCount = kCount},
+    };
+
+    const uint32_t kMaxSets = kCount * pool_sizes.size();
+    vk::DescriptorPoolCreateInfo pool_ci{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = kMaxSets,
+    };
+    pool_ci.setPoolSizes(pool_sizes);
+    imgui_desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
   }
 
   void createFrameDescriptorSet() {
@@ -1569,6 +1616,8 @@ class Renderer {
       cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
     }
 
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
+
     cmd_buf.endRenderPass();
     std::ignore = cmd_buf.end();
   }
@@ -1637,6 +1686,7 @@ class Renderer {
   // Bound per material
   vk::UniqueDescriptorSetLayout material_layout_;
   vk::UniqueDescriptorPool desc_pool_;
+  vk::UniqueDescriptorPool imgui_desc_pool_;
   vk::UniquePipelineLayout pipeline_layout_;
   vk::UniquePipeline gfx_pipeline_;
   std::vector<vk::UniqueFramebuffer> swapchain_fbs_;

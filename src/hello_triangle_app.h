@@ -50,8 +50,8 @@ class HelloTriangleApp {
     initWindow();
     renderer_ = std::make_unique<Renderer>(window_, width_, height_);
     frame_state_.world = &world_;
-    renderer_->init(&frame_state_);
     initImgui();
+    renderer_->init(&frame_state_);
     setupWorld();
     mainLoop();
     cleanup();
@@ -137,6 +137,7 @@ class HelloTriangleApp {
   void processEvents() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+      ImGui_ImplSDL2_ProcessEvent(&event);
       if (event.type == SDL_WINDOWEVENT) {
         if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
           quit_ = true;
@@ -175,6 +176,7 @@ class HelloTriangleApp {
       window_resized_ = false;
     }
     if (!window_minimized_ && !window_empty_) {
+      updateImgui();
       renderer_->drawFrame(&frame_state_);
       frame_state_.frame_num++;
     }
@@ -290,8 +292,23 @@ class HelloTriangleApp {
     frame_state_.proj[1][1] *= -1;
   }
 
+  void updateImgui() {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::ShowDemoWindow();
+
+    ImGui::Render();
+  }
+
   void cleanup() {
     renderer_->cleanup();
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+
     renderer_.reset();
     SDL_DestroyWindow(window_);
     SDL_Quit();
