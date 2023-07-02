@@ -48,6 +48,7 @@ file(GLOB imgui_cpps
   ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
 )
 add_library(imgui STATIC ${imgui_cpps})
+set_target_properties(imgui PROPERTIES CXX_STANDARD 11)
 
 target_include_directories(imgui PRIVATE
   ${IMGUI_DIR}
