@@ -20,6 +20,7 @@
 #include "defines.h"
 #include "frame-state.h"
 #include "glm-include.h"
+#include "input.h"
 #include "renderer.h"
 #include "vulkan-include.h"
 #include "world.h"
@@ -49,11 +50,14 @@ class HelloTriangleApp {
   void run() {
     initWindow();
     renderer_ = std::make_unique<Renderer>(window_, width_, height_);
-    frame_state_.world = &world_;
+
+    initFrameState();
     initImgui();
     renderer_->init(&frame_state_);
+
     setupWorld();
     mainLoop();
+
     cleanup();
   }
 
@@ -100,8 +104,20 @@ class HelloTriangleApp {
     ImGui_ImplSDL2_InitForVulkan(window_);
   }
 
+  void initFrameState() {
+    frame_state_.world = &world_;
+    updateProjectionMatrix();
+
+    cam_ = {.pos{0, 3, -options_.grid_size}, .focus{0, 0, 0}, .up{0, 1, 0}};
+    trackball_ = {
+        .dist = static_cast<float>(options_.grid_size),
+        .focus{0, 0, 0},
+        .rot{1, 0, 0, 0}};
+    updateCamera();
+  }
+
   void setupWorld() {
-    const int grid = 20;
+    const int grid = options_.grid_size;
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
         if ((i + j) % 2 == 0) {
@@ -135,22 +151,33 @@ class HelloTriangleApp {
   }
 
   void processEvents() {
+    resetRelativeInput(input_);
+
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
       ImGui_ImplSDL2_ProcessEvent(&event);
       if (event.type == SDL_WINDOWEVENT) {
-        if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
-          quit_ = true;
+        if (handleWindowEvent(event)) {
           break;
-        } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
-          window_resized_ = true;
-        } else if (event.window.event == SDL_WINDOWEVENT_MINIMIZED) {
-          window_minimized_ = true;
-        } else if (event.window.event == SDL_WINDOWEVENT_RESTORED) {
-          window_minimized_ = false;
         }
       }
+      processInputState(event, input_);
     }
+  }
+
+  // Returns true if app should quit.
+  bool handleWindowEvent(const SDL_Event& event) {
+    if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+      quit_ = true;
+      return true;
+    } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+      window_resized_ = true;
+    } else if (event.window.event == SDL_WINDOWEVENT_MINIMIZED) {
+      window_minimized_ = true;
+    } else if (event.window.event == SDL_WINDOWEVENT_RESTORED) {
+      window_minimized_ = false;
+    }
+    return false;
   }
 
   void updateWindowSize() {
@@ -167,16 +194,20 @@ class HelloTriangleApp {
   }
 
   void update() {
-    timeTick();
-    animate();
+    updateTime();
 
     if (window_resized_) {
-      updateWindowSize();
-      renderer_->resizeWindow(width_, height_);
       window_resized_ = false;
+      updateWindowSize();
+      updateProjectionMatrix();
+      renderer_->resizeWindow(width_, height_);
     }
-    if (!window_minimized_ && !window_empty_) {
+
+    bool should_draw = !window_minimized_ && !window_empty_;
+    if (should_draw) {
       updateImgui();
+      updateCamera();
+      animate();
       renderer_->drawFrame(&frame_state_);
       frame_state_.frame_num++;
     }
@@ -185,7 +216,7 @@ class HelloTriangleApp {
   using float_ms = std::chrono::duration<float, std::ratio<1, 1000>>;
   using float_s = std::chrono::duration<float, std::chrono::seconds::period>;
 
-  void timeTick() {
+  void updateTime() {
     Time now = Clock::now();
     if (frame_state_.frame_num == 0) {
       start_ = now;
@@ -230,7 +261,6 @@ class HelloTriangleApp {
     frame_state_.anim.model_rot = updateModelRotation();
 
     updateObjects();
-    updateUniformBuffer();
   }
 
   float updateClearValue() {
@@ -267,7 +297,7 @@ class HelloTriangleApp {
 
       float dist = glm::length(pos);
       float t = dist / 2.f + 4 * time_s_;
-      float height = sinf(t);
+      float height = sinf(t) * 0.25f;
       pos.y = height;
       object->setPos(pos);
 
@@ -277,15 +307,76 @@ class HelloTriangleApp {
     }
   }
 
-  void updateUniformBuffer() {
-    Camera c;
+  void updateCamera() {
+    if (options_.trackball) {
+      updateTrackballCamera();
+    } else {
+      updateSpinCamera();
+    }
+  }
+
+  void updateSpinCamera() {
     float t = time_s_;
     float r = 8 * cosf(t / 3.f) + 10;
     float t2 = time_s_;
-    c.pos = vec3{r * cosf(t2), cosf(t) + 2.5, r * sinf(t2)};
-    c.focus = vec3{0};
-    c.up = vec3(0, 1, 0);
-    frame_state_.view = glm::lookAt(c.pos, c.focus, c.up);
+    cam_.pos = vec3{r * cosf(t2), cosf(t) + 2.5, r * sinf(t2)};
+    cam_.focus = vec3{0};
+    cam_.up = vec3(0, 1, 0);
+    frame_state_.view = glm::lookAt(cam_.pos, cam_.focus, cam_.up);
+  }
+
+  void updateTrackballCamera() {
+    if (input_.mouse.middle && input_.mouse.moved) {
+      float focus_scale = 0.001f * trackball_.dist;
+      vec3 move = {
+          input_.mouse.xrel * focus_scale, -input_.mouse.yrel * focus_scale, 0};
+      move = glm::inverse(frame_state_.view) * glm::vec4(move, 0);
+      trackball_.focus += move;
+    }
+
+    if (input_.mouse.left && input_.mouse.moved) {
+      glm::ivec2 pos = {input_.mouse.x, input_.mouse.y};
+      glm::ivec2 prev = {
+          input_.mouse.x - input_.mouse.xrel,
+          input_.mouse.y - input_.mouse.yrel};
+
+      vec3 start = getTrackballVec(prev);
+      vec3 end = getTrackballVec(pos);
+      auto rot = glm::rotation(start, end);
+      trackball_.rot = rot * trackball_.rot;
+    }
+
+    constexpr float zoom_frac = 0.9f;
+    if (input_.mouse.scrollyrel == 1) {
+      trackball_.dist *= zoom_frac;
+    } else if (input_.mouse.scrollyrel == -1) {
+      trackball_.dist /= zoom_frac;
+    }
+
+    frame_state_.view = glm::translate(mat4(1), vec3(0, 0, trackball_.dist)) *
+                        glm::toMat4(trackball_.rot) *
+                        glm::translate(mat4(1), trackball_.focus);
+  }
+
+  vec3 getTrackballVec(glm::ivec2 mouse) {
+    glm::ivec2 ipos = {
+        std::clamp(mouse.x, 0, (int)width_),
+        std::clamp(mouse.y, 0, (int)height_)};
+    vec2 pos = ipos;
+
+    vec2 center = {width_ / 2.f, height_ / 2.f};
+    pos -= center;
+
+    float r = glm::length(center);
+    pos /= r;
+    pos.y *= -1;
+
+    float length = std::min(glm::length(pos), 1.f);
+    float posz = -sqrtf(1.f - length);
+    return glm::normalize(vec3{pos, posz});
+  }
+
+  void updateProjectionMatrix() {
     frame_state_.proj = glm::perspective(
         glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100.0f);
     // Invert y-axis because Vulkan is opposite GL.
@@ -334,6 +425,15 @@ class HelloTriangleApp {
   // Last 1s of frame times.
   std::vector<float> frame_times_;
 
+  // TODO: Update this with imgui window.
+  struct Options {
+    bool trackball = true;
+    int grid_size = 20;
+  } options_;
+
+  Camera cam_;
+  Trackball trackball_;
+  InputState input_;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
   World world_;

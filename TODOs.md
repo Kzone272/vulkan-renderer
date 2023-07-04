@@ -1,17 +1,21 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Setup imgui
-- Setup basic user input (i.e. trackball rotation, or wasd + mouse camera)
+- Use imgui for something
+  - Size of object object grid
+  - Play/pause
+  - Camera type
+- Add wasd camera option
 - Use obj materials info to allow multiple materials per "model"
+- Make prettier
+  - Setup cube map BG
+  - Setup blinn-phong rendering
 
 Medium-term ideas: 
-- Setup blinn-phong rendering
-- Setup cube map BG
+- Try doing PBR rendering
 - Setup a compute shader
 - Better way to describe animations
 
 Long-term ideas:
-- Try doing PBR rendering
 - Procedural animation
 - Physics?

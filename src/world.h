@@ -89,6 +89,12 @@ struct Camera {
   vec3 up;
 };
 
+struct Trackball {
+  float dist;
+  vec3 focus;
+  glm::quat rot;
+};
+
 struct World {
   std::vector<std::unique_ptr<Object>> objects;
 };
