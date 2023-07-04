@@ -22,6 +22,7 @@
 #include "glm-include.h"
 #include "input.h"
 #include "renderer.h"
+#include "utils.h"
 #include "vulkan-include.h"
 #include "world.h"
 
@@ -117,7 +118,12 @@ class HelloTriangleApp {
   }
 
   void setupWorld() {
-    const int grid = options_.grid_size;
+    remakeGrid(options_.grid_size);
+  }
+
+  void remakeGrid(int grid) {
+    world_.objects.clear();
+
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
         if ((i + j) % 2 == 0) {
@@ -207,7 +213,9 @@ class HelloTriangleApp {
     if (should_draw) {
       updateImgui();
       updateCamera();
-      animate();
+      if (options_.animate) {
+        animate();
+      }
       renderer_->drawFrame(&frame_state_);
       frame_state_.frame_num++;
     }
@@ -249,7 +257,8 @@ class HelloTriangleApp {
       frame_times_.clear();
 
       int fps = frame_state_.frame_num - last_fps_frame_;
-      printf("%.2fms avg frame (%d fps)\n", avg_time, fps);
+      ui_.fps = strFmt("%.2fms avg frame (%d fps)\n", avg_time, fps);
+      printf("%s", ui_.fps.c_str());
 
       next_fps_time_ = now + 1s;
       last_fps_frame_ = frame_state_.frame_num;
@@ -295,10 +304,12 @@ class HelloTriangleApp {
       vec3 pos = object->getPos();
       pos.y = 0.f;
 
-      float dist = glm::length(pos);
-      float t = dist / 2.f + 4 * time_s_;
-      float height = sinf(t) * 0.25f;
-      pos.y = height;
+      if (options_.bounce_objects) {
+        float dist = glm::length(pos);
+        float t = dist / 2.f + 4 * time_s_;
+        float height = sinf(t) * 0.25f;
+        pos.y = height;
+      }
       object->setPos(pos);
 
       // Viking model is off by 90deg.
@@ -378,7 +389,7 @@ class HelloTriangleApp {
 
   void updateProjectionMatrix() {
     frame_state_.proj = glm::perspective(
-        glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100.0f);
+        glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 1000.0f);
     // Invert y-axis because Vulkan is opposite GL.
     frame_state_.proj[1][1] *= -1;
   }
@@ -388,7 +399,15 @@ class HelloTriangleApp {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::ShowDemoWindow();
+    ImGui::Begin("Controls");
+    ImGui::Text("%s", ui_.fps.c_str());
+    ImGui::Checkbox("Trackball Camera", &options_.trackball);
+    ImGui::Checkbox("Animate", &options_.animate);
+    ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
+    if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
+      remakeGrid(options_.grid_size);
+    }
+    ImGui::End();
 
     ImGui::Render();
   }
@@ -428,8 +447,14 @@ class HelloTriangleApp {
   // TODO: Update this with imgui window.
   struct Options {
     bool trackball = true;
+    bool animate = true;
+    bool bounce_objects = true;
     int grid_size = 20;
   } options_;
+
+  struct UiState {
+    std::string fps;
+  } ui_;
 
   Camera cam_;
   Trackball trackball_;

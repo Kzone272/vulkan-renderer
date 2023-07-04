@@ -4,12 +4,9 @@ Vulkan Tutorial
 Trying to learn some Vulkan by following along with vulkan-tutorial.com
 
 *Latest screenshot:*
-![](screenshot4.png)
-
-
+![](screenshot5.png)
 
 ### Building
-
 
 - (optional) Fetch dependencies with:
 ```
@@ -22,8 +19,6 @@ git submodule update --init
 cmake --preset default
 cmake --build preset debug
 ```
-
-
 
 ### Dependencies
 
