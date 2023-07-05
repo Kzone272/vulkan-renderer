@@ -449,7 +449,9 @@ class HelloTriangleApp {
     ImGui::Text("Camera Type:");
     int cam_ind = static_cast<int>(options_.cam_type);
     ImGui::RadioButton("Spin", &cam_ind, 0);
+    ImGui::SameLine();
     ImGui::RadioButton("Trackball", &cam_ind, 1);
+    ImGui::SameLine();
     ImGui::RadioButton("Fps", &cam_ind, 2);
     CameraType cam_types[] = {
         CameraType::Spin,

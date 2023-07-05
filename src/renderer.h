@@ -1596,23 +1596,33 @@ class Renderer {
         vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
         buf_state.desc_set, nullptr);
 
+    std::sort(
+        frame_state_->world->objects.begin(),
+        frame_state_->world->objects.end(), [](auto& left, auto& right) {
+          return left->getModel() < right->getModel();
+        });
+
+    ModelId curr_model_id = ModelId::UNKNOWN;
     for (auto& obj : frame_state_->world->objects) {
-      auto it = loaded_models_.find(obj->getModel());
+      auto model_id = obj->getModel();
+      auto it = loaded_models_.find(model_id);
       ASSERT(it != loaded_models_.end());
       auto* model = it->second.get();
 
-      // TODO: Sort objects by material to reduce bindings.
-      cmd_buf.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 1,
-          model->texture->desc_set, nullptr);
+      if (curr_model_id != model_id) {
+        curr_model_id = model_id;
+        cmd_buf.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 1,
+            model->texture->desc_set, nullptr);
+        vk::DeviceSize offsets[] = {0};
+        cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
+        cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
+      }
 
       PushData push_data{obj->getTransform()};
       cmd_buf.pushConstants<PushData>(
           *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
-      vk::DeviceSize offsets[] = {0};
-      cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
-      cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
       cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
     }
 
