@@ -83,6 +83,12 @@ class Object {
   std::vector<std::unique_ptr<Object>> children_;
 };
 
+enum class CameraType {
+  Spin,
+  Trackball,
+  Fps,
+};
+
 struct Camera {
   vec3 pos;
   vec3 focus;
@@ -93,6 +99,12 @@ struct Trackball {
   float dist;
   vec3 focus;
   glm::quat rot;
+};
+
+struct FpsCamera {
+  vec3 pos{0};
+  float yaw = 0;
+  float pitch = 0;
 };
 
 struct World {

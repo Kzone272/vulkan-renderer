@@ -2,6 +2,8 @@
 
 #include <SDL.h>
 
+#include <set>
+
 #include "asserts.h"
 
 // Persistent state of input devices, computed from events.
@@ -17,7 +19,13 @@ struct InputState {
     int yrel = 0;
     int scrollyrel = 0;
   } mouse;
+
+  struct Keyboard {
+    std::set<int32_t> pressed;
+  } kb;
 };
+
+std::set<int32_t> tracked_keys = {'w', 'a', 's', 'd'};
 
 void resetRelativeInput(InputState& state) {
   state.mouse.moved = false;
@@ -43,14 +51,25 @@ void processInputState(const SDL_Event& event, InputState& state) {
     state.mouse.x = event.motion.x;
     state.mouse.y = event.motion.y;
     state.mouse.moved = true;
-    state.mouse.xrel = event.motion.xrel;
-    state.mouse.yrel = event.motion.yrel;
+    // Accumulate because there may have been multiple move events to process
+    // since the last update update.
+    state.mouse.xrel += event.motion.xrel;
+    state.mouse.yrel += event.motion.yrel;
   } else if (event.type == SDL_MOUSEWHEEL) {
     int y = event.wheel.y;
     if (y > 0) {
       state.mouse.scrollyrel = 1;
     } else if (y < 0) {
       state.mouse.scrollyrel = -1;
+    }
+  } else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+    int32_t key = event.key.keysym.sym;
+    if (tracked_keys.contains(key)) {
+      if (event.type == SDL_KEYDOWN) {
+        state.kb.pressed.insert(key);
+      } else {
+        state.kb.pressed.erase(key);
+      }
     }
   }
 }

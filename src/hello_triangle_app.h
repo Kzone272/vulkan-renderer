@@ -114,6 +114,7 @@ class HelloTriangleApp {
         .dist = static_cast<float>(options_.grid_size),
         .focus{0, 0, 0},
         .rot{1, 0, 0, 0}};
+    fps_cam_.pos = {0, 3, -options_.grid_size / 2};
     updateCamera();
   }
 
@@ -319,10 +320,14 @@ class HelloTriangleApp {
   }
 
   void updateCamera() {
-    if (options_.trackball) {
-      updateTrackballCamera();
-    } else {
+    if (options_.cam_type == CameraType::Spin) {
       updateSpinCamera();
+    } else if (options_.cam_type == CameraType::Trackball) {
+      updateTrackballCamera();
+    } else if (options_.cam_type == CameraType::Fps) {
+      updateFpsCamera();
+    } else {
+      ASSERT(false);
     }
   }
 
@@ -387,6 +392,45 @@ class HelloTriangleApp {
     return glm::normalize(vec3{pos, posz});
   }
 
+  void updateFpsCamera() {
+    // TODO: Capture mouse so FPS cam doesn't require holding left click.
+    if (input_.mouse.left && input_.mouse.moved) {
+      float mouse_scale = -0.1;
+      fps_cam_.yaw += mouse_scale * input_.mouse.xrel;
+      fps_cam_.pitch += mouse_scale * input_.mouse.yrel;
+      fps_cam_.pitch = glm::clamp(fps_cam_.pitch, -90.f, 90.f);
+    }
+
+    mat4 rot = glm::eulerAngleXY(
+        glm::radians(fps_cam_.pitch), glm::radians(fps_cam_.yaw));
+
+    vec2 dir = getWasdDir();
+    if (abs(glm::length(dir)) > 0.01) {
+      float move_scale = 0.015 * time_delta_ms_;
+      fps_cam_.pos +=
+          vec3(glm::inverse(rot) * move_scale * glm::vec4(dir.x, 0, dir.y, 0));
+    }
+
+    frame_state_.view = rot * glm::translate(mat4(1), -fps_cam_.pos);
+  }
+
+  vec2 getWasdDir() {
+    vec2 dir{0};
+    if (input_.kb.pressed.contains('w')) {
+      dir += vec2(0, 1);
+    }
+    if (input_.kb.pressed.contains('s')) {
+      dir += vec2(0, -1);
+    }
+    if (input_.kb.pressed.contains('a')) {
+      dir += vec2(-1, 0);
+    }
+    if (input_.kb.pressed.contains('d')) {
+      dir += vec2(1, 0);
+    }
+    return glm::normalize(dir);
+  }
+
   void updateProjectionMatrix() {
     frame_state_.proj = glm::perspective(
         glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 1000.0f);
@@ -401,7 +445,19 @@ class HelloTriangleApp {
 
     ImGui::Begin("Controls");
     ImGui::Text("%s", ui_.fps.c_str());
-    ImGui::Checkbox("Trackball Camera", &options_.trackball);
+
+    ImGui::Text("Camera Type:");
+    int cam_ind = static_cast<int>(options_.cam_type);
+    ImGui::RadioButton("Spin", &cam_ind, 0);
+    ImGui::RadioButton("Trackball", &cam_ind, 1);
+    ImGui::RadioButton("Fps", &cam_ind, 2);
+    CameraType cam_types[] = {
+        CameraType::Spin,
+        CameraType::Trackball,
+        CameraType::Fps,
+    };
+    options_.cam_type = cam_types[cam_ind];
+
     ImGui::Checkbox("Animate", &options_.animate);
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
@@ -446,7 +502,7 @@ class HelloTriangleApp {
 
   // TODO: Update this with imgui window.
   struct Options {
-    bool trackball = true;
+    CameraType cam_type = CameraType::Fps;
     bool animate = true;
     bool bounce_objects = true;
     int grid_size = 20;
@@ -458,6 +514,8 @@ class HelloTriangleApp {
 
   Camera cam_;
   Trackball trackball_;
+  FpsCamera fps_cam_;
+
   InputState input_;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
