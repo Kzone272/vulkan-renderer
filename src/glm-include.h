@@ -10,6 +10,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+using glm::ivec2;
 using glm::mat4;
 using glm::vec2;
 using glm::vec3;
+using glm::vec4;

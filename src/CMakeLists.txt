@@ -11,6 +11,8 @@ add_executable(main
   glm-include.h
   world.h
   render-objects.h
+  animation.h
+  time-include.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

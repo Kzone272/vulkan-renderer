@@ -26,15 +26,6 @@
 #include "vulkan-include.h"
 #include "world.h"
 
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::printf;
-
-using namespace std::chrono_literals;
-using Clock = std::chrono::steady_clock;
-using Time = std::chrono::time_point<Clock>;
-
 namespace {
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;

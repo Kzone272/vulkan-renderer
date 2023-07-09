@@ -7,7 +7,7 @@
 #include "world.h"
 
 struct UniformBufferData {
-  alignas(16) glm::mat4 proj_view;
+  alignas(16) mat4 proj_view;
 };
 
 struct PushData {

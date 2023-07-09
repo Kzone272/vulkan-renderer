@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 
+#include "animation.h"
 #include "glm-include.h"
 
 enum class ModelId {
@@ -64,6 +65,22 @@ class Object {
     return model_;
   }
 
+  void animZ(Animation a) {
+    anims_.clear();  // TODO: Probably don't always want to clear all animations
+    a.value = &pos_.z;
+    anims_.push_back(a);
+  }
+
+  void update(Time now) {
+    if (anims_.empty()) {
+      return;
+    }
+    // Update animations, and erase finished ones.
+    std::erase_if(
+        anims_, [&now](auto& anim) { return Animation::update(anim, now); });
+    dirty_ = true;
+  }
+
  private:
   void updateTransform() {
     transform_ = glm::scale(
@@ -80,6 +97,7 @@ class Object {
   vec3 rot_axis_{0, 1, 0};
   vec3 pos_{0};
 
+  std::vector<Animation> anims_;
   std::vector<std::unique_ptr<Object>> children_;
 };
 

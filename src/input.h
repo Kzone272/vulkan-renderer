@@ -21,17 +21,23 @@ struct InputState {
   } mouse;
 
   struct Keyboard {
-    std::set<int32_t> pressed;
+    std::set<int32_t> down;
+    std::set<int32_t> pressed;  // Pressed this frame
   } kb;
 };
 
-std::set<int32_t> tracked_keys = {'w', 'a', 's', 'd'};
+namespace Keys {
+const int32_t Shift = SDLK_LSHIFT;
+}
+
+std::set<int32_t> tracked_keys = {'w', 'a', 's', 'd', ' ', Keys::Shift};
 
 void resetRelativeInput(InputState& state) {
   state.mouse.moved = false;
   state.mouse.xrel = 0;
   state.mouse.yrel = 0;
   state.mouse.scrollyrel = 0;
+  state.kb.pressed.clear();
 }
 
 void processInputState(const SDL_Event& event, InputState& state) {
@@ -66,9 +72,12 @@ void processInputState(const SDL_Event& event, InputState& state) {
     int32_t key = event.key.keysym.sym;
     if (tracked_keys.contains(key)) {
       if (event.type == SDL_KEYDOWN) {
-        state.kb.pressed.insert(key);
+        if (!state.kb.down.contains(key)) {
+          state.kb.pressed.insert(key);
+        }
+        state.kb.down.insert(key);
       } else {
-        state.kb.pressed.erase(key);
+        state.kb.down.erase(key);
       }
     }
   }

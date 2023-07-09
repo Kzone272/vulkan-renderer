@@ -16,24 +16,17 @@
 #include <set>
 #include <vector>
 
+#include "animation.h"
 #include "asserts.h"
 #include "defines.h"
 #include "frame-state.h"
 #include "glm-include.h"
 #include "input.h"
 #include "renderer.h"
+#include "time-include.h"
 #include "utils.h"
 #include "vulkan-include.h"
 #include "world.h"
-
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::printf;
-
-using namespace std::chrono_literals;
-using Clock = std::chrono::steady_clock;
-using Time = std::chrono::time_point<Clock>;
 
 namespace {
 
@@ -41,10 +34,6 @@ constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
 
 }  // namespace
-
-using glm::mat4;
-using glm::vec2;
-using glm::vec3;
 
 class HelloTriangleApp {
  public:
@@ -94,7 +83,7 @@ class HelloTriangleApp {
         WIDTH, HEIGHT, window_flags);
     if (!window_) {
       std::string error{SDL_GetError()};
-      cerr << error << endl;
+      printf("%s\n", error.c_str());
       ASSERT(false);
     }
     SDL_AddEventWatch(SdlEventWatcher, this);
@@ -140,6 +129,17 @@ class HelloTriangleApp {
         }
       }
     }
+
+    makeMyObject();
+  }
+
+  // Make a placeholder object as something to animate.
+  void makeMyObject() {
+    auto obj = std::make_unique<Object>(ModelId::PONY);
+    obj->setPos(vec3(0, 1, 0));
+    obj->setScale(vec3(0.002));
+    my_obj_ = obj.get();
+    addObject(std::move(obj));
   }
 
   void addObject(std::unique_ptr<Object> obj) {
@@ -214,6 +214,7 @@ class HelloTriangleApp {
     if (should_draw) {
       updateImgui();
       updateCamera();
+      handleInput();
       if (options_.animate) {
         animate();
       }
@@ -222,23 +223,20 @@ class HelloTriangleApp {
     }
   }
 
-  using float_ms = std::chrono::duration<float, std::ratio<1, 1000>>;
-  using float_s = std::chrono::duration<float, std::chrono::seconds::period>;
-
   void updateTime() {
     Time now = Clock::now();
     if (frame_state_.frame_num == 0) {
       start_ = now;
-      last_frame_time_ = now;
+      frame_time_ = now;
     }
 
-    time_s_ = float_s(now - start_).count();
+    time_s_ = FloatS(now - start_).count();
 
-    auto time_delta = now - last_frame_time_;
-    time_delta_ms_ = float_ms(time_delta).count();
+    auto time_delta = now - frame_time_;
+    time_delta_ms_ = FloatMs(time_delta).count();
     frame_times_.push_back(time_delta_ms_);
 
-    last_frame_time_ = now;
+    frame_time_ = now;
 
     checkFps(now);
   }
@@ -302,6 +300,11 @@ class HelloTriangleApp {
         spin * glm::angleAxis(glm::radians(-90.f), vec3(1, 0, 0));
 
     for (auto& object : world_.objects) {
+      // For now, my_obj_ gets special handling.
+      if (object.get() == my_obj_) {
+        continue;
+      }
+
       vec3 pos = object->getPos();
       pos.y = 0.f;
 
@@ -317,6 +320,8 @@ class HelloTriangleApp {
       auto quat = object->getModel() == ModelId::VIKING ? orient_spin : spin;
       object->setRot(glm::angle(quat), glm::axis(quat));
     }
+
+    my_obj_->update(frame_time_);
   }
 
   void updateCamera() {
@@ -346,13 +351,13 @@ class HelloTriangleApp {
       float focus_scale = 0.001f * trackball_.dist;
       vec3 move = {
           input_.mouse.xrel * focus_scale, -input_.mouse.yrel * focus_scale, 0};
-      move = glm::inverse(frame_state_.view) * glm::vec4(move, 0);
+      move = glm::inverse(frame_state_.view) * vec4(move, 0);
       trackball_.focus += move;
     }
 
     if (input_.mouse.left && input_.mouse.moved) {
-      glm::ivec2 pos = {input_.mouse.x, input_.mouse.y};
-      glm::ivec2 prev = {
+      ivec2 pos = {input_.mouse.x, input_.mouse.y};
+      ivec2 prev = {
           input_.mouse.x - input_.mouse.xrel,
           input_.mouse.y - input_.mouse.yrel};
 
@@ -374,8 +379,8 @@ class HelloTriangleApp {
                         glm::translate(mat4(1), trackball_.focus);
   }
 
-  vec3 getTrackballVec(glm::ivec2 mouse) {
-    glm::ivec2 ipos = {
+  vec3 getTrackballVec(ivec2 mouse) {
+    ivec2 ipos = {
         std::clamp(mouse.x, 0, (int)width_),
         std::clamp(mouse.y, 0, (int)height_)};
     vec2 pos = ipos;
@@ -408,7 +413,7 @@ class HelloTriangleApp {
     if (abs(glm::length(dir)) > 0.01) {
       float move_scale = 0.015 * time_delta_ms_;
       fps_cam_.pos +=
-          vec3(glm::inverse(rot) * move_scale * glm::vec4(dir.x, 0, dir.y, 0));
+          vec3(glm::inverse(rot) * move_scale * vec4(dir.x, 0, dir.y, 0));
     }
 
     frame_state_.view = rot * glm::translate(mat4(1), -fps_cam_.pos);
@@ -416,19 +421,31 @@ class HelloTriangleApp {
 
   vec2 getWasdDir() {
     vec2 dir{0};
-    if (input_.kb.pressed.contains('w')) {
+    if (input_.kb.down.contains('w')) {
       dir += vec2(0, 1);
     }
-    if (input_.kb.pressed.contains('s')) {
+    if (input_.kb.down.contains('s')) {
       dir += vec2(0, -1);
     }
-    if (input_.kb.pressed.contains('a')) {
+    if (input_.kb.down.contains('a')) {
       dir += vec2(-1, 0);
     }
-    if (input_.kb.pressed.contains('d')) {
+    if (input_.kb.down.contains('d')) {
       dir += vec2(1, 0);
     }
     return glm::normalize(dir);
+  }
+
+  void handleInput() {
+    if (input_.kb.pressed.contains(' ')) {
+      float z = my_obj_->getPos().z;
+      float speed = 2;
+      if (input_.kb.down.contains(Keys::Shift)) {
+        speed *= -1;
+      }
+      float to_z = z + speed;
+      my_obj_->animZ(makeAnimation(z, to_z, 500, frame_time_));
+    }
   }
 
   void updateProjectionMatrix() {
@@ -493,7 +510,7 @@ class HelloTriangleApp {
 
   Time start_;
   float time_s_;
-  Time last_frame_time_;
+  Time frame_time_;
   // Time in ms since the last draw, as a float
   float time_delta_ms_ = 0.0f;
   // Used to calculate FPS
@@ -522,6 +539,7 @@ class HelloTriangleApp {
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
   World world_;
+  Object* my_obj_ = nullptr;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
