@@ -13,24 +13,39 @@ enum class ModelId {
   UNKNOWN,
   VIKING,
   PONY,
+  CUBE,
 };
 
 struct ModelInfo {
   std::string obj_path;
   std::string texture_path;
+  mat4 init_transform;
 };
 
 std::map<ModelId, ModelInfo> model_registry = {
     {ModelId::VIKING,
-     {"assets/models/viking_room.obj", "assets/textures/viking_room.png"}},
+     {
+         "assets/models/viking_room.obj",
+         "assets/textures/viking_room.png",
+         glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0)) *
+             glm::scale(mat4(1), vec3(-300, 300, 300)),
+     }},
     {ModelId::PONY,
-     {"assets/models/pony/pony.obj",
-      "assets/models/pony/pony-body-diffuse.jpg"}},
+     {
+         "assets/models/pony/pony.obj",
+         "assets/models/pony/pony-body-diffuse.jpg",
+         glm::scale(mat4(1), vec3(0.5)),
+     }},
 };
 
 class Object {
  public:
   Object(ModelId model) : model_(model) {
+    auto it = model_registry.find(model);
+    if (it != model_registry.end()) {
+      init_transform_ = it->second.init_transform;
+      dirty_ = true;
+    }
   }
 
   void setScale(const vec3& scale) {
@@ -38,9 +53,8 @@ class Object {
     dirty_ = true;
   }
 
-  void setRot(float angle, const vec3& axis) {
-    rot_angle_ = angle;
-    rot_axis_ = axis;
+  void setRot(glm::quat rot) {
+    rot_ = rot;
     dirty_ = true;
   }
 
@@ -83,18 +97,17 @@ class Object {
 
  private:
   void updateTransform() {
-    transform_ = glm::scale(
-        glm::rotate(glm::translate(mat4(1), pos_), rot_angle_, rot_axis_),
-        scale_);
+    transform_ = glm::translate(mat4(1), pos_) * glm::toMat4(rot_) *
+                 glm::scale(mat4(1), scale_) * init_transform_;
   }
 
   ModelId model_;
+  mat4 init_transform_{1};
 
   bool dirty_ = false;
   mat4 transform_{1};
   vec3 scale_{1};
-  float rot_angle_ = 0;
-  vec3 rot_axis_{0, 1, 0};
+  glm::quat rot_ = {1, {0, 0, 0}};
   vec3 pos_{0};
 
   std::vector<Animation> anims_;

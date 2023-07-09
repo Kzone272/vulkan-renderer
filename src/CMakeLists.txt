@@ -13,6 +13,7 @@ add_executable(main
   render-objects.h
   animation.h
   time-include.h
+  primitives.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

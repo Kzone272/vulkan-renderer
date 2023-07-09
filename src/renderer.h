@@ -95,7 +95,18 @@ class Renderer {
 
   void useModel(ModelId model_id) {
     if (!loaded_models_.contains(model_id)) {
-      auto model = loadModel(model_id);
+      auto it = model_registry.find(model_id);
+      ASSERT(it != model_registry.end());
+      auto& model_info = it->second;
+
+      auto model = loadModel(model_info);
+      loaded_models_.insert({model_id, std::move(model)});
+    }
+  }
+
+  void useMesh(ModelId model_id, const Mesh& mesh) {
+    if (!loaded_models_.contains(model_id)) {
+      auto model = loadMesh(mesh);
       loaded_models_.insert({model_id, std::move(model)});
     }
   }
@@ -933,9 +944,7 @@ class Renderer {
     }
   }
 
-  std::unique_ptr<Texture> createTexture(std::string texture_path) {
-    auto texture = std::make_unique<Texture>();
-
+  SDL_Surface* loadImage(std::string texture_path) {
     SDL_Surface* texture_surface = IMG_Load(texture_path.c_str());
     ASSERT(texture_surface);
     ASSERT(texture_surface->pixels);
@@ -952,8 +961,13 @@ class Renderer {
       SDL_FreeSurface(texture_surface);
       texture_surface = new_surface;
     }
-    uint32_t width = texture_surface->w;
-    uint32_t height = texture_surface->h;
+
+    return texture_surface;
+  }
+
+  std::unique_ptr<Texture> createTexture(
+      void* texture_data, uint32_t width, uint32_t height) {
+    auto texture = std::make_unique<Texture>();
     vk::DeviceSize image_size = width * height * 4;
     texture->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
 
@@ -965,10 +979,10 @@ class Renderer {
             vk::MemoryPropertyFlagBits::eHostCoherent,
         staging_buf, staging_buf_mem);
 
-    void* data = device_->mapMemory(*staging_buf_mem, 0, image_size).value;
-    memcpy(data, texture_surface->pixels, static_cast<size_t>(image_size));
+    void* mapped_data =
+        device_->mapMemory(*staging_buf_mem, 0, image_size).value;
+    memcpy(mapped_data, texture_data, static_cast<size_t>(image_size));
     device_->unmapMemory(*staging_buf_mem);
-    SDL_FreeSurface(texture_surface);
 
     texture->format = vk::Format::eR8G8B8A8Srgb;
     createImage(
@@ -1240,19 +1254,38 @@ class Renderer {
     texture_sampler_ = device_->createSamplerUnique(ci).value;
   }
 
-  std::unique_ptr<Model> loadModel(ModelId model_id) {
-    auto it = model_registry.find(model_id);
-    ASSERT(it != model_registry.end());
-    auto& model_info = it->second;
-
+  std::unique_ptr<Model> loadModel(const ModelInfo& model_info) {
     auto model = std::make_unique<Model>();
-    model->texture = createTexture(model_info.texture_path);
-    loadObj(model_info.obj_path, *model);
+
+    auto* texture_surface = loadImage(model_info.texture_path);
+    model->texture = createTexture(
+        texture_surface->pixels, texture_surface->w, texture_surface->h);
+    SDL_FreeSurface(texture_surface);
+
+    Mesh mesh = loadObj(model_info.obj_path);
+
+    model->index_count = mesh.indices.size();
+    stageVertices(mesh.vertices, *model);
+    stageIndices(mesh.indices, *model);
 
     return model;
   }
 
-  void loadObj(std::string obj_path, Model& model) {
+  std::unique_ptr<Model> loadMesh(const Mesh& mesh) {
+    auto model = std::make_unique<Model>();
+
+    // Create 1x1 pixel grey texture.
+    uint32_t white = 0xFFCCCCCC;
+    model->texture = createTexture(&white, 1, 1);
+
+    model->index_count = mesh.indices.size();
+    stageVertices(mesh.vertices, *model);
+    stageIndices(mesh.indices, *model);
+
+    return model;
+  }
+
+  Mesh loadObj(std::string obj_path) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -1261,9 +1294,7 @@ class Renderer {
     ASSERT(tinyobj::LoadObj(
         &attrib, &shapes, &materials, &warn, &err, obj_path.c_str()));
 
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-
+    Mesh mesh;
     std::unordered_map<Vertex, uint32_t> uniq_verts;
     for (const auto& shape : shapes) {
       for (const auto& index : shape.mesh.indices) {
@@ -1284,28 +1315,26 @@ class Renderer {
           it = uniq_verts
                    .insert({vert, static_cast<uint32_t>(uniq_verts.size())})
                    .first;
-          vertices.push_back(vert);
+          mesh.vertices.push_back(vert);
         }
-        indices.push_back(it->second);
+        mesh.indices.push_back(it->second);
       }
     }
-
-    model.index_count = indices.size();
-    stageVertices(vertices, model);
-    stageIndices(indices, model);
-
     printf(
-        "loaded %zd vertices, %zd indices\n", vertices.size(), indices.size());
+        "loaded %zd vertices, %zd indices\n", mesh.vertices.size(),
+        mesh.indices.size());
+
+    return std::move(mesh);
   }
 
-  void stageVertices(std::vector<Vertex> vertices, Model& model) {
+  void stageVertices(const std::vector<Vertex>& vertices, Model& model) {
     vk::DeviceSize size = sizeof(Vertex) * vertices.size();
     stageBuffer(
         size, (void*)vertices.data(), vk::BufferUsageFlagBits::eVertexBuffer,
         model.vert_buf, model.vert_buf_mem);
   }
 
-  void stageIndices(std::vector<uint32_t> indices, Model& model) {
+  void stageIndices(const std::vector<uint32_t>& indices, Model& model) {
     vk::DeviceSize size = sizeof(uint32_t) * indices.size();
     stageBuffer(
         size, (void*)indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,

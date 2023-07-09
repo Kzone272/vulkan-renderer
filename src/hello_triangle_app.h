@@ -22,6 +22,7 @@
 #include "frame-state.h"
 #include "glm-include.h"
 #include "input.h"
+#include "primitives.h"
 #include "renderer.h"
 #include "time-include.h"
 #include "utils.h"
@@ -98,17 +99,23 @@ class HelloTriangleApp {
     frame_state_.world = &world_;
     updateProjectionMatrix();
 
-    cam_ = {.pos{0, 3, -options_.grid_size}, .focus{0, 0, 0}, .up{0, 1, 0}};
+    cam_ = {
+        .pos{0, 300, -300 * options_.grid_size}, .focus{0, 0, 0}, .up{0, 1, 0}};
     trackball_ = {
-        .dist = static_cast<float>(options_.grid_size),
+        .dist = 300.f * static_cast<float>(options_.grid_size),
         .focus{0, 0, 0},
         .rot{1, 0, 0, 0}};
-    fps_cam_.pos = {0, 3, -options_.grid_size / 2};
+    fps_cam_.pos = {0, 300, -100 * options_.grid_size / 2};
     updateCamera();
   }
 
   void setupWorld() {
+    loadPrimitives();
     remakeGrid(options_.grid_size);
+  }
+
+  void loadPrimitives() {
+    renderer_->useMesh(ModelId::CUBE, makeCube());
   }
 
   void remakeGrid(int grid) {
@@ -116,17 +123,10 @@ class HelloTriangleApp {
 
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
-        if ((i + j) % 2 == 0) {
-          auto obj = std::make_unique<Object>(ModelId::VIKING);
-          obj->setPos(vec3(i - grid / 2, 0, j - grid / 2));
-          obj->setScale(vec3{0.5f});
-          addObject(std::move(obj));
-        } else {
-          auto obj = std::make_unique<Object>(ModelId::PONY);
-          obj->setPos(vec3(i - grid / 2, 0, j - grid / 2));
-          obj->setScale(vec3{0.001f});
-          addObject(std::move(obj));
-        }
+        ModelId id = ((i + j) % 2 == 0) ? ModelId::VIKING : ModelId::PONY;
+        auto obj = std::make_unique<Object>(id);
+        obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
+        addObject(std::move(obj));
       }
     }
 
@@ -135,9 +135,8 @@ class HelloTriangleApp {
 
   // Make a placeholder object as something to animate.
   void makeMyObject() {
-    auto obj = std::make_unique<Object>(ModelId::PONY);
-    obj->setPos(vec3(0, 1, 0));
-    obj->setScale(vec3(0.002));
+    auto obj = std::make_unique<Object>(ModelId::CUBE);
+    obj->setPos(vec3(0, 300, 0));
     my_obj_ = obj.get();
     addObject(std::move(obj));
   }
@@ -257,7 +256,6 @@ class HelloTriangleApp {
 
       int fps = frame_state_.frame_num - last_fps_frame_;
       ui_.fps = strFmt("%.2fms avg frame (%d fps)\n", avg_time, fps);
-      printf("%s", ui_.fps.c_str());
 
       next_fps_time_ = now + 1s;
       last_fps_frame_ = frame_state_.frame_num;
@@ -294,11 +292,6 @@ class HelloTriangleApp {
   }
 
   void updateObjects() {
-    auto spin = glm::angleAxis(
-        glm::radians(frame_state_.anim.model_rot), vec3(0.f, 1.f, 0.f));
-    auto orient_spin =
-        spin * glm::angleAxis(glm::radians(-90.f), vec3(1, 0, 0));
-
     for (auto& object : world_.objects) {
       // For now, my_obj_ gets special handling.
       if (object.get() == my_obj_) {
@@ -310,15 +303,15 @@ class HelloTriangleApp {
 
       if (options_.bounce_objects) {
         float dist = glm::length(pos);
-        float t = dist / 2.f + 4 * time_s_;
-        float height = sinf(t) * 0.25f;
+        float t = dist / 200.f + 4 * time_s_;
+        float height = sinf(t) * 25.f;
         pos.y = height;
       }
       object->setPos(pos);
 
-      // Viking model is off by 90deg.
-      auto quat = object->getModel() == ModelId::VIKING ? orient_spin : spin;
-      object->setRot(glm::angle(quat), glm::axis(quat));
+      auto spin = glm::angleAxis(
+          glm::radians(frame_state_.anim.model_rot), vec3(0.f, 1.f, 0.f));
+      object->setRot(spin);
     }
 
     my_obj_->update(frame_time_);
@@ -338,9 +331,8 @@ class HelloTriangleApp {
 
   void updateSpinCamera() {
     float t = time_s_;
-    float r = 8 * cosf(t / 3.f) + 10;
-    float t2 = time_s_;
-    cam_.pos = vec3{r * cosf(t2), cosf(t) + 2.5, r * sinf(t2)};
+    float r = 2400 * cosf(t / 3.f) + 3000;
+    cam_.pos = vec3{r * cosf(t), 800, r * sinf(t)};
     cam_.focus = vec3{0};
     cam_.up = vec3(0, 1, 0);
     frame_state_.view = glm::lookAt(cam_.pos, cam_.focus, cam_.up);
@@ -411,7 +403,7 @@ class HelloTriangleApp {
 
     vec2 dir = getWasdDir();
     if (abs(glm::length(dir)) > 0.01) {
-      float move_scale = 0.015 * time_delta_ms_;
+      float move_scale = 5 * time_delta_ms_;
       fps_cam_.pos +=
           vec3(glm::inverse(rot) * move_scale * vec4(dir.x, 0, dir.y, 0));
     }
@@ -439,7 +431,7 @@ class HelloTriangleApp {
   void handleInput() {
     if (input_.kb.pressed.contains(' ')) {
       float z = my_obj_->getPos().z;
-      float speed = 2;
+      float speed = 200;
       if (input_.kb.down.contains(Keys::Shift)) {
         speed *= -1;
       }
@@ -450,7 +442,7 @@ class HelloTriangleApp {
 
   void updateProjectionMatrix() {
     frame_state_.proj = glm::perspective(
-        glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 1000.0f);
+        glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100000.0f);
     // Invert y-axis because Vulkan is opposite GL.
     frame_state_.proj[1][1] *= -1;
   }
