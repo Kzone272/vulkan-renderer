@@ -142,7 +142,7 @@ class HelloTriangleApp {
   // Make a placeholder object as something to animate.
   void makeMyObject() {
     auto obj = std::make_unique<Object>(ModelId::MOVER);
-    obj->setPos(vec3(0, 300, 0));
+    obj->setPos(vec3(200, 0, 200));
     my_obj_ = obj.get();
     addObject(std::move(obj));
   }
@@ -436,15 +436,23 @@ class HelloTriangleApp {
 
   void handleInput() {
     if (input_.kb.pressed.contains(' ')) {
-      vec3 posa = my_obj_->getPos();
-      float speed = 200;
+      vec3 start = my_obj_->getPos();
+      float speedx = 300;
+      float speedy = 600;
       if (input_.kb.down.contains(Keys::Shift)) {
-        speed *= -1;
+        speedx *= -1;
       }
-      vec3 posb = posa + vec3(0, 0, speed);
-      vec3 posc = posb + vec3(0, speed, 0);
-      auto spline = makeSpline(Spline::Type::LINEAR, {posa, posb, posc});
-      my_obj_->animPos(makeAnimation(spline, 500, frame_time_));
+      vec3 posb = start + vec3(speedx / 3, speedy, 0);
+      vec3 end = start + vec3(speedx, 0, 0);
+      vec3 posc = end + vec3(-speedx / 3, speedy, 0);
+
+      vec3 posd = end + vec3(speedx / 10, speedy / 4, 0);
+      vec3 end2 = end + vec3(speedx / 3, 0, 0);
+      vec3 pose = end2 + vec3(-speedx / 10, speedy / 4, 0);
+
+      auto spline = makeSpline(
+          Spline::Type::BEZIER, {start, posb, posc, end, posd, pose, end2});
+      my_obj_->animPos(makeAnimation(spline, 800, frame_time_));
     }
   }
 
