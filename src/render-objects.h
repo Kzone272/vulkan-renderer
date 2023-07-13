@@ -29,7 +29,7 @@ struct Model {
   vk::UniqueBuffer ind_buf;
   vk::UniqueDeviceMemory ind_buf_mem;
   uint32_t index_count;
-  std::unique_ptr<Texture> texture;
+  Texture* texture;
 };
 
 struct Vertex {

@@ -14,6 +14,8 @@ enum class ModelId {
   VIKING,
   PONY,
   CUBE,
+  MOVER,
+  TETRA,
 };
 
 struct ModelInfo {

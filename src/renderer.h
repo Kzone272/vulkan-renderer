@@ -105,10 +105,8 @@ class Renderer {
   }
 
   void useMesh(ModelId model_id, const Mesh& mesh) {
-    if (!loaded_models_.contains(model_id)) {
-      auto model = loadMesh(mesh);
-      loaded_models_.insert({model_id, std::move(model)});
-    }
+    auto model = loadMesh(mesh);
+    loaded_models_[model_id] = std::move(model);
   }
 
  private:
@@ -965,8 +963,7 @@ class Renderer {
     return texture_surface;
   }
 
-  std::unique_ptr<Texture> createTexture(
-      void* texture_data, uint32_t width, uint32_t height) {
+  Texture* createTexture(void* texture_data, uint32_t width, uint32_t height) {
     auto texture = std::make_unique<Texture>();
     vk::DeviceSize image_size = width * height * 4;
     texture->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
@@ -1008,7 +1005,9 @@ class Renderer {
         vk::ImageAspectFlagBits::eColor);
     texture->desc_set = createMaterialDescriptorSet(*texture->image_view);
 
-    return texture;
+    auto* ptr = texture.get();
+    loaded_textures_.push_back(std::move(texture));
+    return ptr;
   }
 
   void createImage(
@@ -1274,15 +1273,28 @@ class Renderer {
   std::unique_ptr<Model> loadMesh(const Mesh& mesh) {
     auto model = std::make_unique<Model>();
 
-    // Create 1x1 pixel grey texture.
-    uint32_t white = 0xFFCCCCCC;
-    model->texture = createTexture(&white, 1, 1);
+    // Use 1x1 pixel white texture.
+    uint32_t white = 0xFFFFFFFF;
+    model->texture = getColorTexture(white);
 
     model->index_count = mesh.indices.size();
     stageVertices(mesh.vertices, *model);
     stageIndices(mesh.indices, *model);
 
     return model;
+  }
+
+  Texture* getColorTexture(uint32_t color) {
+    auto it = color_textures_.find(color);
+    if (it != color_textures_.end()) {
+      return it->second;
+    }
+
+    // Create 1x1 color texture.
+    auto* texture = createTexture(&color, 1, 1);
+    color_textures_.emplace(color, texture);
+
+    return texture;
   }
 
   Mesh loadObj(std::string obj_path) {
@@ -1728,7 +1740,6 @@ class Renderer {
   vk::UniqueSampler texture_sampler_;
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
-  std::unique_ptr<Model> model_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
@@ -1742,6 +1753,8 @@ class Renderer {
   };
   std::vector<UniformBufferState> uniform_bufs_;
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
+  std::vector<std::unique_ptr<Texture>> loaded_textures_;
+  std::map<uint32_t, Texture*> color_textures_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

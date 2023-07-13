@@ -31,8 +31,8 @@
 
 namespace {
 
-constexpr int WIDTH = 800;
-constexpr int HEIGHT = 600;
+constexpr int WIDTH = 1280;
+constexpr int HEIGHT = 720;
 
 }  // namespace
 
@@ -115,7 +115,10 @@ class HelloTriangleApp {
   }
 
   void loadPrimitives() {
-    renderer_->useMesh(ModelId::CUBE, makeCube());
+    renderer_->useMesh(ModelId::CUBE, makeCube({0, 0.8, 0.8}));
+    renderer_->useMesh(ModelId::MOVER, makeCube({0.9, 0.2, 0.1}));
+    renderer_->useMesh(
+        ModelId::TETRA, tetrahedron(options_.tetra_steps, options_.tetra_in));
   }
 
   void remakeGrid(int grid) {
@@ -123,8 +126,11 @@ class HelloTriangleApp {
 
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
-        ModelId id = ((i + j) % 2 == 0) ? ModelId::VIKING : ModelId::PONY;
+        ModelId id = ((i + j) % 2 == 0) ? ModelId::CUBE : ModelId::TETRA;
         auto obj = std::make_unique<Object>(id);
+        if (id == ModelId::TETRA) {
+          obj->setScale(vec3(100));
+        }
         obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
         addObject(std::move(obj));
       }
@@ -135,7 +141,7 @@ class HelloTriangleApp {
 
   // Make a placeholder object as something to animate.
   void makeMyObject() {
-    auto obj = std::make_unique<Object>(ModelId::CUBE);
+    auto obj = std::make_unique<Object>(ModelId::MOVER);
     obj->setPos(vec3(0, 300, 0));
     my_obj_ = obj.get();
     addObject(std::move(obj));
@@ -303,7 +309,7 @@ class HelloTriangleApp {
 
       if (options_.bounce_objects) {
         float dist = glm::length(pos);
-        float t = dist / 200.f + 4 * time_s_;
+        float t = dist / 600.f + 4 * time_s_;
         float height = sinf(t) * 25.f;
         pos.y = height;
       }
@@ -474,6 +480,15 @@ class HelloTriangleApp {
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
       remakeGrid(options_.grid_size);
     }
+
+    if (ImGui::Checkbox("In", &options_.tetra_in)) {
+      loadPrimitives();
+    }
+    ImGui::SameLine();
+    if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
+      loadPrimitives();
+    }
+
     ImGui::End();
 
     ImGui::Render();
@@ -511,12 +526,13 @@ class HelloTriangleApp {
   // Last 1s of frame times.
   std::vector<float> frame_times_;
 
-  // TODO: Update this with imgui window.
   struct Options {
-    CameraType cam_type = CameraType::Fps;
+    CameraType cam_type = CameraType::Trackball;
     bool animate = true;
-    bool bounce_objects = true;
-    int grid_size = 20;
+    bool bounce_objects = false;
+    int grid_size = 2;
+    bool tetra_in = true;
+    int tetra_steps = 4;
   } options_;
 
   struct UiState {

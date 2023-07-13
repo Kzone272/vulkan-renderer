@@ -10,7 +10,6 @@ Short-term ideas:
   - Setup cube map BG
   - Setup blinn-phong rendering
 - Use obj materials info to allow multiple materials per "model"
-- Render triangle fractal code
 
 Medium-term ideas: 
 - Try doing PBR rendering
