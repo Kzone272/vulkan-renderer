@@ -81,20 +81,18 @@ class Object {
     return model_;
   }
 
-  void animZ(Animation a) {
+  void animPos(Animation a) {
     anims_.clear();  // TODO: Probably don't always want to clear all animations
-    a.value = &pos_.z;
     anims_.push_back(a);
   }
 
   void update(Time now) {
-    if (anims_.empty()) {
-      return;
+    for (const auto& anim : anims_) {
+      setPos(Animation::sample(anim, now));
     }
-    // Update animations, and erase finished ones.
-    std::erase_if(
-        anims_, [&now](auto& anim) { return Animation::update(anim, now); });
-    dirty_ = true;
+
+    // Erase finished animations.
+    std::erase_if(anims_, [&now](auto& anim) { return now > anim.to_time; });
   }
 
  private:

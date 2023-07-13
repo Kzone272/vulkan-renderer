@@ -24,49 +24,67 @@ float blend(float pct, BlendType blend) {
 
 }  // namespace anim
 
-struct Animation {
-  float* value;  // Maybe delete this.
-  // TODO: This should probably be an array of to/from values and t values.
-  // Duration to/from time should be an overall concept.
-  // Maybe also a field enum like X,Y,Z instead of storing a value*?
-  float from_val;
-  Time from_time;
-  float to_val;
-  Time to_time;
-  BlendType blend;
+struct Spline {
+  enum class Type {
+    LINEAR,
+    BEZIER,  // cubic
+  };
+  Type type;
+  std::vector<vec3> points;
+  int segments = 0;
+};
 
-  static float sample(const Animation& a, Time now) {
-    if (now > a.to_time) {
-      return a.to_val;
-    }
-
-    float pct = FloatMs(now - a.from_time) / FloatMs(a.to_time - a.from_time);
-    float t = anim::blend(pct, a.blend);
-
-    return glm::mix(a.from_val, a.to_val, pct);
+Spline makeSpline(Spline::Type type, const std::vector<vec3>& points) {
+  if (type == Spline::Type::LINEAR) {
+    return {
+        .type = type,
+        .points = points,
+        .segments = static_cast<int>(points.size() - 1),
+    };
   }
 
-  // Returns true if animation ended.
-  static bool update(Animation& a, Time now) {
-    *a.value = Animation::sample(a, now);
-    if (*a.value == a.to_val) {
-      return true;
-    } else {
-      return false;
+  printf("Unsupported spline type!\n");
+  ASSERT(false);
+  return {};
+}
+
+vec3 sampleSpline(const Spline& spline, float u) {
+  if (spline.type == Spline::Type::LINEAR) {
+    if (u <= 0) {
+      return spline.points[0];
     }
+    if (u >= spline.segments) {
+      return spline.points.back();
+    }
+    const vec3& a = spline.points[floor(u)];
+    const vec3& b = spline.points[ceil(u)];
+    float t = glm::fract(u);
+    return glm::mix(a, b, t);
+  }
+
+  printf("Unsupported spline type!\n");
+  ASSERT(false);
+  return {};
+};
+
+struct Animation {
+  Spline spline;
+  Time from_time;
+  Time to_time;
+
+  static vec3 sample(const Animation& a, Time now) {
+    float pct = FloatMs(now - a.from_time) / FloatMs(a.to_time - a.from_time);
+    float u = a.spline.segments * pct;
+
+    return sampleSpline(a.spline, u);
   }
 };
 
-Animation makeAnimation(
-    float from, float to, float dur_ms, Time start,
-    BlendType blend = BlendType::Linear) {
+Animation makeAnimation(Spline& spline, float dur_ms, Time start) {
   return Animation{
-      .value = nullptr,
-      .from_val = from,
+      .spline = spline,
       .from_time = start,
-      .to_val = to,
       .to_time =
           start + std::chrono::duration_cast<Clock::duration>(FloatMs{dur_ms}),
-      .blend = blend,
   };
 }

@@ -436,13 +436,15 @@ class HelloTriangleApp {
 
   void handleInput() {
     if (input_.kb.pressed.contains(' ')) {
-      float z = my_obj_->getPos().z;
+      vec3 posa = my_obj_->getPos();
       float speed = 200;
       if (input_.kb.down.contains(Keys::Shift)) {
         speed *= -1;
       }
-      float to_z = z + speed;
-      my_obj_->animZ(makeAnimation(z, to_z, 500, frame_time_));
+      vec3 posb = posa + vec3(0, 0, speed);
+      vec3 posc = posb + vec3(0, speed, 0);
+      auto spline = makeSpline(Spline::Type::LINEAR, {posa, posb, posc});
+      my_obj_->animPos(makeAnimation(spline, 500, frame_time_));
     }
   }
 
