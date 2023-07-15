@@ -118,6 +118,7 @@ enum class CameraType {
   Spin,
   Trackball,
   Fps,
+  Follow,
 };
 
 struct Camera {
@@ -134,6 +135,13 @@ struct Trackball {
 
 struct FpsCamera {
   vec3 pos{0};
+  float yaw = 0;
+  float pitch = 0;
+};
+
+struct FollowCamera {
+  float dist;
+  vec3 focus{0};
   float yaw = 0;
   float pitch = 0;
 };

@@ -33,13 +33,13 @@ Mesh makeCube(vec3 color) {
 void iter(Mesh& mesh, int steps, bool in);
 
 Mesh tetrahedron(int steps, bool in) {
-  vec3 a(0, 2.f / 3.f, 0);
-  glm::quat r120 = glm::angleAxis(glm::radians(120.f), vec3(0, 0, 1));
+  vec3 a(0, 0, 2.f / 3.f);
+  glm::quat r120 = glm::angleAxis(glm::radians(120.f), vec3(0, 1, 0));
   vec3 b = r120 * a;
   vec3 c = r120 * b;
 
   float lift = sqrt(8.f / 9.f);
-  vec3 d(0, 0, lift);
+  vec3 d(0, lift, 0);
 
   Mesh tetra;
   vec3 color = {0.1, 0.8, 1};

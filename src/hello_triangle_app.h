@@ -42,11 +42,11 @@ class HelloTriangleApp {
     initWindow();
     renderer_ = std::make_unique<Renderer>(window_, width_, height_);
 
-    initFrameState();
     initImgui();
     renderer_->init(&frame_state_);
 
     setupWorld();
+    initFrameState();
     mainLoop();
 
     cleanup();
@@ -106,6 +106,12 @@ class HelloTriangleApp {
         .focus{0, 0, 0},
         .rot{1, 0, 0, 0}};
     fps_cam_.pos = {0, 300, -100 * options_.grid_size / 2};
+    follow_cam_ = {
+        .dist = 800.f,
+        .focus = mover_->getPos(),
+        .yaw = 0,
+        .pitch = -30,
+    };
     updateCamera();
   }
 
@@ -143,7 +149,7 @@ class HelloTriangleApp {
   void makeMyObject() {
     auto obj = std::make_unique<Object>(ModelId::MOVER);
     obj->setPos(vec3(200, 0, 200));
-    my_obj_ = obj.get();
+    mover_ = obj.get();
     addObject(std::move(obj));
   }
 
@@ -218,11 +224,11 @@ class HelloTriangleApp {
     bool should_draw = !window_minimized_ && !window_empty_;
     if (should_draw) {
       updateImgui();
-      updateCamera();
       handleInput();
       if (options_.animate) {
         animate();
       }
+      updateCamera();
       renderer_->drawFrame(&frame_state_);
       frame_state_.frame_num++;
     }
@@ -299,8 +305,8 @@ class HelloTriangleApp {
 
   void updateObjects() {
     for (auto& object : world_.objects) {
-      // For now, my_obj_ gets special handling.
-      if (object.get() == my_obj_) {
+      // For now, mover_ gets special handling.
+      if (object.get() == mover_) {
         continue;
       }
 
@@ -320,7 +326,7 @@ class HelloTriangleApp {
       object->setRot(spin);
     }
 
-    my_obj_->update(frame_time_);
+    mover_->update(frame_time_);
   }
 
   void updateCamera() {
@@ -330,6 +336,8 @@ class HelloTriangleApp {
       updateTrackballCamera();
     } else if (options_.cam_type == CameraType::Fps) {
       updateFpsCamera();
+    } else if (options_.cam_type == CameraType::Follow) {
+      updateFollowCamera();
     } else {
       ASSERT(false);
     }
@@ -365,12 +373,7 @@ class HelloTriangleApp {
       trackball_.rot = rot * trackball_.rot;
     }
 
-    constexpr float zoom_frac = 0.9f;
-    if (input_.mouse.scrollyrel == 1) {
-      trackball_.dist *= zoom_frac;
-    } else if (input_.mouse.scrollyrel == -1) {
-      trackball_.dist /= zoom_frac;
-    }
+    updateDist(trackball_.dist);
 
     frame_state_.view = glm::translate(mat4(1), vec3(0, 0, trackball_.dist)) *
                         glm::toMat4(trackball_.rot) *
@@ -396,25 +399,50 @@ class HelloTriangleApp {
   }
 
   void updateFpsCamera() {
-    // TODO: Capture mouse so FPS cam doesn't require holding left click.
-    if (input_.mouse.left && input_.mouse.moved) {
-      float mouse_scale = -0.1;
-      fps_cam_.yaw += mouse_scale * input_.mouse.xrel;
-      fps_cam_.pitch += mouse_scale * input_.mouse.yrel;
-      fps_cam_.pitch = glm::clamp(fps_cam_.pitch, -90.f, 90.f);
-    }
+    updateYawPitch(fps_cam_.yaw, fps_cam_.pitch);
 
     mat4 rot = glm::eulerAngleXY(
         glm::radians(fps_cam_.pitch), glm::radians(fps_cam_.yaw));
 
     vec2 dir = getWasdDir();
     if (abs(glm::length(dir)) > 0.01) {
-      float move_scale = 5 * time_delta_ms_;
+      float move_scale = 3 * time_delta_ms_;
       fps_cam_.pos +=
           vec3(glm::inverse(rot) * move_scale * vec4(dir.x, 0, dir.y, 0));
     }
 
     frame_state_.view = rot * glm::translate(mat4(1), -fps_cam_.pos);
+  }
+
+  void updateYawPitch(float& yaw, float& pitch) {
+    constexpr float mouse_scale = -0.1;
+    // TODO: Capture mouse so FPS cam doesn't require holding left click.
+    if (input_.mouse.left && input_.mouse.moved) {
+      yaw += mouse_scale * input_.mouse.xrel;
+      pitch += mouse_scale * input_.mouse.yrel;
+      pitch = glm::clamp(pitch, -90.f, 90.f);
+    }
+  }
+
+  void updateDist(float& dist) {
+    constexpr float zoom_frac = 0.9f;
+    if (input_.mouse.scrollyrel == 1) {
+      dist *= zoom_frac;
+    } else if (input_.mouse.scrollyrel == -1) {
+      dist /= zoom_frac;
+    }
+  }
+
+  void updateFollowCamera() {
+    follow_cam_.focus = mover_->getPos();
+    updateYawPitch(follow_cam_.yaw, follow_cam_.pitch);
+    updateDist(follow_cam_.dist);
+
+    mat4 rot = glm::eulerAngleXY(
+        glm::radians(follow_cam_.pitch), glm::radians(follow_cam_.yaw));
+
+    frame_state_.view = glm::translate(mat4(1), vec3(0, 0, follow_cam_.dist)) *
+                        rot * glm::translate(mat4(1), -follow_cam_.focus);
   }
 
   vec2 getWasdDir() {
@@ -436,7 +464,7 @@ class HelloTriangleApp {
 
   void handleInput() {
     if (input_.kb.pressed.contains(' ')) {
-      vec3 start = my_obj_->getPos();
+      vec3 start = mover_->getPos();
       float speedx = 300;
       float speedy = 600;
       if (input_.kb.down.contains(Keys::Shift)) {
@@ -452,7 +480,7 @@ class HelloTriangleApp {
 
       auto spline = makeSpline(
           Spline::Type::BEZIER, {start, posb, posc, end, posd, pose, end2});
-      my_obj_->animPos(makeAnimation(spline, 800, frame_time_));
+      mover_->animPos(makeAnimation(spline, 800, frame_time_));
     }
   }
 
@@ -478,10 +506,13 @@ class HelloTriangleApp {
     ImGui::RadioButton("Trackball", &cam_ind, 1);
     ImGui::SameLine();
     ImGui::RadioButton("Fps", &cam_ind, 2);
+    ImGui::SameLine();
+    ImGui::RadioButton("Follow", &cam_ind, 3);
     CameraType cam_types[] = {
         CameraType::Spin,
         CameraType::Trackball,
         CameraType::Fps,
+        CameraType::Follow,
     };
     options_.cam_type = cam_types[cam_ind];
 
@@ -537,7 +568,7 @@ class HelloTriangleApp {
   std::vector<float> frame_times_;
 
   struct Options {
-    CameraType cam_type = CameraType::Trackball;
+    CameraType cam_type = CameraType::Follow;
     bool animate = true;
     bool bounce_objects = false;
     int grid_size = 2;
@@ -552,12 +583,13 @@ class HelloTriangleApp {
   Camera cam_;
   Trackball trackball_;
   FpsCamera fps_cam_;
+  FollowCamera follow_cam_;
 
   InputState input_;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
   World world_;
-  Object* my_obj_ = nullptr;
+  Object* mover_ = nullptr;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

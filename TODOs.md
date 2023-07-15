@@ -1,11 +1,10 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Better way to describe animations
-  - Non-linear interpolation
-  - Full splines with more than two points
-  - Object hierarchy to animate within object space
-- Setup follow camera, that follows around a moving target
+- Hermite splines
+- Catmull rom splines
+- Move an object around with wasd
+- Object hierarchy to animate within object space
 - Make prettier
   - Setup cube map BG
   - Setup blinn-phong rendering
