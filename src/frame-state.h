@@ -11,7 +11,7 @@ struct AnimationState {
 struct FrameState {
   uint64_t frame_num = 0;
   AnimationState anim;
-  World* world;
+  std::vector<RenderObject> objects;
   mat4 model;
   mat4 view;
   mat4 proj;

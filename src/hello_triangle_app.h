@@ -24,6 +24,7 @@
 #include "input.h"
 #include "primitives.h"
 #include "renderer.h"
+#include "skelly.h"
 #include "time-include.h"
 #include "utils.h"
 #include "vulkan-include.h"
@@ -96,7 +97,6 @@ class HelloTriangleApp {
   }
 
   void initFrameState() {
-    frame_state_.world = &world_;
     updateProjectionMatrix();
 
     cam_ = {
@@ -108,7 +108,7 @@ class HelloTriangleApp {
     fps_cam_.pos = {0, 300, -100 * options_.grid_size / 2};
     follow_cam_ = {
         .dist = 800.f,
-        .focus = mover_->getPos(),
+        .focus = skelly_.getPos(),
         .yaw = 0,
         .pitch = -30,
     };
@@ -117,6 +117,8 @@ class HelloTriangleApp {
 
   void setupWorld() {
     loadPrimitives();
+    addObject(skelly_.getObj());
+    addObject(&grid_);
     remakeGrid(options_.grid_size);
   }
 
@@ -128,7 +130,7 @@ class HelloTriangleApp {
   }
 
   void remakeGrid(int grid) {
-    world_.objects.clear();
+    grid_.clearChildren();
 
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
@@ -138,24 +140,18 @@ class HelloTriangleApp {
           obj->setScale(vec3(100));
         }
         obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
-        addObject(std::move(obj));
+        grid_.addChild(std::move(obj));
       }
     }
-
-    makeMyObject();
   }
 
-  // Make a placeholder object as something to animate.
-  void makeMyObject() {
-    auto obj = std::make_unique<Object>(ModelId::MOVER);
-    obj->setPos(vec3(200, 0, 200));
-    mover_ = obj.get();
-    addObject(std::move(obj));
-  }
-
-  void addObject(std::unique_ptr<Object> obj) {
-    renderer_->useModel(obj->getModel());
-    world_.objects.push_back(std::move(obj));
+  void addObject(Object* obj) {
+    for (auto& model : obj->getModels()) {
+      if (model != ModelId::NONE) {
+        renderer_->useModel(model);
+      }
+    }
+    objects_.push_back(obj);
   }
 
   void mainLoop() {
@@ -229,6 +225,8 @@ class HelloTriangleApp {
         animate();
       }
       updateCamera();
+
+      flattenObjectTree();
       renderer_->drawFrame(&frame_state_);
       frame_state_.frame_num++;
     }
@@ -304,12 +302,7 @@ class HelloTriangleApp {
   }
 
   void updateObjects() {
-    for (auto& object : world_.objects) {
-      // For now, mover_ gets special handling.
-      if (object.get() == mover_) {
-        continue;
-      }
-
+    for (auto& object : grid_.children()) {
       vec3 pos = object->getPos();
       pos.y = 0.f;
 
@@ -326,7 +319,7 @@ class HelloTriangleApp {
       object->setRot(spin);
     }
 
-    mover_->update(frame_time_);
+    skelly_.update(frame_time_, time_delta_ms_);
   }
 
   void updateCamera() {
@@ -404,7 +397,7 @@ class HelloTriangleApp {
     mat4 rot = glm::eulerAngleXY(
         glm::radians(fps_cam_.pitch), glm::radians(fps_cam_.yaw));
 
-    vec2 dir = getWasdDir();
+    vec2 dir = getWasdDir(input_);
     if (abs(glm::length(dir)) > 0.01) {
       float move_scale = 3 * time_delta_ms_;
       fps_cam_.pos +=
@@ -434,7 +427,7 @@ class HelloTriangleApp {
   }
 
   void updateFollowCamera() {
-    follow_cam_.focus = mover_->getPos();
+    follow_cam_.focus = skelly_.getPos();
     updateYawPitch(follow_cam_.yaw, follow_cam_.pitch);
     updateDist(follow_cam_.dist);
 
@@ -445,43 +438,8 @@ class HelloTriangleApp {
                         rot * glm::translate(mat4(1), -follow_cam_.focus);
   }
 
-  vec2 getWasdDir() {
-    vec2 dir{0};
-    if (input_.kb.down.contains('w')) {
-      dir += vec2(0, 1);
-    }
-    if (input_.kb.down.contains('s')) {
-      dir += vec2(0, -1);
-    }
-    if (input_.kb.down.contains('a')) {
-      dir += vec2(-1, 0);
-    }
-    if (input_.kb.down.contains('d')) {
-      dir += vec2(1, 0);
-    }
-    return glm::normalize(dir);
-  }
-
   void handleInput() {
-    if (input_.kb.pressed.contains(' ')) {
-      vec3 start = mover_->getPos();
-      float speedx = 300;
-      float speedy = 600;
-      if (input_.kb.down.contains(Keys::Shift)) {
-        speedx *= -1;
-      }
-      vec3 posb = start + vec3(speedx / 3, speedy, 0);
-      vec3 end = start + vec3(speedx, 0, 0);
-      vec3 posc = end + vec3(-speedx / 3, speedy, 0);
-
-      vec3 posd = end + vec3(speedx / 10, speedy / 4, 0);
-      vec3 end2 = end + vec3(speedx / 3, 0, 0);
-      vec3 pose = end2 + vec3(-speedx / 10, speedy / 4, 0);
-
-      auto spline = makeSpline(
-          Spline::Type::BEZIER, {start, posb, posc, end, posd, pose, end2});
-      mover_->animPos(makeAnimation(spline, 800, frame_time_));
-    }
+    skelly_.handleInput(input_, frame_time_);
   }
 
   void updateProjectionMatrix() {
@@ -489,6 +447,15 @@ class HelloTriangleApp {
         glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100000.0f);
     // Invert y-axis because Vulkan is opposite GL.
     frame_state_.proj[1][1] *= -1;
+  }
+
+  void flattenObjectTree() {
+    frame_state_.objects.clear();
+    mat4 i(1);
+
+    for (auto* obj : objects_) {
+      obj->getRenderObjects(i, frame_state_.objects);
+    }
   }
 
   void updateImgui() {
@@ -530,6 +497,14 @@ class HelloTriangleApp {
       loadPrimitives();
     }
 
+    ImGui::End();
+
+    MoveOptions& move_options = *skelly_.getMoveOptions();
+    ImGui::Begin("Move Options");
+    std::string pos_str = "Pos: " + glm::to_string(skelly_.getPos());
+    ImGui::Text(pos_str.c_str());
+    ImGui::SliderFloat("Max Speed", &move_options.max_speed, 0, 500);
+    ImGui::SliderFloat("Adjust Time", &move_options.adjust_time, 0, 1000);
     ImGui::End();
 
     ImGui::Render();
@@ -588,8 +563,9 @@ class HelloTriangleApp {
   InputState input_;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
-  World world_;
-  Object* mover_ = nullptr;
+  std::vector<Object*> objects_;
+  Object grid_{ModelId::NONE};
+  Skelly skelly_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

@@ -1629,20 +1629,17 @@ class Renderer {
         buf_state.desc_set, nullptr);
 
     std::sort(
-        frame_state_->world->objects.begin(),
-        frame_state_->world->objects.end(), [](auto& left, auto& right) {
-          return left->getModel() < right->getModel();
-        });
+        frame_state_->objects.begin(), frame_state_->objects.end(),
+        [](auto& left, auto& right) { return left.model < right.model; });
 
-    ModelId curr_model_id = ModelId::UNKNOWN;
-    for (auto& obj : frame_state_->world->objects) {
-      auto model_id = obj->getModel();
-      auto it = loaded_models_.find(model_id);
+    ModelId curr_model_id = ModelId::NONE;
+    for (auto& obj : frame_state_->objects) {
+      auto it = loaded_models_.find(obj.model);
       ASSERT(it != loaded_models_.end());
       auto* model = it->second.get();
 
-      if (curr_model_id != model_id) {
-        curr_model_id = model_id;
+      if (curr_model_id != obj.model) {
+        curr_model_id = obj.model;
         cmd_buf.bindDescriptorSets(
             vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 1,
             model->texture->desc_set, nullptr);
@@ -1651,7 +1648,7 @@ class Renderer {
         cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
       }
 
-      PushData push_data{obj->getTransform()};
+      PushData push_data{obj.transform};
       cmd_buf.pushConstants<PushData>(
           *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 

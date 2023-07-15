@@ -10,7 +10,7 @@
 #include "glm-include.h"
 
 enum class ModelId {
-  UNKNOWN,
+  NONE,
   VIKING,
   PONY,
   CUBE,
@@ -38,6 +38,11 @@ std::map<ModelId, ModelInfo> model_registry = {
          "assets/models/pony/pony-body-diffuse.jpg",
          glm::scale(mat4(1), vec3(0.5)),
      }},
+};
+
+struct RenderObject {
+  ModelId model;
+  mat4 transform;
 };
 
 class Object {
@@ -77,8 +82,13 @@ class Object {
     return transform_;
   }
 
-  ModelId getModel() {
-    return model_;
+  std::vector<ModelId> getModels() {
+    std::vector<ModelId> models{model_};
+    for (auto& child : children_) {
+      auto child_models = child->getModels();
+      models.insert(models.end(), child_models.begin(), child_models.end());
+    }
+    return models;
   }
 
   void animPos(Animation a) {
@@ -86,13 +96,38 @@ class Object {
     anims_.push_back(a);
   }
 
-  void update(Time now) {
+  void animate(Time now) {
     for (const auto& anim : anims_) {
       setPos(Animation::sample(anim, now));
     }
 
     // Erase finished animations.
     std::erase_if(anims_, [&now](auto& anim) { return now > anim.to_time; });
+  }
+
+  Object* addChild(std::unique_ptr<Object> child) {
+    auto* ptr = child.get();
+    children_.push_back(std::move(child));
+    return ptr;
+  }
+  const std::vector<std::unique_ptr<Object>>& children() {
+    return children_;
+  }
+  void clearChildren() {
+    children_.clear();
+  }
+
+  void getRenderObjects(const mat4& parent, std::vector<RenderObject>& objs) {
+    mat4 transform = parent * getTransform();
+    if (model_ != ModelId::NONE) {
+      objs.push_back({
+          model_,
+          transform,
+      });
+    }
+    for (auto& child : children_) {
+      child->getRenderObjects(transform, objs);
+    }
   }
 
  private:
@@ -144,8 +179,4 @@ struct FollowCamera {
   vec3 focus{0};
   float yaw = 0;
   float pitch = 0;
-};
-
-struct World {
-  std::vector<std::unique_ptr<Object>> objects;
 };

@@ -82,3 +82,24 @@ void processInputState(const SDL_Event& event, InputState& state) {
     }
   }
 }
+
+vec2 getWasdDir(const InputState& input) {
+  vec2 dir{0};
+  if (input.kb.down.contains('w')) {
+    dir += vec2(0, 1);
+  }
+  if (input.kb.down.contains('s')) {
+    dir += vec2(0, -1);
+  }
+  if (input.kb.down.contains('a')) {
+    dir += vec2(-1, 0);
+  }
+  if (input.kb.down.contains('d')) {
+    dir += vec2(1, 0);
+  }
+
+  if (dir != vec2(0)) {
+    dir = glm::normalize(dir);
+  }
+  return dir;
+}
