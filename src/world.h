@@ -64,12 +64,14 @@ class Object {
     rot_ = rot;
     dirty_ = true;
   }
+  glm::quat getRot() {
+    return rot_;
+  }
 
   void setPos(const vec3& pos) {
     pos_ = pos;
     dirty_ = true;
   }
-
   vec3 getPos() {
     return pos_;
   }
@@ -96,13 +98,15 @@ class Object {
     anims_.push_back(a);
   }
 
-  void animate(Time now) {
+  bool animate(Time now) {
     for (const auto& anim : anims_) {
       setPos(Animation::sample(anim, now));
     }
 
     // Erase finished animations.
     std::erase_if(anims_, [&now](auto& anim) { return now > anim.to_time; });
+
+    return anims_.empty();
   }
 
   Object* addChild(std::unique_ptr<Object> child) {

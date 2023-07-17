@@ -8,6 +8,7 @@ add_executable(main
   defines.h
   vulkan-include.h
   utils.h
+  utils.cc
   glm-include.h
   world.h
   render-objects.h

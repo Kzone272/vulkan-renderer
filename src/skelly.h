@@ -3,10 +3,14 @@
 #include "animation.h"
 #include "glm-include.h"
 #include "input.h"
+#include "utils.h"
 
 struct MoveOptions {
   float max_speed = 150;
-  float adjust_time = 200;
+  float adjust_time = 500;
+  float foot_dist = 15;
+  float step_height = 5;
+  float plant_pct = 0.1;
 };
 
 class Skelly {
@@ -18,13 +22,17 @@ class Skelly {
     pelvis_->setScale(vec3(0.35, 0.2, 0.3));
     pelvis_->setPos(vec3(0, 65, 0));
 
-    lfoot_ = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
-    lfoot_->setScale(vec3(0.1, 0.08, 0.25));
-    lfoot_->setPos(vec3(-20, 0, 0));
+    lfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
+    lfoot_.obj->setScale(vec3(0.1, 0.08, 0.25));
+    lfoot_.offset = vec3(-20, 0, 0);
+    lfoot_.obj->setPos(lfoot_.offset);
+    plantFoot(lfoot_);
 
-    rfoot_ = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
-    rfoot_->setScale(vec3(0.1, 0.08, 0.25));
-    rfoot_->setPos(vec3(20, 0, 0));
+    rfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
+    rfoot_.obj->setScale(vec3(0.1, 0.08, 0.25));
+    rfoot_.offset = vec3(20, 0, 0);
+    rfoot_.obj->setPos(rfoot_.offset);
+    plantFoot(rfoot_);
   }
 
   void handleInput(const InputState& input, Time now) {
@@ -92,6 +100,7 @@ class Skelly {
     }
 
     root_.animate(now);
+    updateFeet(now);
   }
 
   vec3 getPos() {
@@ -107,12 +116,93 @@ class Skelly {
   }
 
  private:
+  struct Foot {
+    Object* obj;
+    bool planted = false;
+    bool in_swing = false;
+    vec3 world_pos;
+    glm::quat world_rot;
+    vec3 offset;
+    vec3 vel;
+    Time move_again;
+  };
+
+  void updateFeet(Time now) {
+    updateFoot(rfoot_, now);
+    updateFoot(lfoot_, now);
+  }
+
+  void updateFoot(Foot& foot, Time now) {
+    vec3 pos = foot.obj->getPos();
+
+    float speed = glm::length(vel_);
+    if (vel_curve_) {
+      // Use target speed.
+      speed = glm::length(Animation::sample(*vel_curve_, now + 10s));
+    }
+    float step_l = std::min(speed / 3.f, 60.f);
+
+    float foot_dist = std::max(1.f, step_l);
+    if (lfoot_.planted && rfoot_.planted) {
+      foot_dist = options_.foot_dist;
+    }
+
+    bool can_move =
+        now > foot.move_again && !lfoot_.in_swing && !rfoot_.in_swing;
+    float target_dist = glm::length(foot.obj->getPos() - foot.offset);
+    // printf("can move :%d dist: %f\n", can_move, target_dist);
+    // printf("foot_dist:%f step_l: %f\n", foot_dist, step_l);
+    if (can_move && target_dist > foot_dist) {
+      foot.in_swing = true;
+      foot.planted = false;
+
+      float step_dur = 1.5f * (step_l / speed) * 1000.f;
+      if (speed == 0) {
+        step_dur = 500;
+      }
+
+      vec3 target_pos = vec3(0, 0, step_l) + foot.offset;
+      vec3 mid_pos =
+          (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
+      auto spline =
+          makeSpline(Spline::Type::LINEAR, {pos, mid_pos, target_pos});
+
+      foot.obj->animPos(makeAnimation(spline, step_dur, now));
+      foot.obj->setRot(glm::quat());
+      foot.move_again =
+          now + std::chrono::duration_cast<Clock::duration>(
+                    FloatMs((1.f + options_.plant_pct) * 2.f * step_dur));
+    }
+
+    if (foot.planted) {
+      mat4 to_local = glm::inverse(root_.getTransform());
+      foot.obj->setPos(to_local * vec4(foot.world_pos, 1));
+      foot.obj->setRot(glm::quat_cast(to_local) * lfoot_.world_rot);
+    }
+
+    bool done = foot.obj->animate(now);
+    foot.vel = foot.obj->getPos() - pos;
+
+    if (foot.in_swing && done) {
+      plantFoot(foot);
+    }
+  }
+
+  void plantFoot(Foot& foot) {
+    foot.planted = true;
+    foot.in_swing = false;
+    mat4 to_world = root_.getTransform();
+    foot.world_pos = to_world * vec4(foot.obj->getPos(), 1);
+    foot.world_rot = glm::quat_cast(to_world) * foot.obj->getRot();
+  }
+
   MoveOptions options_;
 
   Object root_{ModelId::NONE};
   Object* pelvis_;
-  Object* lfoot_;
-  Object* rfoot_;
+
+  Foot lfoot_;
+  Foot rfoot_;
 
   vec2 input_dir_{0};
   std::optional<Animation> vel_curve_;

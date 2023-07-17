@@ -546,9 +546,9 @@ class HelloTriangleApp {
     CameraType cam_type = CameraType::Follow;
     bool animate = true;
     bool bounce_objects = false;
-    int grid_size = 2;
+    int grid_size = 30;
     bool tetra_in = true;
-    int tetra_steps = 4;
+    int tetra_steps = 2;
   } options_;
 
   struct UiState {

@@ -16,3 +16,6 @@ std::string strFmt(const std::string& format, Args... args) {
   return std::string(
       buf.get(), buf.get() + size - 1);  // We don't want the '\0' inside
 }
+
+float remapRange(
+    float value, float in_min, float in_max, float out_min, float out_max);
