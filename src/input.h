@@ -24,6 +24,10 @@ struct InputState {
     std::set<int32_t> down;
     std::set<int32_t> pressed;  // Pressed this frame
   } kb;
+
+  struct Movement {
+    vec2 dir;  // in world space
+  } move;
 };
 
 namespace Keys {

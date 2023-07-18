@@ -439,6 +439,11 @@ class HelloTriangleApp {
   }
 
   void handleInput() {
+    if (options_.cam_type == CameraType::Follow) {
+      input_.move.dir =
+          glm::rotate(getWasdDir(input_), glm::radians(follow_cam_.yaw));
+    }
+
     skelly_.handleInput(input_, frame_time_);
   }
 

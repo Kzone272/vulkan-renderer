@@ -57,9 +57,8 @@ class Skelly {
       root_.animPos(makeAnimation(spline, 800, now));
     }
 
-    auto dir = getWasdDir(input);
-    if (dir != input_dir_) {
-      input_dir_ = dir;
+    if (glm::length(input.move.dir - input_dir_) > 0.1f) {
+      input_dir_ = input.move.dir;
       vec3 target_vel =
           options_.max_speed * vec3(input_dir_.x, 0, input_dir_.y);
 
