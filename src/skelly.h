@@ -160,11 +160,17 @@ class Skelly {
         step_dur = 500;
       }
 
+      // Scale speeds based on the duration of the animation.
+      float scale = (step_dur / 1000.f);
+      float scaled_speed = speed * scale;
       vec3 target_pos = vec3(0, 0, step_l) + foot.offset;
+      vec3 no_vel = vec3(0, 0, -scaled_speed);
       vec3 mid_pos =
           (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
-      auto spline =
-          makeSpline(Spline::Type::LINEAR, {pos, mid_pos, target_pos});
+      vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
+      auto spline = makeSpline(
+          Spline::Type::HERMITE,
+          {pos, -foot.vel * scale, mid_pos, swing_vel, target_pos, no_vel});
 
       foot.obj->animPos(makeAnimation(spline, step_dur, now));
       foot.obj->setRot(glm::quat());

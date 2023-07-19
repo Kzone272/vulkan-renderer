@@ -1,10 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Hermite splines
 - Catmull rom splines
-- Move an object around with wasd
-- Object hierarchy to animate within object space
+- Limit rotation speed to fix visual glitches
+- Setup IK bone system
 - Make prettier
   - Setup cube map BG
   - Setup blinn-phong rendering
@@ -13,8 +12,6 @@ Short-term ideas:
 Medium-term ideas: 
 - Try doing PBR rendering
 - Setup a compute shader
-- Setup IK bone system
 
 Long-term ideas:
-- Procedural animation
 - Physics?

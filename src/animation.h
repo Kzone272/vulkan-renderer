@@ -29,6 +29,7 @@ struct Spline {
   enum class Type {
     LINEAR,
     BEZIER,  // cubic
+    HERMITE,
   };
   Type type;
   std::vector<vec3> points;
@@ -50,6 +51,14 @@ Spline makeSpline(Spline::Type type, const std::vector<vec3>& points) {
         .points = points,
         .segments = (npoints - 1) / 3,
     };
+  } else if (type == Spline::Type::HERMITE) {
+    ASSERT((npoints % 2) == 0);
+    std::vector<vec3> controls = points;
+    return {
+        .type = type,
+        .points = std::move(controls),
+        .segments = (npoints / 2) - 1,
+    };
   }
 
   printf("Unsupported spline type!\n");
@@ -60,7 +69,11 @@ Spline makeSpline(Spline::Type type, const std::vector<vec3>& points) {
 std::map<Spline::Type, mat4> spline_mats{
     {
         Spline::Type::BEZIER,
-        mat4(1, 0, 0, 0, -3, 3, 0, 0, 3, -6, 3, 0, -1, 3, -3, 1),
+        mat4(1, -3, 3, -1, 0, 3, -6, 3, 0, 0, 3, -3, 0, 0, 0, 1),
+    },
+    {
+        Spline::Type::HERMITE,
+        mat4(1, 0, -3, 2, 0, 1, -2, 1, 0, 0, 3, -2, 0, 0, -1, 1),
     },
 };
 
@@ -76,7 +89,8 @@ vec3 blend(
   points[1] = vec4(b, 1);
   points[2] = vec4(c, 1);
   points[3] = vec4(d, 1);
-  return vec3(points * bersntein * ts);
+  auto p = ts * bersntein * glm::transpose(points);
+  return vec3(p);
 }
 
 vec3 sampleSpline(const Spline& spline, float u) {
@@ -105,6 +119,20 @@ vec3 sampleSpline(const Spline& spline, float u) {
     const vec3& d = spline.points[i + 3];
     float t = glm::fract(u);
     return blend(Spline::Type::BEZIER, t, a, b, c, d);
+  } else if (spline.type == Spline::Type::HERMITE) {
+    if (u <= 0) {
+      return spline.points[0];
+    }
+    if (u >= spline.segments) {
+      return spline.points[spline.points.size() - 2];
+    }
+    int i = floor(u) * 2;
+    const vec3& a = spline.points[i];
+    const vec3& b = spline.points[i + 1] / static_cast<float>(spline.segments);
+    const vec3& c = spline.points[i + 2];
+    const vec3& d = spline.points[i + 3] / static_cast<float>(spline.segments);
+    float t = glm::fract(u);
+    return blend(Spline::Type::HERMITE, t, a, b, c, d);
   }
 
   printf("Unsupported spline type!\n");
