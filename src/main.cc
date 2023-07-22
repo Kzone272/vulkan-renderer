@@ -2,7 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "hello_triangle_app.h"
+#include "app.h"
 
 int main() {
   HelloTriangleApp app;

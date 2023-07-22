@@ -1,7 +1,7 @@
 # The main app for this project
 add_executable(main
   main.cc
-  hello_triangle_app.h
+  app.h
   renderer.h
   asserts.h
   asserts.cc
