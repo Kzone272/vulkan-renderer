@@ -8,30 +8,79 @@
 struct MoveOptions {
   float max_speed = 150;
   float adjust_time = 500;
+  float stance_w = 30;
   float foot_dist = 15;
   float step_height = 5;
   float plant_pct = 0.1;
   float max_rot_speed = 180;
 };
 
+struct SkellySizes {
+  float height = 185;
+  float bonew = 6;
+  float leg = 100;
+  float femur = 50;
+  float pelvisw = 35;
+  float shouldersw = 50;
+};
+
 class Skelly {
  public:
   Skelly() {
     root_.setPos(vec3(200, 0, 200));
+    makeBones();
+  }
 
-    pelvis_ = root_.addChild(
-        std::make_unique<Object>(ModelId::Bone, glm::scale(vec3(35, 20, 30))));
-    pelvis_->setPos(vec3(0, 80, 0));
+  void makeBones() {
+    root_.clearChildren();
+
+    mat4 pelvis_t = glm::translate(vec3(0, -10, 0)) *
+                    glm::scale(vec3(sizes_.pelvisw, 20, 20));
+    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
+    pelvis_->setPos(vec3(0, sizes_.leg, 0));
+
+    mat4 torso_t = glm::scale(vec3(sizes_.shouldersw, -20, 25));
+    torso_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
+    torso_->setPos(vec3(0, sizes_.height - 30, 0));
+
+    mat4 head_t = glm::scale(vec3(20, -25, 25));
+    head_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, head_t));
+    head_->setPos(vec3(0, sizes_.height, 5));
+
+    mat4 femur_t = glm::scale(vec3(sizes_.bonew, -sizes_.femur, sizes_.bonew));
+    lfemur_ =
+        pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
+    vec3 femur_pos = vec3(-(sizes_.pelvisw / 2 + 3), 0, 0);
+    lfemur_->setPos(femur_pos);
+    lfemur_->setRot(glm::angleAxis(glm::radians(-30.f), vec3(1, 0, 0)));
+
+    mat4 shin_t = glm::scale(
+        vec3(sizes_.bonew, -(sizes_.leg - sizes_.femur), sizes_.bonew));
+    lshin_ = lfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
+    vec3 shin_pos = vec3(0, -sizes_.femur, 0);
+    lshin_->setPos(shin_pos);
+    lshin_->setRot(glm::angleAxis(glm::radians(45.f), vec3(1, 0, 0)));
+
+    // Add opposite limbs with flipped positions.
+    mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
+
+    rfemur_ =
+        pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
+    rfemur_->setPos(flip * femur_pos);
+
+    rshin_ = rfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
+    rshin_->setPos(flip * shin_pos);
 
     lfoot_.obj = root_.addChild(
         std::make_unique<Object>(ModelId::Bone, glm::scale(vec3(10, 8, 25))));
-    lfoot_.offset = vec3(-20, 0, 0);
+    vec3 foot_offset = {-options_.stance_w / 2, 0, 0};
+    lfoot_.offset = foot_offset;
     lfoot_.obj->setPos(lfoot_.offset);
     plantFoot(lfoot_);
 
     rfoot_.obj = root_.addChild(
         std::make_unique<Object>(ModelId::Bone, glm::scale(vec3(10, 8, 25))));
-    rfoot_.offset = vec3(20, 0, 0);
+    rfoot_.offset = flip * foot_offset;
     rfoot_.obj->setPos(rfoot_.offset);
     plantFoot(rfoot_);
   }
@@ -127,6 +176,9 @@ class Skelly {
   MoveOptions* getMoveOptions() {
     return &options_;
   }
+  SkellySizes* getSkellySizes() {
+    return &sizes_;
+  }
 
  private:
   struct Foot {
@@ -216,9 +268,16 @@ class Skelly {
   }
 
   MoveOptions options_;
+  SkellySizes sizes_;
 
   Object root_{ModelId::None};
   Object* pelvis_;
+  Object* torso_;
+  Object* head_;
+  Object* lfemur_;
+  Object* lshin_;
+  Object* rfemur_;
+  Object* rshin_;
 
   Foot lfoot_;
   Foot rfoot_;

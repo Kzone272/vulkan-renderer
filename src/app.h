@@ -426,7 +426,8 @@ class HelloTriangleApp {
   }
 
   void updateFollowCamera() {
-    follow_cam_.focus = skelly_.getPos();
+    follow_cam_.focus =
+        skelly_.getPos() + vec3(0, skelly_.getSkellySizes()->leg, 0);
     updateYawPitch(follow_cam_.yaw, follow_cam_.pitch);
     updateDist(follow_cam_.dist);
 
@@ -509,11 +510,30 @@ class HelloTriangleApp {
     ImGui::Text(pos_str.c_str());
     ImGui::SliderFloat("Max Speed", &move_options.max_speed, 0, 500);
     ImGui::SliderFloat("Adjust Time", &move_options.adjust_time, 0, 1000);
+    if (ImGui::SliderFloat("Stance W", &move_options.stance_w, 0, 60)) {
+      skelly_.makeBones();
+    }
     ImGui::SliderFloat("Foot Dist", &move_options.foot_dist, 0, 50);
     ImGui::SliderFloat("Step Height", &move_options.step_height, 0, 50);
     ImGui::SliderFloat("Plant %", &move_options.plant_pct, 0, 1);
     ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
+
     ImGui::End();
+
+    SkellySizes& sizes = *skelly_.getSkellySizes();
+    ImGui::Begin("Skelly Sizes");
+    bool changed = false;
+    changed |= ImGui::SliderFloat("Height", &sizes.height, 1, 250);
+    changed |= ImGui::SliderFloat("Leg", &sizes.leg, 1, sizes.height);
+    changed |= ImGui::SliderFloat("Femur", &sizes.femur, 1, sizes.leg);
+    changed |= ImGui::SliderFloat("Bone W", &sizes.bonew, 0.5, 10);
+    changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvisw, 1, 60);
+    changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shouldersw, 1, 100);
+    ImGui::End();
+
+    if (changed) {
+      skelly_.makeBones();
+    }
 
     ImGui::Render();
   }
