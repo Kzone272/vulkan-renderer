@@ -242,6 +242,7 @@ class HelloTriangleApp {
     time_s_ = FloatS(now - start_).count();
 
     auto time_delta = now - frame_time_;
+    time_delta_s_ = FloatS(time_delta).count();
     time_delta_ms_ = FloatMs(time_delta).count();
     frame_times_.push_back(time_delta_ms_);
 
@@ -319,7 +320,7 @@ class HelloTriangleApp {
       object->setRot(spin);
     }
 
-    skelly_.update(frame_time_, time_delta_ms_);
+    skelly_.update(frame_time_, time_delta_s_);
   }
 
   void updateCamera() {
@@ -510,6 +511,10 @@ class HelloTriangleApp {
     ImGui::Text(pos_str.c_str());
     ImGui::SliderFloat("Max Speed", &move_options.max_speed, 0, 500);
     ImGui::SliderFloat("Adjust Time", &move_options.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Foot Dist", &move_options.foot_dist, 0, 50);
+    ImGui::SliderFloat("Step Height", &move_options.step_height, 0, 50);
+    ImGui::SliderFloat("Plant %", &move_options.plant_pct, 0, 1);
+    ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
     ImGui::End();
 
     ImGui::Render();
@@ -539,6 +544,8 @@ class HelloTriangleApp {
   Time start_;
   float time_s_;
   Time frame_time_;
+  // Time in s since the last draw, as a float
+  float time_delta_s_ = 0.0f;
   // Time in ms since the last draw, as a float
   float time_delta_ms_ = 0.0f;
   // Used to calculate FPS

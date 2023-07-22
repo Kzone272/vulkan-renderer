@@ -11,6 +11,7 @@ struct MoveOptions {
   float foot_dist = 15;
   float step_height = 5;
   float plant_pct = 0.1;
+  float max_rot_speed = 180;
 };
 
 class Skelly {
@@ -20,7 +21,7 @@ class Skelly {
 
     pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
     pelvis_->setScale(vec3(0.35, 0.2, 0.3));
-    pelvis_->setPos(vec3(0, 65, 0));
+    pelvis_->setPos(vec3(0, 80, 0));
 
     lfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
     lfoot_.obj->setScale(vec3(0.1, 0.08, 0.25));
@@ -75,7 +76,7 @@ class Skelly {
     }
   }
 
-  void update(Time now, float time_delta_ms) {
+  void update(Time now, float time_delta_s) {
     vec3 curr_vel = vel_;
 
     if (vel_curve_) {
@@ -89,12 +90,25 @@ class Skelly {
     }
 
     auto pos = getPos();
-    pos += curr_vel * (time_delta_ms / 1000.f);
+    pos += curr_vel * time_delta_s;
     root_.setPos(pos);
 
     if (glm::length(curr_vel) > 0.1) {
-      float angle = glm::orientedAngle(
+      float target_angle = glm::orientedAngle(
           vec3(0, 0, 1), glm::normalize(curr_vel), vec3(0, 1, 0));
+      target_angle = fmodClamp(target_angle, glm::radians(360.f));
+
+      float current = glm::angle(root_.getRot());
+      float delta = angleDelta(current, target_angle);
+
+      float angle = target_angle;
+      float change = time_delta_s * glm::radians(options_.max_rot_speed);
+      if (std::abs(delta) > change) {
+        float dir = (delta > 0) ? 1 : -1;
+        angle = current + dir * change;
+      }
+      angle = fmodClamp(angle, glm::radians(360.f));
+
       root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
     }
 
