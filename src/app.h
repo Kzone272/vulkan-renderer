@@ -123,8 +123,8 @@ class HelloTriangleApp {
   }
 
   void loadPrimitives() {
-    renderer_->useMesh(ModelId::Cube, makeCube(100, {0, 0.8, 0.8}));
-    renderer_->useMesh(ModelId::Bone, makeCube(1, {0.9, 0.2, 0.1}));
+    renderer_->useMesh(ModelId::Cube, makeCube({0, 0.8, 0.8}));
+    renderer_->useMesh(ModelId::Bone, makeCube({0.9, 0.2, 0.1}));
     renderer_->useMesh(
         ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
   }
@@ -135,10 +135,8 @@ class HelloTriangleApp {
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
         ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
-        auto obj = std::make_unique<Object>(id);
-        if (id == ModelId::Tetra) {
-          obj->setScale(vec3(100));
-        }
+        mat4 model_t = glm::scale(vec3(100));
+        auto obj = std::make_unique<Object>(id, model_t);
         obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
         grid_.addChild(std::move(obj));
       }

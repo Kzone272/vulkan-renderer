@@ -21,7 +21,7 @@ enum class ModelId {
 struct ModelInfo {
   std::string obj_path;
   std::string texture_path;
-  mat4 init_transform;
+  mat4 model_transform{1};
 };
 
 std::map<ModelId, ModelInfo> model_registry = {
@@ -47,11 +47,15 @@ struct RenderObject {
 
 class Object {
  public:
-  Object(ModelId model) : model_(model) {
-    auto it = model_registry.find(model);
-    if (it != model_registry.end()) {
-      init_transform_ = it->second.init_transform;
-      dirty_ = true;
+  Object(ModelId model, std::optional<mat4> model_transform = std::nullopt)
+      : model_(model) {
+    if (model_transform) {
+      model_transform_ = *model_transform;
+    } else {
+      auto it = model_registry.find(model);
+      if (it != model_registry.end()) {
+        model_transform_ = it->second.model_transform;
+      }
     }
   }
 
@@ -126,7 +130,7 @@ class Object {
     if (model_ != ModelId::None) {
       objs.push_back({
           model_,
-          transform,
+          transform * model_transform_,
       });
     }
     for (auto& child : children_) {
@@ -137,11 +141,12 @@ class Object {
  private:
   void updateTransform() {
     transform_ = glm::translate(mat4(1), pos_) * glm::toMat4(rot_) *
-                 glm::scale(mat4(1), scale_) * init_transform_;
+                 glm::scale(mat4(1), scale_);
   }
 
   ModelId model_;
-  mat4 init_transform_{1};
+  // Transform that applies to this object's mesh only, and not to children.
+  mat4 model_transform_{1};
 
   bool dirty_ = false;
   mat4 transform_{1};

@@ -5,20 +5,19 @@
 #include "render-objects.h"
 
 // Make a cube with origin at bottom middle.
-Mesh makeCube(float size, vec3 color) {
+Mesh makeCube(vec3 color) {
   Mesh m;
-  float half = size / 2;
   m.vertices = {
       // Bottom
-      {{-half, 0, half}, color, {0, 0}},   // bl
-      {{half, 0, half}, color, {0, 0}},    // br
-      {{half, 0, -half}, color, {0, 0}},   // fr
-      {{-half, 0, -half}, color, {0, 0}},  // fl
+      {{-0.5, 0, 0.5}, color, {0, 0}},   // bl
+      {{0.5, 0, 0.5}, color, {0, 0}},    // br
+      {{0.5, 0, -0.5}, color, {0, 0}},   // fr
+      {{-0.5, 0, -0.5}, color, {0, 0}},  // fl
       // Top
-      {{-half, size, half}, color, {0, 0}},   // bl
-      {{half, size, half}, color, {0, 0}},    // br
-      {{half, size, -half}, color, {0, 0}},   // fr
-      {{-half, size, -half}, color, {0, 0}},  // fl
+      {{-0.5, 1, 0.5}, color, {0, 0}},   // bl
+      {{0.5, 1, 0.5}, color, {0, 0}},    // br
+      {{0.5, 1, -0.5}, color, {0, 0}},   // fr
+      {{-0.5, 1, -0.5}, color, {0, 0}},  // fl
   };
   m.indices = {
       3, 2, 1, 3, 1, 0,  // bot
