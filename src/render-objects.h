@@ -4,7 +4,7 @@
 
 #include "glm-include.h"
 #include "vulkan-include.h"
-#include "world.h"
+#include "object.h"
 
 struct UniformBufferData {
   alignas(16) mat4 proj_view;

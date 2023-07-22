@@ -22,9 +22,9 @@
 #include "defines.h"
 #include "frame-state.h"
 #include "glm-include.h"
+#include "object.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
-#include "world.h"
 
 namespace {
 

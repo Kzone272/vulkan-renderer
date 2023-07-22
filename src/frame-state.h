@@ -1,7 +1,7 @@
 #pragma once
 
 #include "glm-include.h"
-#include "world.h"
+#include "object.h"
 
 struct AnimationState {
   float clear_val = 0.0f;

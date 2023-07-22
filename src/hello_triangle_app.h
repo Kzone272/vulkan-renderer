@@ -22,13 +22,13 @@
 #include "frame-state.h"
 #include "glm-include.h"
 #include "input.h"
+#include "object.h"
 #include "primitives.h"
 #include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
 #include "utils.h"
 #include "vulkan-include.h"
-#include "world.h"
 
 namespace {
 

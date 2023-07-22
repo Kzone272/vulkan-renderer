@@ -10,7 +10,7 @@ add_executable(main
   utils.h
   utils.cc
   glm-include.h
-  world.h
+  object.h
   render-objects.h
   animation.h
   time-include.h
