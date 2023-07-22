@@ -10,12 +10,12 @@
 #include "glm-include.h"
 
 enum class ModelId {
-  NONE,
-  VIKING,
-  PONY,
-  CUBE,
-  BONE,
-  TETRA,
+  None,
+  Viking,
+  Pony,
+  Cube,
+  Bone,
+  Tetra,
 };
 
 struct ModelInfo {
@@ -25,14 +25,14 @@ struct ModelInfo {
 };
 
 std::map<ModelId, ModelInfo> model_registry = {
-    {ModelId::VIKING,
+    {ModelId::Viking,
      {
          "assets/models/viking_room.obj",
          "assets/textures/viking_room.png",
          glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0)) *
              glm::scale(mat4(1), vec3(-300, 300, 300)),
      }},
-    {ModelId::PONY,
+    {ModelId::Pony,
      {
          "assets/models/pony/pony.obj",
          "assets/models/pony/pony-body-diffuse.jpg",
@@ -123,7 +123,7 @@ class Object {
 
   void getRenderObjects(const mat4& parent, std::vector<RenderObject>& objs) {
     mat4 transform = parent * getTransform();
-    if (model_ != ModelId::NONE) {
+    if (model_ != ModelId::None) {
       objs.push_back({
           model_,
           transform,

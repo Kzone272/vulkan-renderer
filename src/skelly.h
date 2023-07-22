@@ -19,17 +19,17 @@ class Skelly {
   Skelly() {
     root_.setPos(vec3(200, 0, 200));
 
-    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::BONE));
+    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::Bone));
     pelvis_->setScale(vec3(35, 20, 30));
     pelvis_->setPos(vec3(0, 80, 0));
 
-    lfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::BONE));
+    lfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::Bone));
     lfoot_.obj->setScale(vec3(10, 8, 25));
     lfoot_.offset = vec3(-20, 0, 0);
     lfoot_.obj->setPos(lfoot_.offset);
     plantFoot(lfoot_);
 
-    rfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::BONE));
+    rfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::Bone));
     rfoot_.obj->setScale(vec3(10, 8, 25));
     rfoot_.offset = vec3(20, 0, 0);
     rfoot_.obj->setPos(rfoot_.offset);
@@ -54,7 +54,7 @@ class Skelly {
       vec3 pose = end2 + vec3(0, speedy / 4, -speedz / 10);
 
       auto spline = makeSpline(
-          Spline::Type::BEZIER, {start, posb, posc, end, posd, pose, end2});
+          Spline::Type::Bezier, {start, posb, posc, end, posd, pose, end2});
       root_.animPos(makeAnimation(spline, 800, now));
     }
 
@@ -70,7 +70,7 @@ class Skelly {
         vec3 d = target_vel;
         vec3 b = glm::mix(a, d, 1.f / 3.f);
         vec3 c = d;
-        auto spline = makeSpline(Spline::Type::BEZIER, {a, b, c, d});
+        auto spline = makeSpline(Spline::Type::Bezier, {a, b, c, d});
         vel_curve_ = makeAnimation(spline, options_.adjust_time, now);
       }
     }
@@ -183,7 +183,7 @@ class Skelly {
           (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
       vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
       auto spline = makeSpline(
-          Spline::Type::HERMITE,
+          Spline::Type::Hermite,
           {pos, -foot.vel * scale, mid_pos, swing_vel, target_pos, no_vel});
 
       foot.obj->animPos(makeAnimation(spline, step_dur, now));
@@ -217,7 +217,7 @@ class Skelly {
 
   MoveOptions options_;
 
-  Object root_{ModelId::NONE};
+  Object root_{ModelId::None};
   Object* pelvis_;
 
   Foot lfoot_;

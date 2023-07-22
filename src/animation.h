@@ -27,9 +27,9 @@ float blend(float pct, BlendType blend) {
 
 struct Spline {
   enum class Type {
-    LINEAR,
-    BEZIER,  // cubic
-    HERMITE,
+    Linear,
+    Bezier,  // cubic
+    Hermite,
   };
   Type type;
   std::vector<vec3> points;
@@ -38,20 +38,20 @@ struct Spline {
 
 Spline makeSpline(Spline::Type type, const std::vector<vec3>& points) {
   int npoints = static_cast<int>(points.size());
-  if (type == Spline::Type::LINEAR) {
+  if (type == Spline::Type::Linear) {
     return {
         .type = type,
         .points = points,
         .segments = npoints - 1,
     };
-  } else if (type == Spline::Type::BEZIER) {
+  } else if (type == Spline::Type::Bezier) {
     ASSERT((npoints - 1) % 3 == 0);
     return {
         .type = type,
         .points = points,
         .segments = (npoints - 1) / 3,
     };
-  } else if (type == Spline::Type::HERMITE) {
+  } else if (type == Spline::Type::Hermite) {
     ASSERT((npoints % 2) == 0);
     std::vector<vec3> controls = points;
     return {
@@ -68,11 +68,11 @@ Spline makeSpline(Spline::Type type, const std::vector<vec3>& points) {
 
 std::map<Spline::Type, mat4> spline_mats{
     {
-        Spline::Type::BEZIER,
+        Spline::Type::Bezier,
         mat4(1, -3, 3, -1, 0, 3, -6, 3, 0, 0, 3, -3, 0, 0, 0, 1),
     },
     {
-        Spline::Type::HERMITE,
+        Spline::Type::Hermite,
         mat4(1, 0, -3, 2, 0, 1, -2, 1, 0, 0, 3, -2, 0, 0, -1, 1),
     },
 };
@@ -94,7 +94,7 @@ vec3 blend(
 }
 
 vec3 sampleSpline(const Spline& spline, float u) {
-  if (spline.type == Spline::Type::LINEAR) {
+  if (spline.type == Spline::Type::Linear) {
     if (u <= 0) {
       return spline.points[0];
     }
@@ -105,7 +105,7 @@ vec3 sampleSpline(const Spline& spline, float u) {
     const vec3& b = spline.points[ceil(u)];
     float t = glm::fract(u);
     return glm::mix(a, b, t);
-  } else if (spline.type == Spline::Type::BEZIER) {
+  } else if (spline.type == Spline::Type::Bezier) {
     if (u <= 0) {
       return spline.points[0];
     }
@@ -118,8 +118,8 @@ vec3 sampleSpline(const Spline& spline, float u) {
     const vec3& c = spline.points[i + 2];
     const vec3& d = spline.points[i + 3];
     float t = glm::fract(u);
-    return blend(Spline::Type::BEZIER, t, a, b, c, d);
-  } else if (spline.type == Spline::Type::HERMITE) {
+    return blend(Spline::Type::Bezier, t, a, b, c, d);
+  } else if (spline.type == Spline::Type::Hermite) {
     if (u <= 0) {
       return spline.points[0];
     }
@@ -132,7 +132,7 @@ vec3 sampleSpline(const Spline& spline, float u) {
     const vec3& c = spline.points[i + 2];
     const vec3& d = spline.points[i + 3] / static_cast<float>(spline.segments);
     float t = glm::fract(u);
-    return blend(Spline::Type::HERMITE, t, a, b, c, d);
+    return blend(Spline::Type::Hermite, t, a, b, c, d);
   }
 
   printf("Unsupported spline type!\n");

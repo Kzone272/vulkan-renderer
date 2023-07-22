@@ -1632,7 +1632,7 @@ class Renderer {
         frame_state_->objects.begin(), frame_state_->objects.end(),
         [](auto& left, auto& right) { return left.model < right.model; });
 
-    ModelId curr_model_id = ModelId::NONE;
+    ModelId curr_model_id = ModelId::None;
     for (auto& obj : frame_state_->objects) {
       auto it = loaded_models_.find(obj.model);
       ASSERT(it != loaded_models_.end());

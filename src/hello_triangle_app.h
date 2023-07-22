@@ -123,10 +123,10 @@ class HelloTriangleApp {
   }
 
   void loadPrimitives() {
-    renderer_->useMesh(ModelId::CUBE, makeCube(100, {0, 0.8, 0.8}));
-    renderer_->useMesh(ModelId::BONE, makeCube(1, {0.9, 0.2, 0.1}));
+    renderer_->useMesh(ModelId::Cube, makeCube(100, {0, 0.8, 0.8}));
+    renderer_->useMesh(ModelId::Bone, makeCube(1, {0.9, 0.2, 0.1}));
     renderer_->useMesh(
-        ModelId::TETRA, tetrahedron(options_.tetra_steps, options_.tetra_in));
+        ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
   }
 
   void remakeGrid(int grid) {
@@ -134,9 +134,9 @@ class HelloTriangleApp {
 
     for (int i = 0; i < grid; i++) {
       for (int j = 0; j < grid; j++) {
-        ModelId id = ((i + j) % 2 == 0) ? ModelId::CUBE : ModelId::TETRA;
+        ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
         auto obj = std::make_unique<Object>(id);
-        if (id == ModelId::TETRA) {
+        if (id == ModelId::Tetra) {
           obj->setScale(vec3(100));
         }
         obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
@@ -147,7 +147,7 @@ class HelloTriangleApp {
 
   void addObject(Object* obj) {
     for (auto& model : obj->getModels()) {
-      if (model != ModelId::NONE) {
+      if (model != ModelId::None) {
         renderer_->useModel(model);
       }
     }
@@ -576,7 +576,7 @@ class HelloTriangleApp {
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
   std::vector<Object*> objects_;
-  Object grid_{ModelId::NONE};
+  Object grid_{ModelId::None};
   Skelly skelly_;
 
 #ifdef DEBUG
