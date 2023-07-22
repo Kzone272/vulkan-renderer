@@ -23,3 +23,11 @@ float fmodClamp(float a, float b) {
   }
   return mod;
 }
+
+float cosineLaw(float a, float b, float c) {
+  if (a == 0 || b == 0 || c == 0) {
+    return 0;
+  }
+
+  return std::acos((a * a + b * b - c * c) / (2 * a * b));
+}

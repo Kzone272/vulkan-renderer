@@ -6,13 +6,14 @@
 #include "utils.h"
 
 struct MoveOptions {
-  float max_speed = 150;
+  float max_speed = 200;
   float adjust_time = 500;
   float stance_w = 30;
-  float foot_dist = 15;
-  float step_height = 5;
-  float plant_pct = 0.1;
-  float max_rot_speed = 180;
+  float foot_dist = 5;
+  float step_height = 20;
+  float plant_pct = 0;
+  float max_rot_speed = 270;
+  float lean = 0.1f;
 };
 
 struct SkellySizes {
@@ -20,7 +21,7 @@ struct SkellySizes {
   float bonew = 6;
   float leg = 100;
   float femur = 50;
-  float pelvisw = 35;
+  float pelvisw = 30;
   float shouldersw = 50;
 };
 
@@ -40,26 +41,25 @@ class Skelly {
     pelvis_->setPos(vec3(0, sizes_.leg, 0));
 
     mat4 torso_t = glm::scale(vec3(sizes_.shouldersw, -20, 25));
-    torso_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
-    torso_->setPos(vec3(0, sizes_.height - 30, 0));
+    torso_ =
+        pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
+    torso_->setPos(vec3(0, sizes_.height - sizes_.leg - 30, 0));
 
     mat4 head_t = glm::scale(vec3(20, -25, 25));
-    head_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, head_t));
-    head_->setPos(vec3(0, sizes_.height, 5));
+    head_ = torso_->addChild(std::make_unique<Object>(ModelId::Bone, head_t));
+    head_->setPos(vec3(0, 30, 5));
 
     mat4 femur_t = glm::scale(vec3(sizes_.bonew, -sizes_.femur, sizes_.bonew));
     lfemur_ =
         pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
     vec3 femur_pos = vec3(-(sizes_.pelvisw / 2 + 3), 0, 0);
     lfemur_->setPos(femur_pos);
-    lfemur_->setRot(glm::angleAxis(glm::radians(-30.f), vec3(1, 0, 0)));
 
     mat4 shin_t = glm::scale(
         vec3(sizes_.bonew, -(sizes_.leg - sizes_.femur), sizes_.bonew));
     lshin_ = lfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
     vec3 shin_pos = vec3(0, -sizes_.femur, 0);
     lshin_->setPos(shin_pos);
-    lshin_->setRot(glm::angleAxis(glm::radians(45.f), vec3(1, 0, 0)));
 
     // Add opposite limbs with flipped positions.
     mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
@@ -161,8 +161,15 @@ class Skelly {
       root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
     }
 
+    vec2 lean = options_.lean * curr_vel.xz();
+    vec3 pelvis_pos = glm::inverse(root_.getTransform()) *
+                      vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
+    pelvis_pos.y = pelvis_->getPos().y;
+    pelvis_->setPos(pelvis_pos);
+
     root_.animate(now);
     updateFeet(now);
+    updateLegs();
   }
 
   vec3 getPos() {
@@ -205,7 +212,7 @@ class Skelly {
       // Use target speed.
       speed = glm::length(Animation::sample(*vel_curve_, now + 10s));
     }
-    float step_l = std::min(speed / 3.f, 60.f);
+    float step_l = std::min(sizes_.leg * 0.6f, speed / 3);
 
     float foot_dist = std::max(1.f, step_l);
     if (lfoot_.planted && rfoot_.planted) {
@@ -265,6 +272,40 @@ class Skelly {
     mat4 to_world = root_.getTransform();
     foot.world_pos = to_world * vec4(foot.obj->getPos(), 1);
     foot.world_rot = glm::quat_cast(to_world) * foot.obj->getRot();
+  }
+
+  void updateLegs() {
+    updateLeg(*lfemur_, *lshin_, lfoot_);
+    updateLeg(*rfemur_, *rshin_, rfoot_);
+  }
+
+  void updateLeg(Object& femur, Object& shin, Foot& foot) {
+    float femur_l = sizes_.femur;
+    float shin_l = sizes_.leg - femur_l;
+
+    // Positions in root space.
+    vec3 hip_pos = pelvis_->getTransform() * vec4(femur.getPos(), 1);
+    vec3 foot_pos = foot.obj->getPos() + vec3(0, 10, 0);
+    vec3 target = foot_pos - hip_pos;
+    float target_l = glm::length(target);
+
+    glm::quat point_foot =
+        glm::rotation(vec3(0, -1, 0), glm::normalize(target));
+
+    auto [hip, knee] = solveIk(femur_l, shin_l, target_l);
+    femur.setRot(point_foot * glm::angleAxis(hip, vec3(1, 0, 0)));
+    shin.setRot(glm::angleAxis(knee, vec3(1, 0, 0)));
+  }
+
+  // Returns pair of angles for bone1 and bone2.
+  std::pair<float, float> solveIk(float bone1, float bone2, float target) {
+    if (target >= bone1 + bone2) {
+      return {0, 0};
+    }
+
+    float b1 = -cosineLaw(bone1, target, bone2);
+    float b2 = glm::radians(180.f) - cosineLaw(bone1, bone2, target);
+    return {b1, b2};
   }
 
   MoveOptions options_;
