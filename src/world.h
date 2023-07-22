@@ -14,7 +14,7 @@ enum class ModelId {
   VIKING,
   PONY,
   CUBE,
-  MOVER,
+  BONE,
   TETRA,
 };
 

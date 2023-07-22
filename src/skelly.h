@@ -19,18 +19,18 @@ class Skelly {
   Skelly() {
     root_.setPos(vec3(200, 0, 200));
 
-    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
-    pelvis_->setScale(vec3(0.35, 0.2, 0.3));
+    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::BONE));
+    pelvis_->setScale(vec3(35, 20, 30));
     pelvis_->setPos(vec3(0, 80, 0));
 
-    lfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
-    lfoot_.obj->setScale(vec3(0.1, 0.08, 0.25));
+    lfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::BONE));
+    lfoot_.obj->setScale(vec3(10, 8, 25));
     lfoot_.offset = vec3(-20, 0, 0);
     lfoot_.obj->setPos(lfoot_.offset);
     plantFoot(lfoot_);
 
-    rfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::MOVER));
-    rfoot_.obj->setScale(vec3(0.1, 0.08, 0.25));
+    rfoot_.obj = root_.addChild(std::make_unique<Object>(ModelId::BONE));
+    rfoot_.obj->setScale(vec3(10, 8, 25));
     rfoot_.offset = vec3(20, 0, 0);
     rfoot_.obj->setPos(rfoot_.offset);
     plantFoot(rfoot_);

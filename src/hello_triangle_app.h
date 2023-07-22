@@ -123,8 +123,8 @@ class HelloTriangleApp {
   }
 
   void loadPrimitives() {
-    renderer_->useMesh(ModelId::CUBE, makeCube({0, 0.8, 0.8}));
-    renderer_->useMesh(ModelId::MOVER, makeCube({0.9, 0.2, 0.1}));
+    renderer_->useMesh(ModelId::CUBE, makeCube(100, {0, 0.8, 0.8}));
+    renderer_->useMesh(ModelId::BONE, makeCube(1, {0.9, 0.2, 0.1}));
     renderer_->useMesh(
         ModelId::TETRA, tetrahedron(options_.tetra_steps, options_.tetra_in));
   }
