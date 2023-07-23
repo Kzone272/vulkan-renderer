@@ -11,9 +11,8 @@ struct MoveOptions {
   float stance_w = 30;
   float foot_dist = 5;
   float step_height = 20;
-  float plant_pct = 0;
   float max_rot_speed = 270;
-  float lean = 0.1;
+  float lean = 0.05;
   float bounce = 5;
 };
 
@@ -174,7 +173,6 @@ class Skelly {
     glm::quat world_rot;
     vec3 offset;
     vec3 vel;
-    Time move_again;
   };
   struct Movement;
 
@@ -215,14 +213,32 @@ class Skelly {
     }
   }
 
+  bool inCycle(const Movement& move, float t) {
+    float end = fmod(move.offset + move.dur, 1.f);
+    return t >= move.offset && t <= end;
+  }
+
+  void checkStarts(const std::vector<Movement*>& moves, float prev_t, float t) {
+    for (auto* move : moves) {
+      move->should_start = !inCycle(*move, prev_t) && inCycle(*move, t);
+    }
+  }
+
   void updateCycle(Time now, float delta_s) {
+    float prev_t = cycle_t_;
+
     // TODO: This check probably needs word.
     // Maybe it should start once we take the first step, then stop once
     // velocity reaches zero?
     if (glm::length(vel_) < 0.1f) {
       cycle_t_ = 0;
+      walk_.lstep.should_start = false;
+      walk_.rstep.should_start = false;
     } else {
-      cycle_t_ = fmod(cycle_t_ + delta_s * (cycle_dur_ / 1000.f), 1.f);
+      cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
+      // Don't check start for looping animations.
+      std::vector<Movement*> moves = {&walk_.lstep, &walk_.rstep};
+      checkStarts(moves, prev_t, cycle_t_);
     }
 
     if (!target_speed_changed_) {
@@ -255,11 +271,21 @@ class Skelly {
                                });
   }
 
+  Time getMoveStart(const Movement& move, Time now) {
+    float t = cycle_t_;
+    if (t < move.offset) {
+      t += 1;
+      DASSERT(t >= move.offset);
+    }
+    float pos_in_anim = t - move.offset;
+    return addMs(now, -pos_in_anim * cycle_dur_);
+  }
+
   void updatePelvis(Time now) {
     if (target_speed_changed_) {
       pelvis_->clearAddAnims();
       float bounce_dur = walk_.bounce.dur * cycle_dur_;
-      Time bounce_start = addMs(now, walk_.bounce.offset * cycle_dur_);
+      Time bounce_start = getMoveStart(walk_.bounce, now);
       pelvis_->addPosAnim(
           makeAnimation(walk_.bounce.spline, bounce_dur, bounce_start, true));
     }
@@ -283,21 +309,16 @@ class Skelly {
   }
 
   void updateFoot(Foot& foot, Time now, const Movement& move) {
-    bool supported = !lfoot_.in_swing && !rfoot_.in_swing;
-    bool can_move = supported && now > foot.move_again;
     vec3 pos = foot.obj->getPos();
-    float target_dist = glm::length(pos - foot.offset);
-    bool should_step = supported && target_dist > options_.foot_dist;
-
-    // Not used yet.
     {
-      float cycle_start = move.offset;
-      bool in_swing_t =
-          cycle_t_ > cycle_start && cycle_t_ < cycle_start + move.dur;
-      bool take_step = foot.planted && in_swing_t;
+      // This code isn't used anymore, but probably should be used to determine
+      // when walking starts, or if we should move feet back when stopped.
+      bool supported = !lfoot_.in_swing && !rfoot_.in_swing;
+      float target_dist = glm::length(pos - foot.offset);
+      bool should_step = supported && target_dist > options_.foot_dist;
     }
 
-    if (should_step) {
+    if (move.should_start) {
       swingFoot(foot, now, move);
     }
 
@@ -318,7 +339,6 @@ class Skelly {
   void swingFoot(Foot& foot, Time now, const Movement& move) {
     foot.in_swing = true;
     foot.planted = false;
-    printf("step %s at %f\n", &foot == &lfoot_ ? "l" : "r", cycle_t_);
 
     float step_dur = move.dur * cycle_dur_;
     float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
@@ -336,10 +356,9 @@ class Skelly {
         Spline::Type::Hermite,
         {pos, -foot.vel * scale, mid_pos, swing_vel, target_pos, no_vel});
 
-    foot.obj->setPosAnim(makeAnimation(spline, step_dur, now));
+    Time start = getMoveStart(move, now);
+    foot.obj->setPosAnim(makeAnimation(spline, step_dur, start));
     foot.obj->setRot(glm::quat());
-    foot.move_again = now + std::chrono::duration_cast<Clock::duration>(FloatMs(
-                                (1.f + options_.plant_pct) * 2.f * step_dur));
   }
 
   void plantFoot(Foot& foot) {
@@ -402,6 +421,7 @@ class Skelly {
   struct Movement {
     float offset;
     float dur;
+    bool should_start = false;
     Spline spline;
   };
   struct Cycle {
