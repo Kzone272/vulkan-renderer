@@ -176,6 +176,7 @@ class Skelly {
     vec3 vel;
     Time move_again;
   };
+  struct Movement;
 
   void updateMove(Time now, float delta_s) {
     vec3 curr_vel = vel_;
@@ -235,7 +236,7 @@ class Skelly {
     if (speed == 0) {
       step_dur = 500;
     }
-    cycle_dur_ = step_dur / walk_.step_dur;
+    cycle_dur_ = step_dur / walk_.lstep.dur;
     printf("updated cycledur %f\n", cycle_dur_);
     updateCurves();
   }
@@ -243,7 +244,7 @@ class Skelly {
   void updateCurves() {
     float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
 
-    curves_.pelvis_bounce = makeSpline(
+    walk_.bounce.spline = makeSpline(
         Spline::Type::Hermite, {
                                    {0, -bounce, 0},
                                    {0, 0, 0},
@@ -257,10 +258,10 @@ class Skelly {
   void updatePelvis(Time now) {
     if (target_speed_changed_) {
       pelvis_->clearAddAnims();
-      float bounce_dur = walk_.bounce_dur * cycle_dur_;
-      Time bounce_start = addMs(now, walk_.bounce_offset * cycle_dur_);
+      float bounce_dur = walk_.bounce.dur * cycle_dur_;
+      Time bounce_start = addMs(now, walk_.bounce.offset * cycle_dur_);
       pelvis_->addPosAnim(
-          makeAnimation(curves_.pelvis_bounce, bounce_dur, bounce_start, true));
+          makeAnimation(walk_.bounce.spline, bounce_dur, bounce_start, true));
     }
 
     vec2 lean = options_.lean * vel_.xz();
@@ -277,11 +278,11 @@ class Skelly {
   }
 
   void updateFeet(Time now) {
-    updateFoot(rfoot_, now);
-    updateFoot(lfoot_, now);
+    updateFoot(rfoot_, now, walk_.rstep);
+    updateFoot(lfoot_, now, walk_.lstep);
   }
 
-  void updateFoot(Foot& foot, Time now) {
+  void updateFoot(Foot& foot, Time now, const Movement& move) {
     bool supported = !lfoot_.in_swing && !rfoot_.in_swing;
     bool can_move = supported && now > foot.move_again;
     vec3 pos = foot.obj->getPos();
@@ -290,15 +291,14 @@ class Skelly {
 
     // Not used yet.
     {
-      bool left = &foot == &lfoot_;
-      float cycle_start = left ? walk_.lstep_offset : walk_.rstep_offset;
+      float cycle_start = move.offset;
       bool in_swing_t =
-          cycle_t_ > cycle_start && cycle_t_ < cycle_start + walk_.step_dur;
+          cycle_t_ > cycle_start && cycle_t_ < cycle_start + move.dur;
       bool take_step = foot.planted && in_swing_t;
     }
 
     if (should_step) {
-      swingFoot(foot, now);
+      swingFoot(foot, now, move);
     }
 
     if (foot.planted) {
@@ -315,12 +315,12 @@ class Skelly {
     }
   }
 
-  void swingFoot(Foot& foot, Time now) {
+  void swingFoot(Foot& foot, Time now, const Movement& move) {
     foot.in_swing = true;
     foot.planted = false;
     printf("step %s at %f\n", &foot == &lfoot_ ? "l" : "r", cycle_t_);
 
-    float step_dur = walk_.step_dur * cycle_dur_;
+    float step_dur = move.dur * cycle_dur_;
     float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
 
     // Scale speeds based on the duration of the animation.
@@ -399,21 +399,23 @@ class Skelly {
   Foot lfoot_;
   Foot rfoot_;
 
-  struct Cycle {
-    float lstep_offset = 0;
-    float rstep_offset = 0.5;
-    float step_dur = 0.45;
-    float bounce_offset = -0.05;
-    float bounce_dur = 0.5;
+  struct Movement {
+    float offset;
+    float dur;
+    Spline spline;
   };
-  Cycle walk_;
+  struct Cycle {
+    Movement lstep;
+    Movement rstep;
+    Movement bounce;
+  };
+  Cycle walk_{
+      .lstep = {.offset = 0, .dur = 0.45},
+      .rstep = {.offset = 0.5, .dur = 0.45},
+      .bounce = {.offset = -0.05, .dur = 0.5},
+  };
   float cycle_t_ = 0.f;
   float cycle_dur_ = 0.f;
-
-  struct Curves {
-    Spline swing;
-    Spline pelvis_bounce;
-  } curves_;
 
   vec2 input_dir_{0};
   std::optional<Animation> vel_curve_;
