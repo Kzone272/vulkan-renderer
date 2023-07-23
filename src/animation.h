@@ -6,6 +6,7 @@
 #include "asserts.h"
 #include "glm-include.h"
 #include "time-include.h"
+#include "utils.h"
 
 enum class BlendType {
   Linear,
@@ -142,22 +143,30 @@ vec3 sampleSpline(const Spline& spline, float u) {
 
 struct Animation {
   Spline spline;
+  float dur_ms;
   Time from_time;
   Time to_time;
+  bool loop = false;
 
   static vec3 sample(const Animation& a, Time now) {
-    float pct = FloatMs(now - a.from_time) / FloatMs(a.to_time - a.from_time);
+    float time_ms = FloatMs(now - a.from_time).count();
+    if (a.loop) {
+      time_ms = fmodClamp(time_ms, a.dur_ms);
+    }
+    float pct = time_ms / a.dur_ms;
     float u = a.spline.segments * pct;
 
     return sampleSpline(a.spline, u);
   }
 };
 
-Animation makeAnimation(Spline& spline, float dur_ms, Time start) {
+Animation makeAnimation(
+    Spline& spline, float dur_ms, Time start, bool loop = false) {
   return Animation{
       .spline = spline,
+      .dur_ms = dur_ms,
       .from_time = start,
-      .to_time =
-          start + std::chrono::duration_cast<Clock::duration>(FloatMs{dur_ms}),
+      .to_time = addMs(start, dur_ms),
+      .loop = loop,
   };
 }

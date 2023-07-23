@@ -97,20 +97,40 @@ class Object {
     return models;
   }
 
-  void animPos(Animation a) {
-    anims_.clear();  // TODO: Probably don't always want to clear all animations
-    anims_.push_back(a);
+  void setPosAnim(Animation a) {
+    pos_anim_ = a;
+  }
+
+  void addPosAnim(Animation a) {
+    add_anims_.push_back(a);
+  }
+
+  void clearAddAnims() {
+    add_anims_.clear();
   }
 
   bool animate(Time now) {
-    for (const auto& anim : anims_) {
-      setPos(Animation::sample(anim, now));
+    bool finished = false;
+    if (pos_anim_) {
+      setPos(Animation::sample(*pos_anim_, now));
+      if (now > pos_anim_->to_time) {
+        pos_anim_.reset();
+        finished = true;
+      }
     }
 
     // Erase finished animations.
-    std::erase_if(anims_, [&now](auto& anim) { return now > anim.to_time; });
+    std::erase_if(add_anims_, [&now](auto& anim) {
+      return !anim.loop && now > anim.to_time;
+    });
 
-    return anims_.empty();
+    anim_pos_ = vec3(0);
+    for (const auto& anim : add_anims_) {
+      anim_pos_ += Animation::sample(anim, now);
+      dirty_ = true;
+    }
+
+    return finished;
   }
 
   Object* addChild(std::unique_ptr<Object> child) {
@@ -140,8 +160,8 @@ class Object {
 
  private:
   void updateTransform() {
-    transform_ = glm::translate(mat4(1), pos_) * glm::toMat4(rot_) *
-                 glm::scale(mat4(1), scale_);
+    transform_ = glm::translate(pos_ + anim_pos_) * glm::toMat4(rot_) *
+                 glm::scale(scale_);
   }
 
   ModelId model_;
@@ -153,8 +173,12 @@ class Object {
   vec3 scale_{1};
   glm::quat rot_ = {1, {0, 0, 0}};
   vec3 pos_{0};
+  vec3 anim_pos_{0};
 
-  std::vector<Animation> anims_;
+  // Animation that sets absolute position.
+  std::optional<Animation> pos_anim_;
+  // Animations that add to current position.
+  std::vector<Animation> add_anims_;
   std::vector<std::unique_ptr<Object>> children_;
 };
 

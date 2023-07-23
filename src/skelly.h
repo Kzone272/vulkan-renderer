@@ -13,7 +13,8 @@ struct MoveOptions {
   float step_height = 20;
   float plant_pct = 0;
   float max_rot_speed = 270;
-  float lean = 0.1f;
+  float lean = 0.1;
+  float bounce = 5;
 };
 
 struct SkellySizes {
@@ -104,13 +105,27 @@ class Skelly {
 
       auto spline = makeSpline(
           Spline::Type::Bezier, {start, posb, posc, end, posd, pose, end2});
-      root_.animPos(makeAnimation(spline, 800, now));
+      root_.addPosAnim(makeAnimation(spline, 800, now));
     }
 
-    if (glm::length(input.move.dir - input_dir_) > 0.1f) {
+    // Check if we should update velocity because max speed slider changed.
+    // TODO: Use slider update directly.
+    bool max_speed_changed =
+        target_speed_ > 0.1f &&
+        std::abs(target_speed_ - options_.max_speed) > 0.1f;
+
+    target_speed_changed_ = false;
+    if (glm::length(input.move.dir - input_dir_) > 0.1f || max_speed_changed) {
       input_dir_ = input.move.dir;
       vec3 target_vel =
           options_.max_speed * vec3(input_dir_.x, 0, input_dir_.y);
+
+      float speed = glm::length(target_vel);
+      if (std::abs(speed - target_speed_) > 0.1f) {
+        printf("speed %f targetsp %f\n", speed, target_speed_);
+        target_speed_ = speed;
+        target_speed_changed_ = true;
+      }
 
       if (options_.adjust_time == 0) {
         vel_ = target_vel;
@@ -126,6 +141,7 @@ class Skelly {
   }
 
   void update(Time now, float time_delta_s) {
+    // TODO: Move this block into an updateMove() function.
     vec3 curr_vel = vel_;
 
     if (vel_curve_) {
@@ -161,13 +177,10 @@ class Skelly {
       root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
     }
 
-    vec2 lean = options_.lean * curr_vel.xz();
-    vec3 pelvis_pos = glm::inverse(root_.getTransform()) *
-                      vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
-    pelvis_pos.y = pelvis_->getPos().y;
-    pelvis_->setPos(pelvis_pos);
-
+    // Root animate used for awkward jump animation I should probably delete.
     root_.animate(now);
+    updateCycle(now, time_delta_s);
+    updatePelvis(now);
     updateFeet(now);
     updateLegs();
   }
@@ -199,57 +212,91 @@ class Skelly {
     Time move_again;
   };
 
+  void updateCycle(Time now, float time_delta_s) {
+    // TODO: This check probably needs word.
+    // Maybe it should start once we take the first step, then stop once
+    // velocity reaches zero?
+    if (glm::length(vel_) < 0.1f) {
+      cycle_t_ = 0;
+    } else {
+      cycle_t_ = fmod(cycle_t_ + time_delta_s * (cycle_dur_ / 1000.f), 1.f);
+    }
+
+    if (!target_speed_changed_) {
+      return;
+    }
+
+    // TODO: Clean up this math. step_dur should not be a factor.
+    float speed = target_speed_;
+    float step_l = std::min(sizes_.leg * 0.6f, speed / 3);
+    float step_dur = 1.5f * (step_l / speed) * 1000.f;
+    if (speed == 0) {
+      step_dur = 500;
+    }
+    cycle_dur_ = step_dur / walk_.step_dur;
+    printf("updated cycledur %f\n", cycle_dur_);
+    updateCurves();
+  }
+
+  void updateCurves() {
+    float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
+
+    curves_.pelvis_bounce = makeSpline(
+        Spline::Type::Hermite, {
+                                   {0, -bounce, 0},
+                                   {0, 0, 0},
+                                   {0, bounce, 0},
+                                   {0, 0, 0},
+                                   {0, -bounce, 0},
+                                   {0, 0, 0},
+                               });
+  }
+
+  void updatePelvis(Time now) {
+    if (target_speed_changed_) {
+      pelvis_->clearAddAnims();
+      float bounce_dur = walk_.bounce_dur * cycle_dur_;
+      Time bounce_start = addMs(now, walk_.bounce_offset * cycle_dur_);
+      pelvis_->addPosAnim(
+          makeAnimation(curves_.pelvis_bounce, bounce_dur, bounce_start, true));
+    }
+
+    vec2 lean = options_.lean * vel_.xz();
+    vec3 pelvis_pos = glm::inverse(root_.getTransform()) *
+                      vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
+    pelvis_pos.y = pelvis_->getPos().y;
+    // This is really fragile. It's a feedback loop that updates position based
+    // on the position. It works because it u
+    // TODO: Add a method for adding "offsets" to be added to position like
+    // there exists for animations.
+    pelvis_->setPos(pelvis_pos);
+
+    pelvis_->animate(now);
+  }
+
   void updateFeet(Time now) {
     updateFoot(rfoot_, now);
     updateFoot(lfoot_, now);
   }
 
   void updateFoot(Foot& foot, Time now) {
+    bool supported = !lfoot_.in_swing && !rfoot_.in_swing;
+    bool can_move = supported && now > foot.move_again;
     vec3 pos = foot.obj->getPos();
+    float target_dist = glm::length(pos - foot.offset);
+    bool should_step = supported && target_dist > options_.foot_dist;
 
-    float speed = glm::length(vel_);
-    if (vel_curve_) {
-      // Use target speed.
-      speed = glm::length(Animation::sample(*vel_curve_, now + 10s));
+    // Not used yet.
+    {
+      bool left = &foot == &lfoot_;
+      float cycle_start = left ? walk_.lstep_offset : walk_.rstep_offset;
+      bool in_swing_t =
+          cycle_t_ > cycle_start && cycle_t_ < cycle_start + walk_.step_dur;
+      bool take_step = foot.planted && in_swing_t;
     }
-    float step_l = std::min(sizes_.leg * 0.6f, speed / 3);
 
-    float foot_dist = std::max(1.f, step_l);
-    if (lfoot_.planted && rfoot_.planted) {
-      foot_dist = options_.foot_dist;
-    }
-
-    bool can_move =
-        now > foot.move_again && !lfoot_.in_swing && !rfoot_.in_swing;
-    float target_dist = glm::length(foot.obj->getPos() - foot.offset);
-    // printf("can move :%d dist: %f\n", can_move, target_dist);
-    // printf("foot_dist:%f step_l: %f\n", foot_dist, step_l);
-    if (can_move && target_dist > foot_dist) {
-      foot.in_swing = true;
-      foot.planted = false;
-
-      float step_dur = 1.5f * (step_l / speed) * 1000.f;
-      if (speed == 0) {
-        step_dur = 500;
-      }
-
-      // Scale speeds based on the duration of the animation.
-      float scale = (step_dur / 1000.f);
-      float scaled_speed = speed * scale;
-      vec3 target_pos = vec3(0, 0, step_l) + foot.offset;
-      vec3 no_vel = vec3(0, 0, -scaled_speed);
-      vec3 mid_pos =
-          (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
-      vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
-      auto spline = makeSpline(
-          Spline::Type::Hermite,
-          {pos, -foot.vel * scale, mid_pos, swing_vel, target_pos, no_vel});
-
-      foot.obj->animPos(makeAnimation(spline, step_dur, now));
-      foot.obj->setRot(glm::quat());
-      foot.move_again =
-          now + std::chrono::duration_cast<Clock::duration>(
-                    FloatMs((1.f + options_.plant_pct) * 2.f * step_dur));
+    if (should_step) {
+      swingFoot(foot, now);
     }
 
     if (foot.planted) {
@@ -264,6 +311,33 @@ class Skelly {
     if (foot.in_swing && done) {
       plantFoot(foot);
     }
+  }
+
+  void swingFoot(Foot& foot, Time now) {
+    foot.in_swing = true;
+    foot.planted = false;
+    printf("step %s at %f\n", &foot == &lfoot_ ? "l" : "r", cycle_t_);
+
+    float step_dur = walk_.step_dur * cycle_dur_;
+    float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
+
+    // Scale speeds based on the duration of the animation.
+    float scale = (step_dur / 1000.f);
+    float scaled_speed = scale * target_speed_;
+
+    vec3 pos = foot.obj->getPos();
+    vec3 target_pos = vec3(0, 0, step_l) + foot.offset;
+    vec3 no_vel = vec3(0, 0, -scaled_speed);
+    vec3 mid_pos = (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
+    vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
+    auto spline = makeSpline(
+        Spline::Type::Hermite,
+        {pos, -foot.vel * scale, mid_pos, swing_vel, target_pos, no_vel});
+
+    foot.obj->setPosAnim(makeAnimation(spline, step_dur, now));
+    foot.obj->setRot(glm::quat());
+    foot.move_again = now + std::chrono::duration_cast<Clock::duration>(FloatMs(
+                                (1.f + options_.plant_pct) * 2.f * step_dur));
   }
 
   void plantFoot(Foot& foot) {
@@ -300,7 +374,7 @@ class Skelly {
   // Returns pair of angles for bone1 and bone2.
   std::pair<float, float> solveIk(float bone1, float bone2, float target) {
     if (target >= bone1 + bone2) {
-      return {0, 0};
+      return {0.f, 0.f};
     }
 
     float b1 = -cosineLaw(bone1, target, bone2);
@@ -323,7 +397,25 @@ class Skelly {
   Foot lfoot_;
   Foot rfoot_;
 
+  struct Cycle {
+    float lstep_offset = 0;
+    float rstep_offset = 0.5;
+    float step_dur = 0.45;
+    float bounce_offset = -0.05;
+    float bounce_dur = 0.5;
+  };
+  Cycle walk_;
+  float cycle_t_ = 0.f;
+  float cycle_dur_ = 0.f;
+
+  struct Curves {
+    Spline swing;
+    Spline pelvis_bounce;
+  } curves_;
+
   vec2 input_dir_{0};
   std::optional<Animation> vel_curve_;
   vec3 vel_{0};
+  float target_speed_ = 0;
+  bool target_speed_changed_ = false;
 };

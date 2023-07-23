@@ -518,6 +518,7 @@ class HelloTriangleApp {
     ImGui::SliderFloat("Plant %", &move_options.plant_pct, 0, 1);
     ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
     ImGui::SliderFloat("Lean", &move_options.lean, 0, 0.5);
+    ImGui::SliderFloat("Bounce", &move_options.bounce, 0, 10);
 
     ImGui::End();
 
