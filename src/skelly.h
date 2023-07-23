@@ -172,7 +172,6 @@ class Skelly {
     vec3 world_pos;
     glm::quat world_rot;
     vec3 offset;
-    vec3 vel;
   };
   struct Movement;
 
@@ -329,7 +328,6 @@ class Skelly {
     }
 
     bool done = foot.obj->animate(now);
-    foot.vel = foot.obj->getPos() - pos;
 
     if (foot.in_swing && done) {
       plantFoot(foot);
@@ -352,9 +350,10 @@ class Skelly {
     vec3 no_vel = vec3(0, 0, -scaled_speed);
     vec3 mid_pos = (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
     vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
+
     auto spline = makeSpline(
         Spline::Type::Hermite,
-        {pos, -foot.vel * scale, mid_pos, swing_vel, target_pos, no_vel});
+        {pos, no_vel, mid_pos, swing_vel, target_pos, no_vel});
 
     Time start = getMoveStart(move, now);
     foot.obj->setPosAnim(makeAnimation(spline, step_dur, start));
