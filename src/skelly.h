@@ -140,46 +140,11 @@ class Skelly {
     }
   }
 
-  void update(Time now, float time_delta_s) {
-    // TODO: Move this block into an updateMove() function.
-    vec3 curr_vel = vel_;
-
-    if (vel_curve_) {
-      vel_ = Animation::sample(*vel_curve_, now);
-      if (now > vel_curve_->to_time) {
-        vel_curve_.reset();
-      }
-      // Average old and new velocity for this frame's update.
-      curr_vel += vel_;
-      curr_vel /= 2;
-    }
-
-    auto pos = getPos();
-    pos += curr_vel * time_delta_s;
-    root_.setPos(pos);
-
-    if (glm::length(curr_vel) > 0.1) {
-      float target_angle = glm::orientedAngle(
-          vec3(0, 0, 1), glm::normalize(curr_vel), vec3(0, 1, 0));
-      target_angle = fmodClamp(target_angle, glm::radians(360.f));
-
-      float current = glm::angle(root_.getRot());
-      float delta = angleDelta(current, target_angle);
-
-      float angle = target_angle;
-      float change = time_delta_s * glm::radians(options_.max_rot_speed);
-      if (std::abs(delta) > change) {
-        float dir = (delta > 0) ? 1 : -1;
-        angle = current + dir * change;
-      }
-      angle = fmodClamp(angle, glm::radians(360.f));
-
-      root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
-    }
-
+  void update(Time now, float delta_s) {
+    updateMove(now, delta_s);
     // Root animate used for awkward jump animation I should probably delete.
     root_.animate(now);
-    updateCycle(now, time_delta_s);
+    updateCycle(now, delta_s);
     updatePelvis(now);
     updateFeet(now);
     updateLegs();
@@ -212,14 +177,51 @@ class Skelly {
     Time move_again;
   };
 
-  void updateCycle(Time now, float time_delta_s) {
+  void updateMove(Time now, float delta_s) {
+    vec3 curr_vel = vel_;
+
+    if (vel_curve_) {
+      vel_ = Animation::sample(*vel_curve_, now);
+      if (now > vel_curve_->to_time) {
+        vel_curve_.reset();
+      }
+      // Average old and new velocity for this frame's update.
+      curr_vel += vel_;
+      curr_vel /= 2;
+    }
+
+    auto pos = getPos();
+    pos += curr_vel * delta_s;
+    root_.setPos(pos);
+
+    if (glm::length(curr_vel) > 0.1) {
+      float target_angle = glm::orientedAngle(
+          vec3(0, 0, 1), glm::normalize(curr_vel), vec3(0, 1, 0));
+      target_angle = fmodClamp(target_angle, glm::radians(360.f));
+
+      float current = glm::angle(root_.getRot());
+      float delta = angleDelta(current, target_angle);
+
+      float angle = target_angle;
+      float change = delta_s * glm::radians(options_.max_rot_speed);
+      if (std::abs(delta) > change) {
+        float dir = (delta > 0) ? 1 : -1;
+        angle = current + dir * change;
+      }
+      angle = fmodClamp(angle, glm::radians(360.f));
+
+      root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+    }
+  }
+
+  void updateCycle(Time now, float delta_s) {
     // TODO: This check probably needs word.
     // Maybe it should start once we take the first step, then stop once
     // velocity reaches zero?
     if (glm::length(vel_) < 0.1f) {
       cycle_t_ = 0;
     } else {
-      cycle_t_ = fmod(cycle_t_ + time_delta_s * (cycle_dur_ / 1000.f), 1.f);
+      cycle_t_ = fmod(cycle_t_ + delta_s * (cycle_dur_ / 1000.f), 1.f);
     }
 
     if (!target_speed_changed_) {
