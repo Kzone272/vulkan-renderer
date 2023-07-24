@@ -69,7 +69,7 @@ class Object {
     dirty_ = true;
   }
   glm::quat getRot() {
-    return rot_;
+    return rot_ * anim_rot_;
   }
 
   void setPos(const vec3& pos) {
@@ -104,22 +104,40 @@ class Object {
   }
 
   void addPosAnim(Animation<vec3>* a) {
-    add_anims_.push_back(a);
+    pos_anims_.push_back(a);
   }
 
   void clearAddAnims() {
-    add_anims_.clear();
+    pos_anims_.clear();
+  }
+
+  void addRotAnim(Animation<float>* a) {
+    rot_anims_.push_back(a);
+  }
+
+  void clearRotAnims() {
+    rot_anims_.clear();
   }
 
   void animate(Time now) {
     // Erase finished animations.
-    std::erase_if(add_anims_, [&now](auto& anim) {
+    std::erase_if(pos_anims_, [&now](auto& anim) {
+      return !anim->loop && now > anim->to_time;
+    });
+    std::erase_if(rot_anims_, [&now](auto& anim) {
       return !anim->loop && now > anim->to_time;
     });
 
     anim_pos_ = vec3(0);
-    for (auto* anim : add_anims_) {
+    for (auto* anim : pos_anims_) {
       anim_pos_ += sampleAnimation(*anim, now);
+      dirty_ = true;
+    }
+
+    anim_rot_ = {1, {0, 0, 0}};
+    for (auto* anim : rot_anims_) {
+      anim_rot_ =
+          glm::angleAxis(sampleAnimation(*anim, now), anim->axis) * anim_rot_;
       dirty_ = true;
     }
   }
@@ -152,7 +170,7 @@ class Object {
  private:
   void updateTransform() {
     transform_ =
-        glm::translate(getPos()) * glm::toMat4(rot_) * glm::scale(scale_);
+        glm::translate(getPos()) * glm::toMat4(getRot()) * glm::scale(scale_);
   }
 
   ModelId model_;
@@ -163,13 +181,15 @@ class Object {
   mat4 transform_{1};
   vec3 scale_{1};
   glm::quat rot_ = {1, {0, 0, 0}};
+  glm::quat anim_rot_ = {1, {0, 0, 0}};
   vec3 pos_{0};
   vec3 anim_pos_{0};
 
   // Offset from the current position.
   vec3 pos_offset_{0};
   // Animations that add to current position.
-  std::vector<Animation<vec3>*> add_anims_;
+  std::vector<Animation<vec3>*> pos_anims_;
+  std::vector<Animation<float>*> rot_anims_;
   std::vector<std::unique_ptr<Object>> children_;
 };
 

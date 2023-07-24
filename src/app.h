@@ -518,6 +518,8 @@ class HelloTriangleApp {
     ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
     ImGui::SliderFloat("Lean", &move_options.lean, 0, 0.5);
     ImGui::SliderFloat("Bounce", &move_options.bounce, 0, 10);
+    ImGui::SliderFloat("Hip Sway", &move_options.hip_sway, 0, 30);
+    ImGui::SliderFloat("Hip Spin", &move_options.hip_spin, 0, 45);
 
     ImGui::End();
 

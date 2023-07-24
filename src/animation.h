@@ -82,6 +82,21 @@ std::map<SplineType, mat4> spline_mats{
 };
 
 template <class T>
+T weight(vec4 weights, const T& a, const T& b, const T& c, const T& d) {
+  glm::mat<4, T::length(), float, glm::qualifier::defaultp> points = {
+      a, b, c, d};
+  return weights * glm::transpose(points);
+}
+
+template <>
+float weight(
+    vec4 weights, const float& a, const float& b, const float& c,
+    const float& d) {
+  vec4 points{a, b, c, d};
+  return glm::dot(weights, points);
+}
+
+template <class T>
 T blend(
     SplineType type, float t, const T& a, const T& b, const T& c, const T& d) {
   ASSERT(spline_mats.contains(type));
@@ -89,9 +104,7 @@ T blend(
   vec4 ts(1, t, t * t, t * t * t);
 
   vec4 weights = ts * bersntein;
-  glm::mat<4, T::length(), float, glm::qualifier::defaultp> points = {
-      a, b, c, d};
-  return weights * glm::transpose(points);
+  return weight(weights, a, b, c, d);
 }
 
 template <class T>
@@ -151,17 +164,21 @@ struct Animation {
   Time from_time;
   Time to_time;
   bool loop = false;
+  // Used only for rotation animations.
+  vec3 axis;
 };
 
 template <class T>
 Animation<T> makeAnimation(
-    Spline<T>& spline, float dur_ms, Time start, bool loop = false) {
+    Spline<T>& spline, float dur_ms, Time start, bool loop = false,
+    vec3 axis = {0, 1, 0}) {
   return Animation{
       .spline = spline,
       .dur_ms = dur_ms,
       .from_time = start,
       .to_time = addMs(start, dur_ms),
       .loop = loop,
+      .axis = axis,
   };
 }
 

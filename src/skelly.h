@@ -14,6 +14,8 @@ struct MoveOptions {
   float max_rot_speed = 270;
   float lean = 0.05;
   float bounce = 5;
+  float hip_sway = 2;
+  float hip_spin = 10;
 };
 
 struct SkellySizes {
@@ -172,7 +174,22 @@ class Skelly {
     glm::quat world_rot;
     vec3 offset;
   };
-  struct Movement;
+
+  template <class T>
+  struct Movement {
+    float offset;
+    float dur;
+    bool should_start = false;
+    Spline<T> spline;
+    std::optional<Animation<T>> anim;
+  };
+  struct Cycle {
+    Movement<vec3> lstep;
+    Movement<vec3> rstep;
+    Movement<vec3> bounce;
+    Movement<float> sway;
+    Movement<float> spin;
+  };
 
   void updateMove(Time now, float delta_s) {
     vec3 curr_vel = vel_;
@@ -211,12 +228,15 @@ class Skelly {
     }
   }
 
-  bool inCycle(const Movement& move, float t) {
+  template <class T>
+  bool inCycle(const Movement<T>& move, float t) {
     float end = fmod(move.offset + move.dur, 1.f);
     return t >= move.offset && t <= end;
   }
 
-  void checkStarts(const std::vector<Movement*>& moves, float prev_t, float t) {
+  template <class T>
+  void checkStarts(
+      const std::vector<Movement<T>*>& moves, float prev_t, float t) {
     for (auto* move : moves) {
       move->should_start = !inCycle(*move, prev_t) && inCycle(*move, t);
     }
@@ -235,7 +255,7 @@ class Skelly {
     } else {
       cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
       // Don't check start for looping animations.
-      std::vector<Movement*> moves = {&walk_.lstep, &walk_.rstep};
+      std::vector<Movement<vec3>*> moves = {&walk_.lstep, &walk_.rstep};
       checkStarts(moves, prev_t, cycle_t_);
     }
 
@@ -256,7 +276,6 @@ class Skelly {
 
   void updateCurves() {
     float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
-
     walk_.bounce.spline = makeSpline<vec3>(
         SplineType::Hermite, {
                                  {0, -bounce, 0},
@@ -266,9 +285,18 @@ class Skelly {
                                  {0, -bounce, 0},
                                  {0, 0, 0},
                              });
+
+    float hip_sway = glm::radians(options_.hip_sway);
+    walk_.sway.spline = makeSpline<float>(
+        SplineType::Hermite, {-hip_sway, 0, hip_sway, 0, -hip_sway, 0});
+
+    float hip_spin = glm::radians(options_.hip_spin);
+    walk_.spin.spline = makeSpline<float>(
+        SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
   }
 
-  Time getMoveStart(const Movement& move, Time now) {
+  template <class T>
+  Time getMoveStart(const Movement<T>& move, Time now) {
     float t = cycle_t_;
     if (t < move.offset) {
       t += 1;
@@ -286,6 +314,21 @@ class Skelly {
       walk_.bounce.anim =
           makeAnimation(walk_.bounce.spline, bounce_dur, bounce_start, true);
       pelvis_->addPosAnim(&walk_.bounce.anim.value());
+
+      // TODO: Setting up these animations is repetitive, and should be
+      // refactored.
+      pelvis_->clearRotAnims();
+      float sway_dur = walk_.sway.dur * cycle_dur_;
+      Time sway_start = getMoveStart(walk_.sway, now);
+      walk_.sway.anim = makeAnimation(
+          walk_.sway.spline, sway_dur, sway_start, true, {0, 0, -1});
+      pelvis_->addRotAnim(&walk_.sway.anim.value());
+
+      float spin_dur = walk_.spin.dur * cycle_dur_;
+      Time spin_start = getMoveStart(walk_.spin, now);
+      walk_.spin.anim = makeAnimation(
+          walk_.spin.spline, spin_dur, spin_start, true, {0, 1, 0});
+      pelvis_->addRotAnim(&walk_.spin.anim.value());
     }
 
     vec2 lean = options_.lean * vel_.xz();
@@ -302,7 +345,7 @@ class Skelly {
     updateFoot(lfoot_, now, walk_.lstep);
   }
 
-  void updateFoot(Foot& foot, Time now, Movement& move) {
+  void updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
     vec3 pos = foot.obj->getPos();
     {
       // This code isn't used anymore, but probably should be used to determine
@@ -332,7 +375,7 @@ class Skelly {
     }
   }
 
-  void swingFoot(Foot& foot, Time now, Movement& move) {
+  void swingFoot(Foot& foot, Time now, Movement<vec3>& move) {
     foot.in_swing = true;
     foot.planted = false;
 
@@ -378,9 +421,10 @@ class Skelly {
     float shin_l = sizes_.leg - femur_l;
 
     // Positions in root space.
-    vec3 hip_pos = pelvis_->getTransform() * vec4(femur.getPos(), 1);
+    vec3 hip_pos = femur.getPos();
     vec3 foot_pos = foot.obj->getPos() + vec3(0, 10, 0);
-    vec3 target = foot_pos - hip_pos;
+    vec3 target =
+        glm::inverse(pelvis_->getTransform()) * vec4(foot_pos - hip_pos, 1);
     float target_l = glm::length(target);
 
     glm::quat point_foot =
@@ -417,22 +461,12 @@ class Skelly {
   Foot lfoot_;
   Foot rfoot_;
 
-  struct Movement {
-    float offset;
-    float dur;
-    bool should_start = false;
-    Spline<vec3> spline;
-    std::optional<Animation<vec3>> anim;
-  };
-  struct Cycle {
-    Movement lstep;
-    Movement rstep;
-    Movement bounce;
-  };
   Cycle walk_{
       .lstep = {.offset = 0, .dur = 0.45},
       .rstep = {.offset = 0.5, .dur = 0.45},
       .bounce = {.offset = -0.05, .dur = 0.5},
+      .sway = {.offset = -0.05, .dur = 1},
+      .spin = {.offset = -0.05, .dur = 1},
   };
   float cycle_t_ = 0.f;
   float cycle_dur_ = 0.f;
