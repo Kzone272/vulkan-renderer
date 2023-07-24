@@ -97,11 +97,11 @@ class Object {
     return models;
   }
 
-  void setPosAnim(Animation a) {
+  void setPosAnim(Animation<vec3> a) {
     pos_anim_ = a;
   }
 
-  void addPosAnim(Animation a) {
+  void addPosAnim(Animation<vec3> a) {
     add_anims_.push_back(a);
   }
 
@@ -112,7 +112,7 @@ class Object {
   bool animate(Time now) {
     bool finished = false;
     if (pos_anim_) {
-      setPos(Animation::sample(*pos_anim_, now));
+      setPos(sampleAnimation(*pos_anim_, now));
       if (now > pos_anim_->to_time) {
         pos_anim_.reset();
         finished = true;
@@ -126,7 +126,7 @@ class Object {
 
     anim_pos_ = vec3(0);
     for (const auto& anim : add_anims_) {
-      anim_pos_ += Animation::sample(anim, now);
+      anim_pos_ += sampleAnimation(anim, now);
       dirty_ = true;
     }
 
@@ -176,9 +176,9 @@ class Object {
   vec3 anim_pos_{0};
 
   // Animation that sets absolute position.
-  std::optional<Animation> pos_anim_;
+  std::optional<Animation<vec3>> pos_anim_;
   // Animations that add to current position.
-  std::vector<Animation> add_anims_;
+  std::vector<Animation<vec3>> add_anims_;
   std::vector<std::unique_ptr<Object>> children_;
 };
 

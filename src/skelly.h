@@ -102,8 +102,8 @@ class Skelly {
       vec3 end2 = end + vec3(0, 0, speedz / 3);
       vec3 pose = end2 + vec3(0, speedy / 4, -speedz / 10);
 
-      auto spline = makeSpline(
-          Spline::Type::Bezier, {start, posb, posc, end, posd, pose, end2});
+      auto spline = makeSpline<vec3>(
+          SplineType::Bezier, {start, posb, posc, end, posd, pose, end2});
       root_.addPosAnim(makeAnimation(spline, 800, now));
     }
 
@@ -133,7 +133,7 @@ class Skelly {
         vec3 d = target_vel;
         vec3 b = glm::mix(a, d, 1.f / 3.f);
         vec3 c = d;
-        auto spline = makeSpline(Spline::Type::Bezier, {a, b, c, d});
+        auto spline = makeSpline<vec3>(SplineType::Bezier, {a, b, c, d});
         vel_curve_ = makeAnimation(spline, options_.adjust_time, now);
       }
     }
@@ -179,7 +179,7 @@ class Skelly {
     vec3 curr_vel = vel_;
 
     if (vel_curve_) {
-      vel_ = Animation::sample(*vel_curve_, now);
+      vel_ = sampleAnimation(*vel_curve_, now);
       if (now > vel_curve_->to_time) {
         vel_curve_.reset();
       }
@@ -259,15 +259,15 @@ class Skelly {
   void updateCurves() {
     float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
 
-    walk_.bounce.spline = makeSpline(
-        Spline::Type::Hermite, {
-                                   {0, -bounce, 0},
-                                   {0, 0, 0},
-                                   {0, bounce, 0},
-                                   {0, 0, 0},
-                                   {0, -bounce, 0},
-                                   {0, 0, 0},
-                               });
+    walk_.bounce.spline = makeSpline<vec3>(
+        SplineType::Hermite, {
+                                 {0, -bounce, 0},
+                                 {0, 0, 0},
+                                 {0, bounce, 0},
+                                 {0, 0, 0},
+                                 {0, -bounce, 0},
+                                 {0, 0, 0},
+                             });
   }
 
   Time getMoveStart(const Movement& move, Time now) {
@@ -351,8 +351,8 @@ class Skelly {
     vec3 mid_pos = (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
     vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
 
-    auto spline = makeSpline(
-        Spline::Type::Hermite,
+    auto spline = makeSpline<vec3>(
+        SplineType::Hermite,
         {pos, no_vel, mid_pos, swing_vel, target_pos, no_vel});
 
     Time start = getMoveStart(move, now);
@@ -421,7 +421,7 @@ class Skelly {
     float offset;
     float dur;
     bool should_start = false;
-    Spline spline;
+    Spline<vec3> spline;
   };
   struct Cycle {
     Movement lstep;
@@ -437,7 +437,7 @@ class Skelly {
   float cycle_dur_ = 0.f;
 
   vec2 input_dir_{0};
-  std::optional<Animation> vel_curve_;
+  std::optional<Animation<vec3>> vel_curve_;
   vec3 vel_{0};
   float target_speed_ = 0;
   bool target_speed_changed_ = false;

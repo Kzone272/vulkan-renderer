@@ -1,11 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Improve how walk cycle is defined
-  - Define cycle of single leg, and offset legs by 50% in cycle
-  - Scale cycle based on speed
+- Add support for animating rotations
 - Add more movement to skeleton
-  - pelvis height and rotation
+  - pelvis rotation
   - heel lift-off
   - shoulders
   - arms
