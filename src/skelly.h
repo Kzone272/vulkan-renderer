@@ -104,7 +104,7 @@ class Skelly {
 
       auto spline = makeSpline<vec3>(
           SplineType::Bezier, {start, posb, posc, end, posd, pose, end2});
-      root_.addPosAnim(makeAnimation(spline, 800, now));
+      // root_.addPosAnim(makeAnimation(spline, 800, now));
     }
 
     // Check if we should update velocity because max speed slider changed.
@@ -121,7 +121,6 @@ class Skelly {
 
       float speed = glm::length(target_vel);
       if (std::abs(speed - target_speed_) > 0.1f) {
-        printf("speed %f targetsp %f\n", speed, target_speed_);
         target_speed_ = speed;
         target_speed_changed_ = true;
       }
@@ -252,7 +251,6 @@ class Skelly {
       step_dur = 500;
     }
     cycle_dur_ = step_dur / walk_.lstep.dur;
-    printf("updated cycledur %f\n", cycle_dur_);
     updateCurves();
   }
 
@@ -285,19 +283,16 @@ class Skelly {
       pelvis_->clearAddAnims();
       float bounce_dur = walk_.bounce.dur * cycle_dur_;
       Time bounce_start = getMoveStart(walk_.bounce, now);
-      pelvis_->addPosAnim(
-          makeAnimation(walk_.bounce.spline, bounce_dur, bounce_start, true));
+      walk_.bounce.anim =
+          makeAnimation(walk_.bounce.spline, bounce_dur, bounce_start, true);
+      pelvis_->addPosAnim(&walk_.bounce.anim.value());
     }
 
     vec2 lean = options_.lean * vel_.xz();
-    vec3 pelvis_pos = glm::inverse(root_.getTransform()) *
-                      vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
-    pelvis_pos.y = pelvis_->getPos().y;
-    // This is really fragile. It's a feedback loop that updates position based
-    // on the position. It works because it u
-    // TODO: Add a method for adding "offsets" to be added to position like
-    // there exists for animations.
-    pelvis_->setPos(pelvis_pos);
+
+    vec3 offset = glm::inverse(root_.getTransform()) *
+                  vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
+    pelvis_->setPosOffset(offset);
 
     pelvis_->animate(now);
   }
@@ -307,7 +302,7 @@ class Skelly {
     updateFoot(lfoot_, now, walk_.lstep);
   }
 
-  void updateFoot(Foot& foot, Time now, const Movement& move) {
+  void updateFoot(Foot& foot, Time now, Movement& move) {
     vec3 pos = foot.obj->getPos();
     {
       // This code isn't used anymore, but probably should be used to determine
@@ -327,14 +322,17 @@ class Skelly {
       foot.obj->setRot(glm::quat_cast(to_local) * lfoot_.world_rot);
     }
 
-    bool done = foot.obj->animate(now);
+    foot.obj->animate(now);
+    bool ended = move.anim && now > move.anim->to_time;
 
-    if (foot.in_swing && done) {
+    if (ended) {
+      foot.obj->setPos(sampleAnimation(*move.anim, move.anim->to_time));
+      move.anim.reset();
       plantFoot(foot);
     }
   }
 
-  void swingFoot(Foot& foot, Time now, const Movement& move) {
+  void swingFoot(Foot& foot, Time now, Movement& move) {
     foot.in_swing = true;
     foot.planted = false;
 
@@ -351,13 +349,15 @@ class Skelly {
     vec3 mid_pos = (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
     vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
 
-    auto spline = makeSpline<vec3>(
+    move.spline = makeSpline<vec3>(
         SplineType::Hermite,
         {pos, no_vel, mid_pos, swing_vel, target_pos, no_vel});
 
     Time start = getMoveStart(move, now);
-    foot.obj->setPosAnim(makeAnimation(spline, step_dur, start));
+    foot.obj->setPos(vec3(0));
     foot.obj->setRot(glm::quat());
+    move.anim = makeAnimation(move.spline, step_dur, start);
+    foot.obj->addPosAnim(&move.anim.value());
   }
 
   void plantFoot(Foot& foot) {
@@ -422,6 +422,7 @@ class Skelly {
     float dur;
     bool should_start = false;
     Spline<vec3> spline;
+    std::optional<Animation<vec3>> anim;
   };
   struct Cycle {
     Movement lstep;

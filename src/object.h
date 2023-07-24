@@ -76,8 +76,14 @@ class Object {
     pos_ = pos;
     dirty_ = true;
   }
+
   vec3 getPos() {
-    return pos_;
+    return pos_ + pos_offset_ + anim_pos_;
+  }
+
+  void setPosOffset(vec3 offset) {
+    pos_offset_ = offset;
+    dirty_ = true;
   }
 
   mat4 getTransform() {
@@ -97,11 +103,7 @@ class Object {
     return models;
   }
 
-  void setPosAnim(Animation<vec3> a) {
-    pos_anim_ = a;
-  }
-
-  void addPosAnim(Animation<vec3> a) {
+  void addPosAnim(Animation<vec3>* a) {
     add_anims_.push_back(a);
   }
 
@@ -109,28 +111,17 @@ class Object {
     add_anims_.clear();
   }
 
-  bool animate(Time now) {
-    bool finished = false;
-    if (pos_anim_) {
-      setPos(sampleAnimation(*pos_anim_, now));
-      if (now > pos_anim_->to_time) {
-        pos_anim_.reset();
-        finished = true;
-      }
-    }
-
+  void animate(Time now) {
     // Erase finished animations.
     std::erase_if(add_anims_, [&now](auto& anim) {
-      return !anim.loop && now > anim.to_time;
+      return !anim->loop && now > anim->to_time;
     });
 
     anim_pos_ = vec3(0);
-    for (const auto& anim : add_anims_) {
-      anim_pos_ += sampleAnimation(anim, now);
+    for (auto* anim : add_anims_) {
+      anim_pos_ += sampleAnimation(*anim, now);
       dirty_ = true;
     }
-
-    return finished;
   }
 
   Object* addChild(std::unique_ptr<Object> child) {
@@ -160,8 +151,8 @@ class Object {
 
  private:
   void updateTransform() {
-    transform_ = glm::translate(pos_ + anim_pos_) * glm::toMat4(rot_) *
-                 glm::scale(scale_);
+    transform_ =
+        glm::translate(getPos()) * glm::toMat4(rot_) * glm::scale(scale_);
   }
 
   ModelId model_;
@@ -175,10 +166,10 @@ class Object {
   vec3 pos_{0};
   vec3 anim_pos_{0};
 
-  // Animation that sets absolute position.
-  std::optional<Animation<vec3>> pos_anim_;
+  // Offset from the current position.
+  vec3 pos_offset_{0};
   // Animations that add to current position.
-  std::vector<Animation<vec3>> add_anims_;
+  std::vector<Animation<vec3>*> add_anims_;
   std::vector<std::unique_ptr<Object>> children_;
 };
 
