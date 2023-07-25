@@ -1,9 +1,7 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Add support for animating rotations
 - Add more movement to skeleton
-  - pelvis rotation
   - heel lift-off
   - shoulders
   - arms

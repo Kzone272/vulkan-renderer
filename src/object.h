@@ -15,6 +15,7 @@ enum class ModelId {
   Pony,
   Cube,
   Bone,
+  Control,
   Tetra,
 };
 

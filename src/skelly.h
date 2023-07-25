@@ -8,7 +8,8 @@
 struct MoveOptions {
   float max_speed = 200;
   float adjust_time = 500;
-  float stance_w = 30;
+  float crouch_pct = 0.90;
+  float stance_w = 15;
   float foot_dist = 5;
   float step_height = 20;
   float max_rot_speed = 270;
@@ -19,12 +20,23 @@ struct MoveOptions {
 };
 
 struct SkellySizes {
+  // Configurable
   float height = 185;
-  float bonew = 6;
-  float leg = 100;
-  float femur = 50;
-  float pelvisw = 30;
-  float shouldersw = 50;
+  float bone_w = 6;
+  float leg = 100;  // floor to hip
+  float femur_pct = 0.56;
+  float pelvis_w = 25;
+  float shoulders_w = 50;
+  // Constants
+  vec3 ankle = vec3(0, 10, -7);  // from foot to ankle
+  float pelvis_h = 15;           // height above hip
+  float head_h = 25;             // length between shoulders and head
+  float neck = 5;                // length between shoulders and head
+  // Driven by params above.
+  float pelvis_y;
+  float shoulders_y;
+  float femur;
+  float shin;
 };
 
 class Skelly {
@@ -37,28 +49,34 @@ class Skelly {
   void makeBones() {
     root_.clearChildren();
 
-    mat4 pelvis_t = glm::translate(vec3(0, -10, 0)) *
-                    glm::scale(vec3(sizes_.pelvisw, 20, 20));
-    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
-    pelvis_->setPos(vec3(0, sizes_.leg, 0));
+    sizes_.pelvis_y = sizes_.leg + sizes_.pelvis_h;
+    sizes_.shoulders_y =
+        sizes_.height - sizes_.pelvis_y - sizes_.neck - sizes_.head_h;
+    float leg_l = sizes_.leg - sizes_.ankle.y;
+    sizes_.femur = sizes_.femur_pct * leg_l;
+    sizes_.shin = leg_l - sizes_.femur;
 
-    mat4 torso_t = glm::scale(vec3(sizes_.shouldersw, -20, 25));
+    mat4 pelvis_t = glm::scale(vec3(sizes_.pelvis_w, -sizes_.pelvis_h, 20));
+    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
+    pelvis_->setPos(vec3(0, sizes_.pelvis_y, 0));
+
+    mat4 torso_t = glm::scale(vec3(sizes_.shoulders_w, -20, 25));
     torso_ =
         pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
-    torso_->setPos(vec3(0, sizes_.height - sizes_.leg - 30, 0));
+    torso_->setPos(vec3(0, sizes_.shoulders_y, 0));
 
-    mat4 head_t = glm::scale(vec3(20, -25, 25));
+    mat4 head_t = glm::scale(vec3(20, sizes_.head_h, 25));
     head_ = torso_->addChild(std::make_unique<Object>(ModelId::Bone, head_t));
-    head_->setPos(vec3(0, 30, 5));
+    head_->setPos(vec3(0, sizes_.neck, 5));
 
-    mat4 femur_t = glm::scale(vec3(sizes_.bonew, -sizes_.femur, sizes_.bonew));
+    mat4 femur_t =
+        glm::scale(vec3(sizes_.bone_w, -sizes_.femur, sizes_.bone_w));
     lfemur_ =
         pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
-    vec3 femur_pos = vec3(-(sizes_.pelvisw / 2 + 3), 0, 0);
+    vec3 femur_pos = vec3(-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0);
     lfemur_->setPos(femur_pos);
 
-    mat4 shin_t = glm::scale(
-        vec3(sizes_.bonew, -(sizes_.leg - sizes_.femur), sizes_.bonew));
+    mat4 shin_t = glm::scale(vec3(sizes_.bone_w, -sizes_.shin, sizes_.bone_w));
     lshin_ = lfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
     vec3 shin_pos = vec3(0, -sizes_.femur, 0);
     lshin_->setPos(shin_pos);
@@ -331,8 +349,9 @@ class Skelly {
       pelvis_->addRotAnim(&walk_.spin.anim.value());
     }
 
-    vec2 lean = options_.lean * vel_.xz();
+    pelvis_->setPos(vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0));
 
+    vec2 lean = options_.lean * vel_.xz();
     vec3 offset = glm::inverse(root_.getTransform()) *
                   vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
     pelvis_->setPosOffset(offset);
@@ -417,20 +436,16 @@ class Skelly {
   }
 
   void updateLeg(Object& femur, Object& shin, Foot& foot) {
-    float femur_l = sizes_.femur;
-    float shin_l = sizes_.leg - femur_l;
-
-    // Positions in root space.
-    vec3 hip_pos = femur.getPos();
-    vec3 foot_pos = foot.obj->getPos() + vec3(0, 10, 0);
-    vec3 target =
-        glm::inverse(pelvis_->getTransform()) * vec4(foot_pos - hip_pos, 1);
+    // Positions in pelvis space.
+    vec3 foot_pos = glm::inverse(pelvis_->getTransform()) *
+                    vec4(foot.obj->getPos() + sizes_.ankle, 1);
+    vec3 target = foot_pos - femur.getPos();
     float target_l = glm::length(target);
 
     glm::quat point_foot =
         glm::rotation(vec3(0, -1, 0), glm::normalize(target));
 
-    auto [hip, knee] = solveIk(femur_l, shin_l, target_l);
+    auto [hip, knee] = solveIk(sizes_.femur, sizes_.shin, target_l);
     femur.setRot(point_foot * glm::angleAxis(hip, vec3(1, 0, 0)));
     shin.setRot(glm::angleAxis(knee, vec3(1, 0, 0)));
   }

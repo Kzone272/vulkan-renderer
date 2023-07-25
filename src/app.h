@@ -125,6 +125,7 @@ class HelloTriangleApp {
   void loadPrimitives() {
     renderer_->useMesh(ModelId::Cube, makeCube({0, 0.8, 0.8}));
     renderer_->useMesh(ModelId::Bone, makeCube({0.9, 0.2, 0.1}));
+    renderer_->useMesh(ModelId::Control, makeCube({0.1, 1, 0.2}));
     renderer_->useMesh(
         ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
   }
@@ -510,6 +511,7 @@ class HelloTriangleApp {
     ImGui::Text(pos_str.c_str());
     ImGui::SliderFloat("Max Speed", &move_options.max_speed, 0, 500);
     ImGui::SliderFloat("Adjust Time", &move_options.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Crouch %", &move_options.crouch_pct, 0.01, 1.2);
     if (ImGui::SliderFloat("Stance W", &move_options.stance_w, 0, 60)) {
       skelly_.makeBones();
     }
@@ -528,10 +530,10 @@ class HelloTriangleApp {
     bool changed = false;
     changed |= ImGui::SliderFloat("Height", &sizes.height, 1, 250);
     changed |= ImGui::SliderFloat("Leg", &sizes.leg, 1, sizes.height);
-    changed |= ImGui::SliderFloat("Femur", &sizes.femur, 1, sizes.leg);
-    changed |= ImGui::SliderFloat("Bone W", &sizes.bonew, 0.5, 10);
-    changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvisw, 1, 60);
-    changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shouldersw, 1, 100);
+    changed |= ImGui::SliderFloat("Femur", &sizes.femur_pct, 0.05, 1);
+    changed |= ImGui::SliderFloat("Bone W", &sizes.bone_w, 0.5, 10);
+    changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvis_w, 1, 60);
+    changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shoulders_w, 1, 100);
     ImGui::End();
 
     if (changed) {
