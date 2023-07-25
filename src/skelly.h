@@ -28,10 +28,10 @@ struct SkellySizes {
   float pelvis_w = 25;
   float shoulders_w = 50;
   // Constants
-  vec3 ankle = vec3(0, 10, -7);  // from foot to ankle
-  float pelvis_h = 15;           // height above hip
-  float head_h = 25;             // length between shoulders and head
-  float neck = 5;                // length between shoulders and head
+  vec3 ankle = vec3(0, 10, -18);  // from foot to ankle
+  float pelvis_h = 15;            // height above hip
+  float head_h = 25;              // length between shoulders and head
+  float neck = 5;                 // length between shoulders and head
   // Driven by params above.
   float pelvis_y;
   float shoulders_y;
@@ -81,6 +81,12 @@ class Skelly {
     vec3 shin_pos = vec3(0, -sizes_.femur, 0);
     lshin_->setPos(shin_pos);
 
+    mat4 foot_t = glm::translate(-sizes_.ankle) * glm::scale(vec3(10, 8, 25)) *
+                  glm::translate(vec3(0, 0, -0.5));
+    lfoot_ = lshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
+    vec3 foot_pos = vec3(0, -sizes_.shin, 0);
+    lfoot_->setPos(foot_pos);
+
     // Add opposite limbs with flipped positions.
     mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
 
@@ -91,18 +97,10 @@ class Skelly {
     rshin_ = rfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
     rshin_->setPos(flip * shin_pos);
 
-    lfoot_.obj = root_.addChild(
-        std::make_unique<Object>(ModelId::Bone, glm::scale(vec3(10, 8, 25))));
-    vec3 foot_offset = {-options_.stance_w / 2, 0, 0};
-    lfoot_.offset = foot_offset;
-    lfoot_.obj->setPos(lfoot_.offset);
-    plantFoot(lfoot_);
+    rfoot_ = rshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
+    rfoot_->setPos(flip * foot_pos);
 
-    rfoot_.obj = root_.addChild(
-        std::make_unique<Object>(ModelId::Bone, glm::scale(vec3(10, 8, 25))));
-    rfoot_.offset = flip * foot_offset;
-    rfoot_.obj->setPos(rfoot_.offset);
-    plantFoot(rfoot_);
+    makeIkRig();
   }
 
   void handleInput(const InputState& input, Time now) {
@@ -163,9 +161,8 @@ class Skelly {
     // Root animate used for awkward jump animation I should probably delete.
     root_.animate(now);
     updateCycle(now, delta_s);
-    updatePelvis(now);
-    updateFeet(now);
-    updateLegs();
+    updateRig(now);
+    updateSkeleton();
   }
 
   vec3 getPos() {
@@ -191,7 +188,31 @@ class Skelly {
     vec3 world_pos;
     glm::quat world_rot;
     vec3 offset;
+    float angle = 0;  // Angle relative to floor
   };
+
+  struct IkRig {
+    Foot lfoot;
+    Foot rfoot;
+  } ik_;
+
+  void makeIkRig() {
+    mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
+    mat4 control_t = glm::scale(vec3(5));
+
+    vec3 foot_offset = {-options_.stance_w / 2, 0, 12};
+    ik_.lfoot.obj =
+        root_.addChild(std::make_unique<Object>(ModelId::Control, control_t));
+    ik_.lfoot.offset = foot_offset;
+    ik_.lfoot.obj->setPos(ik_.lfoot.offset);
+    plantFoot(ik_.lfoot);
+
+    ik_.rfoot.obj =
+        root_.addChild(std::make_unique<Object>(ModelId::Control, control_t));
+    ik_.rfoot.offset = flip * foot_offset;
+    ik_.rfoot.obj->setPos(ik_.rfoot.offset);
+    plantFoot(ik_.rfoot);
+  }
 
   template <class T>
   struct Movement {
@@ -324,6 +345,11 @@ class Skelly {
     return addMs(now, -pos_in_anim * cycle_dur_);
   }
 
+  void updateRig(Time now) {
+    updatePelvis(now);
+    updateFeet(now);
+  }
+
   void updatePelvis(Time now) {
     if (target_speed_changed_) {
       pelvis_->clearAddAnims();
@@ -360,8 +386,8 @@ class Skelly {
   }
 
   void updateFeet(Time now) {
-    updateFoot(rfoot_, now, walk_.rstep);
-    updateFoot(lfoot_, now, walk_.lstep);
+    updateFoot(ik_.rfoot, now, walk_.rstep);
+    updateFoot(ik_.lfoot, now, walk_.lstep);
   }
 
   void updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
@@ -369,7 +395,7 @@ class Skelly {
     {
       // This code isn't used anymore, but probably should be used to determine
       // when walking starts, or if we should move feet back when stopped.
-      bool supported = !lfoot_.in_swing && !rfoot_.in_swing;
+      bool supported = !ik_.lfoot.in_swing && !ik_.rfoot.in_swing;
       float target_dist = glm::length(pos - foot.offset);
       bool should_step = supported && target_dist > options_.foot_dist;
     }
@@ -381,7 +407,7 @@ class Skelly {
     if (foot.planted) {
       mat4 to_local = glm::inverse(root_.getTransform());
       foot.obj->setPos(to_local * vec4(foot.world_pos, 1));
-      foot.obj->setRot(glm::quat_cast(to_local) * lfoot_.world_rot);
+      foot.obj->setRot(glm::quat_cast(to_local) * foot.world_rot);
     }
 
     foot.obj->animate(now);
@@ -430,15 +456,19 @@ class Skelly {
     foot.world_rot = glm::quat_cast(to_world) * foot.obj->getRot();
   }
 
-  void updateLegs() {
-    updateLeg(*lfemur_, *lshin_, lfoot_);
-    updateLeg(*rfemur_, *rshin_, rfoot_);
+  void updateSkeleton() {
+    updateLegs();
   }
 
-  void updateLeg(Object& femur, Object& shin, Foot& foot) {
+  void updateLegs() {
+    updateLeg(*lfemur_, *lshin_, *lfoot_, ik_.lfoot);
+    updateLeg(*rfemur_, *rshin_, *rfoot_, ik_.rfoot);
+  }
+
+  void updateLeg(Object& femur, Object& shin, Object& foot, Foot& ik_foot) {
     // Positions in pelvis space.
     vec3 foot_pos = glm::inverse(pelvis_->getTransform()) *
-                    vec4(foot.obj->getPos() + sizes_.ankle, 1);
+                    vec4(ik_foot.obj->getPos() + sizes_.ankle, 1);
     vec3 target = foot_pos - femur.getPos();
     float target_l = glm::length(target);
 
@@ -448,6 +478,11 @@ class Skelly {
     auto [hip, knee] = solveIk(sizes_.femur, sizes_.shin, target_l);
     femur.setRot(point_foot * glm::angleAxis(hip, vec3(1, 0, 0)));
     shin.setRot(glm::angleAxis(knee, vec3(1, 0, 0)));
+
+    mat4 foot_to_root = glm::inverse(
+        pelvis_->getTransform() * femur.getTransform() * shin.getTransform());
+    glm::quat foot_rot = glm::quat_cast(foot_to_root);
+    foot.setRot(foot_rot);
   }
 
   // Returns pair of angles for bone1 and bone2.
@@ -470,11 +505,10 @@ class Skelly {
   Object* head_;
   Object* lfemur_;
   Object* lshin_;
+  Object* lfoot_;
   Object* rfemur_;
   Object* rshin_;
-
-  Foot lfoot_;
-  Foot rfoot_;
+  Object* rfoot_;
 
   Cycle walk_{
       .lstep = {.offset = 0, .dur = 0.45},
