@@ -5,8 +5,8 @@
 
 #include "asserts.h"
 #include "glm-include.h"
+#include "maths.h"
 #include "time-include.h"
-#include "utils.h"
 
 enum class BlendType {
   Linear,

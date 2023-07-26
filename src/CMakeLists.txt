@@ -7,8 +7,9 @@ add_executable(main
   asserts.cc
   defines.h
   vulkan-include.h
-  utils.h
-  utils.cc
+  maths.h
+  maths.cc
+  strings.h
   glm-include.h
   object.h
   render-objects.h

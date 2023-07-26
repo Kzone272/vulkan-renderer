@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <format>
 #include <memory>
 #include <string>
 
@@ -17,11 +18,8 @@ std::string strFmt(const std::string& format, Args... args) {
       buf.get(), buf.get() + size - 1);  // We don't want the '\0' inside
 }
 
-float remapRange(
-    float value, float in_min, float in_max, float out_min, float out_max);
-// Returns shortest delta from current to target angle.
-float angleDelta(float current, float target);
-// Returns a % b, always in the range [0, b). b >= 0.
-float fmodClamp(float a, float b);
-// Returns angle between a and b sides of triangle abc.
-float cosineLaw(float a, float b, float c);
+template <class... Args>
+void println(std::format_string<Args...> fmt, Args&&... args) {
+  // void println(const std::format_string<Args...>& format, Args... args) {
+  std::cout << std::format(fmt, args...) << std::endl;
+}
