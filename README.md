@@ -3,6 +3,8 @@ Vulkan Tutorial
 
 Trying to learn some Vulkan by following along with vulkan-tutorial.com
 
+Video of procedural walk cycle: https://youtu.be/BLujpnxdd7o
+
 *Latest screenshot:*
 ![](screenshot5.png)
 
