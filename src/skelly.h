@@ -270,7 +270,10 @@ class Skelly {
 
   template <class T>
   bool inCycle(const Movement<T>& move, float t) {
-    float end = fmod(move.offset + move.dur, 1.f);
+    float end = move.offset + move.dur;
+    if (end > 1.f) {
+      end -= 1;
+    }
     return t >= move.offset && t <= end;
   }
 
@@ -512,11 +515,11 @@ class Skelly {
   Object* rfoot_;
 
   Cycle walk_{
-      .lstep = {.offset = 0, .dur = 0.45},
-      .rstep = {.offset = 0.5, .dur = 0.45},
-      .bounce = {.offset = -0.05, .dur = 0.5},
-      .sway = {.offset = -0.05, .dur = 1},
-      .spin = {.offset = -0.05, .dur = 1},
+      .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
+      .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
+      .bounce = {.offset = 0, .dur = 0.5},
+      .sway = {.offset = 0, .dur = 1},
+      .spin = {.offset = 0, .dur = 1},
   };
   float cycle_t_ = 0.f;
   float cycle_dur_ = 0.f;
