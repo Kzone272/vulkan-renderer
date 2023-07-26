@@ -2,7 +2,6 @@ Things I Should Do Soon:
 
 Short-term ideas:
 - Add more movement to skeleton
-  - heel lift-off
   - shoulders
   - arms
 - Adjust position of in-swing step if velocity changes significantly

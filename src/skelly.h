@@ -4,20 +4,21 @@
 #include "glm-include.h"
 #include "input.h"
 #include "maths.h"
+#include "object.h"
 #include "strings.h"
 
 struct MoveOptions {
   float max_speed = 200;
   float adjust_time = 500;
-  float crouch_pct = 0.90;
+  float crouch_pct = 0.95;
   float stance_w = 15;
   float foot_dist = 5;
-  float step_height = 20;
+  float step_height = 5;
   float max_rot_speed = 270;
   float lean = 0.05;
-  float bounce = 5;
+  float bounce = 3;
   float hip_sway = 2;
-  float hip_spin = 10;
+  float hip_spin = 12;
 };
 
 struct SkellySizes {
@@ -33,6 +34,7 @@ struct SkellySizes {
   float pelvis_h = 15;            // height above hip
   float head_h = 25;              // length between shoulders and head
   float neck = 5;                 // length between shoulders and head
+  float foot_l = 25;              // Toe to heel
   // Driven by params above.
   float pelvis_y;
   float shoulders_y;
@@ -82,7 +84,8 @@ class Skelly {
     vec3 shin_pos = vec3(0, -sizes_.femur, 0);
     lshin_->setPos(shin_pos);
 
-    mat4 foot_t = glm::translate(-sizes_.ankle) * glm::scale(vec3(10, 8, 25)) *
+    mat4 foot_t = glm::translate(-sizes_.ankle) *
+                  glm::scale(vec3(10, 8, sizes_.foot_l)) *
                   glm::translate(vec3(0, 0, -0.5));
     lfoot_ = lshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
     vec3 foot_pos = vec3(0, -sizes_.shin, 0);
@@ -219,16 +222,31 @@ class Skelly {
   struct Movement {
     float offset;
     float dur;
+    bool loop = false;
     bool should_start = false;
+    vec3 axis;  // used only for rotation
     Spline<T> spline;
     std::optional<Animation<T>> anim;
   };
   struct Cycle {
     Movement<vec3> lstep;
     Movement<vec3> rstep;
+    Movement<float> lheel;
+    Movement<float> rheel;
     Movement<vec3> bounce;
     Movement<float> sway;
     Movement<float> spin;
+  };
+  Cycle walk_{
+      // Offsets should be in [0, 1)
+      // Durations should be in [0, 1]
+      .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
+      .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
+      .lheel = {.offset = 0.85, .dur = 0.7},
+      .rheel = {.offset = 0.35, .dur = 0.7},
+      .bounce = {.offset = 0, .dur = 0.5},  // pelvis up/down
+      .sway = {.offset = 0, .dur = 1},      // pelvis z
+      .spin = {.offset = 0, .dur = 1},      // pelvis y
   };
 
   void updateMove(Time now, float delta_s) {
@@ -270,19 +288,17 @@ class Skelly {
 
   template <class T>
   bool inCycle(const Movement<T>& move, float t) {
-    float end = move.offset + move.dur;
-    if (end > 1.f) {
-      end -= 1;
+    if (t < move.offset) {
+      t += 1;
+      DASSERT(t >= move.offset);
     }
-    return t >= move.offset && t <= end;
+    float end = move.offset + move.dur;
+    return t <= end;
   }
 
   template <class T>
-  void checkStarts(
-      const std::vector<Movement<T>*>& moves, float prev_t, float t) {
-    for (auto* move : moves) {
-      move->should_start = !inCycle(*move, prev_t) && inCycle(*move, t);
-    }
+  void checkStart(Movement<T>& move, float prev_t, float t) {
+    move.should_start = !inCycle(move, prev_t) && inCycle(move, t);
   }
 
   void updateCycle(Time now, float delta_s) {
@@ -293,13 +309,18 @@ class Skelly {
     // velocity reaches zero?
     if (glm::length(vel_) < 0.1f) {
       cycle_t_ = 0;
+      // TODO: This is smelly.
       walk_.lstep.should_start = false;
       walk_.rstep.should_start = false;
+      walk_.lheel.should_start = false;
+      walk_.rheel.should_start = false;
     } else {
       cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
       // Don't check start for looping animations.
-      std::vector<Movement<vec3>*> moves = {&walk_.lstep, &walk_.rstep};
-      checkStarts(moves, prev_t, cycle_t_);
+      checkStart(walk_.lstep, prev_t, cycle_t_);
+      checkStart(walk_.rstep, prev_t, cycle_t_);
+      checkStart(walk_.lheel, prev_t, cycle_t_);
+      checkStart(walk_.rheel, prev_t, cycle_t_);
     }
 
     if (!target_speed_changed_) {
@@ -336,6 +357,18 @@ class Skelly {
     float hip_spin = glm::radians(options_.hip_spin);
     walk_.spin.spline = makeSpline<float>(
         SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
+
+    // TODO: This curve could be smoother.
+    walk_.lheel.spline =
+        makeSpline<float>(SplineType::Hermite, {0, 1, 50, 1, -15, 1, 0, 0});
+    walk_.rheel.spline = walk_.lheel.spline;
+  }
+
+  template <class T>
+  void startMovement(Movement<T>& move, Time now) {
+    float dur = move.dur * cycle_dur_;
+    Time start = getMoveStart(move, now);
+    move.anim = makeAnimation(move.spline, dur, start, move.loop, move.axis);
   }
 
   template <class T>
@@ -390,8 +423,23 @@ class Skelly {
   }
 
   void updateFeet(Time now) {
+    updateHeel(now, ik_.lfoot, walk_.lheel);
+    updateHeel(now, ik_.rfoot, walk_.rheel);
     updateFoot(ik_.rfoot, now, walk_.rstep);
     updateFoot(ik_.lfoot, now, walk_.lstep);
+  }
+
+  void updateHeel(Time now, Foot& foot, Movement<float>& heel) {
+    if (heel.should_start) {
+      startMovement(heel, now);
+    }
+    if (heel.anim) {
+      foot.angle = sampleAnimation(*heel.anim, now);
+      if (now > heel.anim->to_time) {
+        heel.anim.reset();
+        foot.angle = 0;
+      }
+    }
   }
 
   void updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
@@ -470,9 +518,20 @@ class Skelly {
   }
 
   void updateLeg(Object& femur, Object& shin, Object& foot, Foot& ik_foot) {
+    glm::quat ankle_rot =
+        glm::angleAxis(glm::radians(ik_foot.angle), vec3(1, 0, 0));
+    vec3 ankle = sizes_.ankle;
+    if (ik_foot.angle >= 0) {
+      ankle = ankle_rot * ankle;
+    } else {
+      float lift =
+          glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(ik_foot.angle)).y;
+      ankle.y += lift;
+    }
+    vec3 root_foot = ik_foot.obj->getPos() + ankle;
+
     // Positions in pelvis space.
-    vec3 foot_pos = glm::inverse(pelvis_->getTransform()) *
-                    vec4(ik_foot.obj->getPos() + sizes_.ankle, 1);
+    vec3 foot_pos = glm::inverse(pelvis_->getTransform()) * vec4(root_foot, 1);
     vec3 target = foot_pos - femur.getPos();
     float target_l = glm::length(target);
 
@@ -485,7 +544,7 @@ class Skelly {
 
     mat4 foot_to_root = glm::inverse(
         pelvis_->getTransform() * femur.getTransform() * shin.getTransform());
-    glm::quat foot_rot = glm::quat_cast(foot_to_root);
+    glm::quat foot_rot = ankle_rot * glm::quat_cast(foot_to_root);
     foot.setRot(foot_rot);
   }
 
@@ -514,13 +573,6 @@ class Skelly {
   Object* rshin_;
   Object* rfoot_;
 
-  Cycle walk_{
-      .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
-      .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
-      .bounce = {.offset = 0, .dur = 0.5},
-      .sway = {.offset = 0, .dur = 1},
-      .spin = {.offset = 0, .dur = 1},
-  };
   float cycle_t_ = 0.f;
   float cycle_dur_ = 0.f;
 
