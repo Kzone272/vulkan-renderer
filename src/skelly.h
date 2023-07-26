@@ -19,6 +19,7 @@ struct MoveOptions {
   float bounce = 3;
   float hip_sway = 2;
   float hip_spin = 12;
+  float heel_lift_pct = 0.75;
 };
 
 struct SkellySizes {
@@ -358,9 +359,13 @@ class Skelly {
     walk_.spin.spline = makeSpline<float>(
         SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
 
-    // TODO: This curve could be smoother.
+    std::vector<float> values = {0, 10, 50, 5, -15, 5, 0, 0};
+    float speed_scale = std::min(target_speed_, 300.f) / 150.f;
+    for (float& val : values) {
+      val *= options_.heel_lift_pct * speed_scale;
+    }
     walk_.lheel.spline =
-        makeSpline<float>(SplineType::Hermite, {0, 1, 50, 1, -15, 1, 0, 0});
+        makeSpline<float>(SplineType::Hermite, std::move(values));
     walk_.rheel.spline = walk_.lheel.spline;
   }
 
@@ -479,15 +484,11 @@ class Skelly {
     float step_dur = move.dur * cycle_dur_;
     float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
 
-    // Scale speeds based on the duration of the animation.
-    float scale = (step_dur / 1000.f);
-    float scaled_speed = scale * target_speed_;
-
     vec3 pos = foot.obj->getPos();
     vec3 target_pos = vec3(0, 0, step_l) + foot.offset;
-    vec3 no_vel = vec3(0, 0, -scaled_speed);
+    vec3 no_vel = vec3(0, 0, -target_speed_);
     vec3 mid_pos = (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
-    vec3 swing_vel = 1.5f * scaled_speed * glm::normalize(target_pos - pos);
+    vec3 swing_vel = 1.5f * target_speed_ * glm::normalize(target_pos - pos);
 
     move.spline = makeSpline<vec3>(
         SplineType::Hermite,

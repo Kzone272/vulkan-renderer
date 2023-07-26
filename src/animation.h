@@ -57,10 +57,9 @@ Spline<T> makeSpline(SplineType type, const std::vector<T>& points) {
     };
   } else if (type == SplineType::Hermite) {
     ASSERT((npoints % 2) == 0);
-    std::vector<T> controls = points;
     return {
         .type = type,
-        .points = std::move(controls),
+        .points = points,
         .segments = (npoints / 2) - 1,
     };
   }
@@ -143,11 +142,9 @@ T sampleSpline(const Spline<T>& spline, float u) {
     }
     int i = floor(u) * 2;
     const T& a = spline.points[i];
-    // How am I scaling a ref? Am I referencing a temporary?
-    // This scaling should most likely be done in makeAnimation().
-    const T& b = spline.points[i + 1] / static_cast<float>(spline.segments);
+    const T& b = spline.points[i + 1];
     const T& c = spline.points[i + 2];
-    const T& d = spline.points[i + 3] / static_cast<float>(spline.segments);
+    const T& d = spline.points[i + 3];
     float t = glm::fract(u);
     return blend(SplineType::Hermite, t, a, b, c, d);
   }
@@ -170,10 +167,21 @@ struct Animation {
 
 template <class T>
 Animation<T> makeAnimation(
-    Spline<T>& spline, float dur_ms, Time start, bool loop = false,
+    const Spline<T>& spline, float dur_ms, Time start, bool loop = false,
     vec3 axis = {0, 1, 0}) {
+  Spline<T> spl = spline;
+
+  // We need to scale the velocities of Hermite splines based on duration of
+  // each segment.
+  // Notes on scaling: https://www.cubic.org/docs/hermite.htm
+  if (spl.type == SplineType::Hermite) {
+    for (int i = 1; i < spl.points.size(); i += 2) {
+      spl.points[i] *= dur_ms / spl.segments / 1000.f;
+    }
+  }
+
   return Animation{
-      .spline = spline,
+      .spline = std::move(spl),
       .dur_ms = dur_ms,
       .from_time = start,
       .to_time = addMs(start, dur_ms),

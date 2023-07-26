@@ -522,6 +522,7 @@ class HelloTriangleApp {
     ImGui::SliderFloat("Bounce", &move_options.bounce, 0, 10);
     ImGui::SliderFloat("Hip Sway", &move_options.hip_sway, 0, 30);
     ImGui::SliderFloat("Hip Spin", &move_options.hip_spin, 0, 45);
+    ImGui::SliderFloat("Heel Lift %", &move_options.heel_lift_pct, 0, 2);
 
     ImGui::End();
 
