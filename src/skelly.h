@@ -265,7 +265,7 @@ class Skelly {
     Movement<vec3> rstep;
     Movement<float> lheel;
     Movement<float> rheel;
-    Movement<vec3> bounce;
+    Movement<float> bounce;
     Movement<float> sway;
     Movement<float> spin;
   };
@@ -372,15 +372,8 @@ class Skelly {
 
   void updateCurves() {
     float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
-    walk_.bounce.spline = makeSpline<vec3>(
-        SplineType::Hermite, {
-                                 {0, -bounce, 0},
-                                 {0, 0, 0},
-                                 {0, bounce, 0},
-                                 {0, 0, 0},
-                                 {0, -bounce, 0},
-                                 {0, 0, 0},
-                             });
+    walk_.bounce.spline = makeSpline<float>(
+        SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
 
     float hip_sway = glm::radians(options_.hip_sway);
     walk_.sway.spline = makeSpline<float>(
@@ -431,7 +424,7 @@ class Skelly {
       startMovement(walk_.bounce, now);
     }
     if (walk_.bounce.anim) {
-      ik_.cog.pos += sampleAnimation(*walk_.bounce.anim, now);
+      ik_.cog.pos.y += sampleAnimation(*walk_.bounce.anim, now);
     }
 
     vec2 lean = options_.lean * vel_.xz();
