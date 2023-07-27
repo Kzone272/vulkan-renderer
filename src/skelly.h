@@ -17,7 +17,7 @@ struct MoveOptions {
   float max_rot_speed = 270;
   float lean = 0.05;
   float bounce = 3;
-  float hip_sway = 2;
+  float hip_sway = 6;
   float hip_spin = 12;
   float heel_lift_pct = 0.75;
 };
@@ -51,8 +51,6 @@ class Skelly {
   }
 
   void makeBones() {
-    root_.clearChildren();
-
     sizes_.pelvis_y = sizes_.leg + sizes_.pelvis_h;
     sizes_.shoulders_y =
         sizes_.height - sizes_.pelvis_y - sizes_.neck - sizes_.head_h;
@@ -60,13 +58,18 @@ class Skelly {
     sizes_.femur = sizes_.femur_pct * leg_l;
     sizes_.shin = leg_l - sizes_.femur;
 
+    root_.clearChildren();
+
+    cog_ = Object(ModelId::Control, glm::scale(vec3(5)));
+    root_.addChild(&cog_);
+    cog_.setPos(vec3(0, sizes_.pelvis_y, 0));
+
     mat4 pelvis_t = glm::scale(vec3(sizes_.pelvis_w, -sizes_.pelvis_h, 20));
-    pelvis_ = root_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
-    pelvis_->setPos(vec3(0, sizes_.pelvis_y, 0));
+    pelvis_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
+    pelvis_->setPos(vec3(0, 0, 0));
 
     mat4 torso_t = glm::scale(vec3(sizes_.shoulders_w, -20, 25));
-    torso_ =
-        pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
+    torso_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
     torso_->setPos(vec3(0, sizes_.shoulders_y, 0));
 
     mat4 head_t = glm::scale(vec3(20, sizes_.head_h, 25));
@@ -105,7 +108,7 @@ class Skelly {
     rfoot_ = rshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
     rfoot_->setPos(flip * foot_pos);
 
-    makeIkRig();
+    makeIkControls();
   }
 
   void handleInput(const InputState& input, Time now) {
@@ -186,6 +189,10 @@ class Skelly {
   }
 
  private:
+  struct CenterOfGravity {
+    vec3 pos;
+  };
+
   struct Foot {
     Object* obj;
     bool planted = false;
@@ -194,14 +201,38 @@ class Skelly {
     glm::quat world_rot;
     vec3 offset;
     float angle = 0;  // Angle relative to floor
+    vec3 knee = {0, 0, 1};
   };
 
-  struct IkRig {
+  struct Pelvis {
+    float tilt;  // x
+    float sway;  // z
+    float spin;  // y
+  };
+
+  struct Torso {
+    vec3 pos;
+    float tilt;  // x
+    float sway;  // z
+    float spin;  // y
+  };
+
+  struct Hand {
+    vec3 pos;
+    vec3 elbow = {0, 0, -1};  // dir
+  };
+
+  struct IkControls {
+    CenterOfGravity cog;
+    Pelvis pelvis;
     Foot lfoot;
     Foot rfoot;
-  } ik_;
+    Torso torso;
+    Hand lhand;
+    Hand rhand;
+  } ik_ = {};
 
-  void makeIkRig() {
+  void makeIkControls() {
     mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
     mat4 control_t = glm::scale(vec3(5));
 
@@ -245,9 +276,9 @@ class Skelly {
       .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
       .lheel = {.offset = 0.85, .dur = 0.7},
       .rheel = {.offset = 0.35, .dur = 0.7},
-      .bounce = {.offset = 0, .dur = 0.5},  // pelvis up/down
-      .sway = {.offset = 0, .dur = 1},      // pelvis z
-      .spin = {.offset = 0, .dur = 1},      // pelvis y
+      .bounce = {.offset = 0, .dur = 0.5, .loop = true},  // pelvis up/down
+      .sway = {.offset = 0, .dur = 1, .loop = true, .axis = {0, 0, -1}},
+      .spin = {.offset = 0, .dur = 1, .loop = true, .axis = {0, 1, 0}},
   };
 
   void updateMove(Time now, float delta_s) {
@@ -388,41 +419,35 @@ class Skelly {
   }
 
   void updateRig(Time now) {
+    updateCog(now);
     updatePelvis(now);
     updateFeet(now);
   }
 
-  void updatePelvis(Time now) {
+  void updateCog(Time now) {
+    ik_.cog.pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
+
     if (target_speed_changed_) {
-      pelvis_->clearAddAnims();
-      float bounce_dur = walk_.bounce.dur * cycle_dur_;
-      Time bounce_start = getMoveStart(walk_.bounce, now);
-      walk_.bounce.anim =
-          makeAnimation(walk_.bounce.spline, bounce_dur, bounce_start, true);
-      pelvis_->addPosAnim(&walk_.bounce.anim.value());
-
-      // TODO: Setting up these animations is repetitive, and should be
-      // refactored.
-      pelvis_->clearRotAnims();
-      float sway_dur = walk_.sway.dur * cycle_dur_;
-      Time sway_start = getMoveStart(walk_.sway, now);
-      walk_.sway.anim = makeAnimation(
-          walk_.sway.spline, sway_dur, sway_start, true, {0, 0, -1});
-      pelvis_->addRotAnim(&walk_.sway.anim.value());
-
-      float spin_dur = walk_.spin.dur * cycle_dur_;
-      Time spin_start = getMoveStart(walk_.spin, now);
-      walk_.spin.anim = makeAnimation(
-          walk_.spin.spline, spin_dur, spin_start, true, {0, 1, 0});
-      pelvis_->addRotAnim(&walk_.spin.anim.value());
+      startMovement(walk_.bounce, now);
+    }
+    if (walk_.bounce.anim) {
+      ik_.cog.pos += sampleAnimation(*walk_.bounce.anim, now);
     }
 
-    pelvis_->setPos(vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0));
-
     vec2 lean = options_.lean * vel_.xz();
-    vec3 offset = glm::inverse(root_.getTransform()) *
-                  vec4(root_.getPos() + vec3(lean.x, 0, lean.y), 1);
-    pelvis_->setPosOffset(offset);
+    vec3 offset = root_.toLocal() * vec4(vec3(lean.x, 0, lean.y), 0);
+    ik_.cog.pos += offset;
+  }
+
+  void updatePelvis(Time now) {
+    if (target_speed_changed_) {
+      pelvis_->clearRotAnims();
+
+      startMovement(walk_.sway, now);
+      pelvis_->addRotAnim(&walk_.sway.anim.value());
+      startMovement(walk_.spin, now);
+      pelvis_->addRotAnim(&walk_.spin.anim.value());
+    }
 
     pelvis_->animate(now);
   }
@@ -462,7 +487,7 @@ class Skelly {
     }
 
     if (foot.planted) {
-      mat4 to_local = glm::inverse(root_.getTransform());
+      mat4 to_local = root_.toLocal();
       foot.obj->setPos(to_local * vec4(foot.world_pos, 1));
       foot.obj->setRot(glm::quat_cast(to_local) * foot.world_rot);
     }
@@ -504,12 +529,13 @@ class Skelly {
   void plantFoot(Foot& foot) {
     foot.planted = true;
     foot.in_swing = false;
-    mat4 to_world = root_.getTransform();
-    foot.world_pos = to_world * vec4(foot.obj->getPos(), 1);
-    foot.world_rot = glm::quat_cast(to_world) * foot.obj->getRot();
+    mat4 to_world = foot.obj->toRoot();
+    foot.world_pos = to_world * vec4(0, 0, 0, 1);
+    foot.world_rot = glm::quat_cast(to_world);
   }
 
   void updateSkeleton() {
+    cog_.setPos(ik_.cog.pos);
     updateLegs();
   }
 
@@ -529,10 +555,11 @@ class Skelly {
           glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(ik_foot.angle)).y;
       ankle.y += lift;
     }
+    // TODO: Consider using root_ space for these positions.
     vec3 root_foot = ik_foot.obj->getPos() + ankle;
 
     // Positions in pelvis space.
-    vec3 foot_pos = glm::inverse(pelvis_->getTransform()) * vec4(root_foot, 1);
+    vec3 foot_pos = pelvis_->toLocal(&root_) * vec4(root_foot, 1);
     vec3 target = foot_pos - femur.getPos();
     float target_l = glm::length(target);
 
@@ -543,8 +570,7 @@ class Skelly {
     femur.setRot(point_foot * glm::angleAxis(hip, vec3(1, 0, 0)));
     shin.setRot(glm::angleAxis(knee, vec3(1, 0, 0)));
 
-    mat4 foot_to_root = glm::inverse(
-        pelvis_->getTransform() * femur.getTransform() * shin.getTransform());
+    mat4 foot_to_root = shin.toLocal(&root_);
     glm::quat foot_rot = ankle_rot * glm::quat_cast(foot_to_root);
     foot.setRot(foot_rot);
   }
@@ -563,7 +589,8 @@ class Skelly {
   MoveOptions options_;
   SkellySizes sizes_;
 
-  Object root_{ModelId::None};
+  Object root_;
+  Object cog_;
   Object* pelvis_;
   Object* torso_;
   Object* head_;

@@ -63,6 +63,10 @@ class Object {
     }
   }
 
+  void setParent(Object* parent) {
+    parent_ = parent;
+  }
+
   void setScale(const vec3& scale) {
     scale_ = scale;
     dirty_ = true;
@@ -90,12 +94,40 @@ class Object {
     dirty_ = true;
   }
 
-  mat4 getTransform() {
+  const mat4& getTransform() {
     if (dirty_) {
       updateTransform();
       dirty_ = false;
     }
     return transform_;
+  }
+
+  // Transform from this object's space to an ancestor.
+  const mat4 toAncestor(Object* ancestor) {
+    if (ancestor == this) {
+      return mat4(1);
+    }
+    if (parent_ == nullptr) {
+      // You should not request transform to an invalid ancestor.
+      DASSERT(ancestor == nullptr);
+      return getTransform();
+    }
+    return parent_->toAncestor(ancestor) * getTransform();
+  }
+
+  // Local space to root.
+  const mat4 toRoot() {
+    return toAncestor(nullptr);
+  }
+
+  // From root space to local.
+  const mat4 toLocal() {
+    return glm::inverse(toRoot());
+  }
+
+  // From ancestor's space to local.
+  const mat4 toLocal(Object* ancestor) {
+    return glm::inverse(toAncestor(ancestor));
   }
 
   std::vector<ModelId> getModels() {
@@ -154,12 +186,14 @@ class Object {
   }
   void addChild(Object* child) {
     children_.push_back(child);
+    child->setParent(this);
   }
   const std::vector<Object*>& children() {
     return children_;
   }
   void clearChildren() {
     children_.clear();
+    owned_children_.clear();
   }
 
   void getRenderObjects(const mat4& parent, std::vector<RenderObject>& objs) {
@@ -185,6 +219,7 @@ class Object {
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
 
+  Object* parent_ = nullptr;
   bool dirty_ = false;
   mat4 transform_{1};
   vec3 scale_{1};
