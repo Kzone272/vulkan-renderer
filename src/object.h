@@ -17,6 +17,7 @@ enum class ModelId {
   Bone,
   Control,
   Tetra,
+  Floor,
 };
 
 struct ModelInfo {
@@ -48,7 +49,9 @@ struct RenderObject {
 
 class Object {
  public:
-  Object(ModelId model, std::optional<mat4> model_transform = std::nullopt)
+  Object(
+      ModelId model = ModelId::None,
+      std::optional<mat4> model_transform = std::nullopt)
       : model_(model) {
     if (model_transform) {
       model_transform_ = *model_transform;
@@ -97,7 +100,7 @@ class Object {
 
   std::vector<ModelId> getModels() {
     std::vector<ModelId> models{model_};
-    for (auto& child : children_) {
+    for (auto* child : children_) {
       auto child_models = child->getModels();
       models.insert(models.end(), child_models.begin(), child_models.end());
     }
@@ -145,10 +148,14 @@ class Object {
 
   Object* addChild(std::unique_ptr<Object> child) {
     auto* ptr = child.get();
-    children_.push_back(std::move(child));
+    owned_children_.push_back(std::move(child));
+    addChild(ptr);
     return ptr;
   }
-  const std::vector<std::unique_ptr<Object>>& children() {
+  void addChild(Object* child) {
+    children_.push_back(child);
+  }
+  const std::vector<Object*>& children() {
     return children_;
   }
   void clearChildren() {
@@ -191,7 +198,8 @@ class Object {
   // Animations that add to current position.
   std::vector<Animation<vec3>*> pos_anims_;
   std::vector<Animation<float>*> rot_anims_;
-  std::vector<std::unique_ptr<Object>> children_;
+  std::vector<Object*> children_;
+  std::vector<std::unique_ptr<Object>> owned_children_;
 };
 
 enum class CameraType {

@@ -30,6 +30,21 @@ Mesh makeCube(vec3 color) {
   return std::move(m);
 }
 
+Mesh makePlane(float x_size, float z_size, vec3 color) {
+  Mesh m;
+  // repeat texture every 1m
+  float x_reps = x_size / 100;
+  float y_reps = z_size / 100;
+  m.vertices = {
+      {{-x_size / 2, 0, z_size / 2}, color, {0, 0}},            // bl
+      {{x_size / 2, 0, z_size / 2}, color, {x_reps, 0}},        // br
+      {{x_size / 2, 0, -z_size / 2}, color, {x_reps, y_reps}},  // fr
+      {{-x_size / 2, 0, -z_size / 2}, color, {0, y_reps}},      // fl
+  };
+  m.indices = {0, 1, 2, 0, 2, 3};
+  return std::move(m);
+}
+
 void iter(Mesh& mesh, int steps, bool in);
 
 Mesh tetrahedron(int steps, bool in) {

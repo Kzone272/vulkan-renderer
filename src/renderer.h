@@ -93,12 +93,8 @@ class Renderer {
     height_ = height;
   }
 
-  void useModel(ModelId model_id) {
+  void useModel(ModelId model_id, ModelInfo& model_info) {
     if (!loaded_models_.contains(model_id)) {
-      auto it = model_registry.find(model_id);
-      ASSERT(it != model_registry.end());
-      auto& model_info = it->second;
-
       auto model = loadModel(model_info);
       loaded_models_.insert({model_id, std::move(model)});
     }

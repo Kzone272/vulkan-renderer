@@ -116,16 +116,42 @@ class HelloTriangleApp {
   }
 
   void setupWorld() {
-    loadPrimitives();
-    addObject(skelly_.getObj());
-    addObject(&grid_);
+    world_.addChild(skelly_.getObj());
+    world_.addChild(&grid_);
     remakeGrid(options_.grid_size);
+    world_.addChild(std::make_unique<Object>(ModelId::Floor));
+
+    auto* car = world_.addChild(std::make_unique<Object>(ModelId::Pony));
+    car->setPos(vec3(-300, -3, 0));
+
+    auto* room = world_.addChild(std::make_unique<Object>(ModelId::Viking));
+    room->setPos(vec3(300, 25, 300));
+
+    loadModels();
+    loadPrimitives();
+  }
+
+  void loadModels() {
+    auto models = world_.getModels();
+    std::set<ModelId> model_set(models.begin(), models.end());
+    for (auto id : model_set) {
+      if (id == ModelId::None) {
+        continue;
+      }
+      auto it = model_registry.find(id);
+      if (it == model_registry.end()) {
+        continue;
+      }
+      renderer_->useModel(id, it->second);
+    }
   }
 
   void loadPrimitives() {
     renderer_->useMesh(ModelId::Cube, makeCube({0, 0.8, 0.8}));
     renderer_->useMesh(ModelId::Bone, makeCube({0.9, 0.2, 0.1}));
     renderer_->useMesh(ModelId::Control, makeCube({0.1, 1, 0.2}));
+    renderer_->useMesh(
+        ModelId::Floor, makePlane(10000, 10000, {0.2, 0.2, 0.2}));
     renderer_->useMesh(
         ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
   }
@@ -142,15 +168,6 @@ class HelloTriangleApp {
         grid_.addChild(std::move(obj));
       }
     }
-  }
-
-  void addObject(Object* obj) {
-    for (auto& model : obj->getModels()) {
-      if (model != ModelId::None) {
-        renderer_->useModel(model);
-      }
-    }
-    objects_.push_back(obj);
   }
 
   void mainLoop() {
@@ -302,7 +319,7 @@ class HelloTriangleApp {
   }
 
   void updateObjects() {
-    for (auto& object : grid_.children()) {
+    for (auto* object : grid_.children()) {
       vec3 pos = object->getPos();
       pos.y = 0.f;
 
@@ -457,11 +474,8 @@ class HelloTriangleApp {
 
   void flattenObjectTree() {
     frame_state_.objects.clear();
-    mat4 i(1);
-
-    for (auto* obj : objects_) {
-      obj->getRenderObjects(i, frame_state_.objects);
-    }
+    mat4 identity(1);
+    world_.getRenderObjects(identity, frame_state_.objects);
   }
 
   void updateImgui() {
@@ -582,7 +596,7 @@ class HelloTriangleApp {
     CameraType cam_type = CameraType::Follow;
     bool animate = true;
     bool bounce_objects = false;
-    int grid_size = 30;
+    int grid_size = 2;
     bool tetra_in = true;
     int tetra_steps = 2;
   } options_;
@@ -599,8 +613,8 @@ class HelloTriangleApp {
   InputState input_;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
-  std::vector<Object*> objects_;
-  Object grid_{ModelId::None};
+  Object world_;
+  Object grid_;
   Skelly skelly_;
 
 #ifdef DEBUG
