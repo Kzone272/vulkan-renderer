@@ -115,14 +115,14 @@ class Object {
     return parent_->toAncestor(ancestor) * getTransform();
   }
 
-  // Local space to root.
-  const mat4 toRoot() {
+  // Local space to world (root of tree).
+  const mat4 toWorld() {
     return toAncestor(nullptr);
   }
 
-  // From root space to local.
+  // From world space to local.
   const mat4 toLocal() {
-    return glm::inverse(toRoot());
+    return glm::inverse(toWorld());
   }
 
   // From ancestor's space to local.

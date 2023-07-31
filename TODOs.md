@@ -5,8 +5,6 @@ Short-term ideas:
   - shoulders
   - arms
 - Adjust position of in-swing step if velocity changes significantly
-- Add helpers for getting transform of object all the way to root space
-  - and the inverse: from root into local space
 - Make prettier
   - Add scene selector
   - Setup cube map BG

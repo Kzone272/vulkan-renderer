@@ -1,3 +1,5 @@
+#pragma once
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -18,3 +20,8 @@ using glm::mat4;
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
+
+template <typename T>
+std::string tostr(const T& v) {
+  return glm::to_string(v);
+}

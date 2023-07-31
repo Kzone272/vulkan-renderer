@@ -122,10 +122,10 @@ class HelloTriangleApp {
     world_.addChild(std::make_unique<Object>(ModelId::Floor));
 
     auto* car = world_.addChild(std::make_unique<Object>(ModelId::Pony));
-    car->setPos(vec3(-300, -3, 0));
+    car->setPos(vec3(-300, -1, 0));
 
     auto* room = world_.addChild(std::make_unique<Object>(ModelId::Viking));
-    room->setPos(vec3(300, 25, 300));
+    room->setPos(vec3(300, 1, 300));
 
     loadModels();
     loadPrimitives();
@@ -467,7 +467,7 @@ class HelloTriangleApp {
 
   void updateProjectionMatrix() {
     frame_state_.proj = glm::perspective(
-        glm::radians(45.0f), (float)width_ / (float)height_, 0.1f, 100000.0f);
+        glm::radians(45.0f), (float)width_ / (float)height_, 5.f, 50000.0f);
     // Invert y-axis because Vulkan is opposite GL.
     frame_state_.proj[1][1] *= -1;
   }
@@ -537,6 +537,8 @@ class HelloTriangleApp {
     ImGui::SliderFloat("Hip Sway", &move_options.hip_sway, 0, 30);
     ImGui::SliderFloat("Hip Spin", &move_options.hip_spin, 0, 45);
     ImGui::SliderFloat("Heel Lift %", &move_options.heel_lift_pct, 0, 2);
+    ImGui::SliderFloat("Heels Shift", &move_options.heel_shift, 0, 90);
+    ImGui::Checkbox("Animate in world", &move_options.animate_in_world);
 
     ImGui::End();
 

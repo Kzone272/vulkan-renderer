@@ -20,6 +20,9 @@ struct MoveOptions {
   float hip_sway = 6;
   float hip_spin = 12;
   float heel_lift_pct = 0.75;
+  float heel_shift = 0;
+  // The option has very bad step placement when turning. Consider deleting.
+  bool animate_in_world = false;
 };
 
 struct SkellySizes {
@@ -48,6 +51,7 @@ class Skelly {
   Skelly() {
     root_.setPos(vec3(200, 0, 200));
     makeBones();
+    updateCurves();
   }
 
   void makeBones() {
@@ -169,8 +173,10 @@ class Skelly {
     // Root animate used for awkward jump animation I should probably delete.
     root_.animate(now);
     updateCycle(now, delta_s);
-    updateRig(now);
-    updateSkeleton();
+    updateCog(now);
+    updatePelvis(now);
+    updateFeet(now);
+    updateLegs();
   }
 
   vec3 getPos() {
@@ -197,7 +203,7 @@ class Skelly {
     Object* obj;
     bool planted = false;
     bool in_swing = false;
-    vec3 world_pos;
+    vec3 world_target;
     glm::quat world_rot;
     vec3 offset;
     float angle = 0;  // Angle relative to floor
@@ -234,20 +240,22 @@ class Skelly {
 
   void makeIkControls() {
     mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
-    mat4 control_t = glm::scale(vec3(5));
 
     vec3 foot_offset = {-options_.stance_w / 2, 0, 12};
-    ik_.lfoot.obj =
-        root_.addChild(std::make_unique<Object>(ModelId::Control, control_t));
-    ik_.lfoot.offset = foot_offset;
-    ik_.lfoot.obj->setPos(ik_.lfoot.offset);
-    plantFoot(ik_.lfoot);
+    initFoot(ik_.lfoot, foot_offset);
+    initFoot(ik_.rfoot, flip * vec4(foot_offset, 1));
+  }
 
-    ik_.rfoot.obj =
+  void initFoot(Foot& foot, vec3 offset) {
+    mat4 control_t = glm::scale(vec3(5));
+    foot.obj =
         root_.addChild(std::make_unique<Object>(ModelId::Control, control_t));
-    ik_.rfoot.offset = flip * foot_offset;
-    ik_.rfoot.obj->setPos(ik_.rfoot.offset);
-    plantFoot(ik_.rfoot);
+    foot.offset = offset;
+    foot.obj->setPos(foot.offset);
+    if (options_.animate_in_world) {
+      foot.world_target = root_.toWorld() * vec4(foot.obj->getPos(), 1);
+    }
+    plantFoot(foot);
   }
 
   template <class T>
@@ -268,6 +276,7 @@ class Skelly {
     Movement<float> bounce;
     Movement<float> sway;
     Movement<float> spin;
+    Movement<float> heels_add;  // Mostly for debugging heel angle
   };
   Cycle walk_{
       // Offsets should be in [0, 1)
@@ -279,6 +288,7 @@ class Skelly {
       .bounce = {.offset = 0, .dur = 0.5, .loop = true},  // pelvis up/down
       .sway = {.offset = 0, .dur = 1, .loop = true, .axis = {0, 0, -1}},
       .spin = {.offset = 0, .dur = 1, .loop = true, .axis = {0, 1, 0}},
+      .heels_add = {.offset = 0.25, .dur = 1, .loop = true, .axis = {0, 1, 0}},
   };
 
   void updateMove(Time now, float delta_s) {
@@ -339,7 +349,7 @@ class Skelly {
     // TODO: This check probably needs word.
     // Maybe it should start once we take the first step, then stop once
     // velocity reaches zero?
-    if (glm::length(vel_) < 0.1f) {
+    if ((false) && glm::length(vel_) < 0.1f) {
       cycle_t_ = 0;
       // TODO: This is smelly.
       walk_.lstep.should_start = false;
@@ -368,6 +378,8 @@ class Skelly {
     }
     cycle_dur_ = step_dur / walk_.lstep.dur;
     updateCurves();
+    // TODO: clean up movement starting.
+    startMovement(walk_.heels_add, now);
   }
 
   void updateCurves() {
@@ -391,6 +403,10 @@ class Skelly {
     walk_.lheel.spline =
         makeSpline<float>(SplineType::Hermite, std::move(values));
     walk_.rheel.spline = walk_.lheel.spline;
+
+    float heel = options_.heel_shift;
+    walk_.heels_add.spline =
+        makeSpline<float>(SplineType::Hermite, {-heel, 0, heel, 0, -heel, 0});
   }
 
   template <class T>
@@ -411,25 +427,20 @@ class Skelly {
     return addMs(now, -pos_in_anim * cycle_dur_);
   }
 
-  void updateRig(Time now) {
-    updateCog(now);
-    updatePelvis(now);
-    updateFeet(now);
-  }
-
   void updateCog(Time now) {
-    ik_.cog.pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
+    vec3 pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
 
     if (target_speed_changed_) {
       startMovement(walk_.bounce, now);
     }
     if (walk_.bounce.anim) {
-      ik_.cog.pos.y += sampleAnimation(*walk_.bounce.anim, now);
+      pos.y += sampleAnimation(*walk_.bounce.anim, now);
     }
 
     vec2 lean = options_.lean * vel_.xz();
     vec3 offset = root_.toLocal() * vec4(vec3(lean.x, 0, lean.y), 0);
-    ik_.cog.pos += offset;
+    pos += offset;
+    cog_.setPos(pos);
   }
 
   void updatePelvis(Time now) {
@@ -437,12 +448,18 @@ class Skelly {
       pelvis_->clearRotAnims();
 
       startMovement(walk_.sway, now);
-      pelvis_->addRotAnim(&walk_.sway.anim.value());
       startMovement(walk_.spin, now);
-      pelvis_->addRotAnim(&walk_.spin.anim.value());
+    }
+    if (walk_.sway.anim) {
+      ik_.pelvis.sway = sampleAnimation(*walk_.sway.anim, now);
+    }
+    if (walk_.spin.anim) {
+      ik_.pelvis.spin = sampleAnimation(*walk_.spin.anim, now);
     }
 
-    pelvis_->animate(now);
+    glm::quat rot = glm::angleAxis(ik_.pelvis.spin, vec3(0, 1, 0)) *
+                    glm::angleAxis(ik_.pelvis.sway, vec3(0, 0, -1));
+    pelvis_->setRot(rot);
   }
 
   void updateFeet(Time now) {
@@ -456,21 +473,28 @@ class Skelly {
     if (heel.should_start) {
       startMovement(heel, now);
     }
+
     if (heel.anim) {
       foot.angle = sampleAnimation(*heel.anim, now);
       if (now > heel.anim->to_time) {
         heel.anim.reset();
         foot.angle = 0;
       }
+    } else {
+      foot.angle = 0;
+    }
+
+    if (walk_.heels_add.anim) {
+      foot.angle += sampleAnimation(*walk_.heels_add.anim, now);
     }
   }
 
   void updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
-    vec3 pos = foot.obj->getPos();
     {
       // This code isn't used anymore, but probably should be used to determine
       // when walking starts, or if we should move feet back when stopped.
       bool supported = !ik_.lfoot.in_swing && !ik_.rfoot.in_swing;
+      vec3 pos = foot.obj->getPos();
       float target_dist = glm::length(pos - foot.offset);
       bool should_step = supported && target_dist > options_.foot_dist;
     }
@@ -481,17 +505,25 @@ class Skelly {
 
     if (foot.planted) {
       mat4 to_local = root_.toLocal();
-      foot.obj->setPos(to_local * vec4(foot.world_pos, 1));
-      foot.obj->setRot(glm::quat_cast(to_local) * foot.world_rot);
+      foot.obj->setPos(to_local * vec4(foot.world_target, 1));
     }
 
-    foot.obj->animate(now);
-    bool ended = move.anim && now > move.anim->to_time;
-
-    if (ended) {
-      foot.obj->setPos(sampleAnimation(*move.anim, move.anim->to_time));
-      move.anim.reset();
-      plantFoot(foot);
+    if (move.anim) {
+      if (now > move.anim->to_time) {
+        vec3 plant_pos = sampleAnimation(*move.anim, move.anim->to_time);
+        if (options_.animate_in_world) {
+          plant_pos = root_.toLocal() * vec4(plant_pos, 1);
+        }
+        foot.obj->setPos(plant_pos);
+        move.anim.reset();
+        plantFoot(foot);
+      } else {
+        vec3 swing_pos = sampleAnimation(*move.anim, now);
+        if (options_.animate_in_world) {
+          swing_pos = root_.toLocal() * vec4(swing_pos, 1);
+        }
+        foot.obj->setPos(swing_pos);
+      }
     }
   }
 
@@ -499,37 +531,61 @@ class Skelly {
     foot.in_swing = true;
     foot.planted = false;
 
-    float step_dur = move.dur * cycle_dur_;
-    float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
+    vec3 start = foot.obj->getPos();
+    mat4 to_world = root_.toWorld();
+    if (options_.animate_in_world) {
+      start = to_world * vec4(start, 1);
+    }
 
-    vec3 pos = foot.obj->getPos();
-    vec3 target_pos = vec3(0, 0, step_l) + foot.offset;
-    vec3 no_vel = vec3(0, 0, -target_speed_);
-    vec3 mid_pos = (pos + target_pos) / 2.f + vec3(0, options_.step_height, 0);
-    vec3 swing_vel = 1.5f * target_speed_ * glm::normalize(target_pos - pos);
+    vec3 end;
+    if (options_.animate_in_world) {
+      vec3 offset = to_world * vec4(foot.offset, 0);
+      vec3 target_v = vel_;
+      if (vel_curve_) {
+        target_v += sampleAnimation(*vel_curve_, addMs(now, move.dur));
+        target_v /= 2;
+      }
+      vec3 step{0};
+      if (glm::length(target_v) > 0.1) {
+        float step_l = std::min(sizes_.leg * 1.4f, glm::length(target_v));
+        step = step_l * glm::normalize(target_v);
+      }
+      vec3 going = (move.dur / 1000.f) * target_v;
+      foot.world_target = getPos() + going + step + offset;
+      end = foot.world_target;
+    } else {
+      float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
+      end = vec3(0, 0, step_l) + foot.offset;
+      foot.world_target = to_world * vec4(end, 1);
+    }
+
+    vec3 mid_pos = (start + end) / 2.f + vec3(0, options_.step_height, 0);
+
+    vec3 path = end - start;
+    vec3 swing_vel = 1.25f * path / (move.dur * cycle_dur_ / 1000);
+    vec3 no_vel = vec3(0, 0, 0);
+    vec3 toe_drop = vec3(0, -options_.step_height / 2, 0);
+    // Subtract root motion when animating in local space
+    if (!options_.animate_in_world) {
+      no_vel.z -= target_speed_;
+      toe_drop.z -= target_speed_;
+    }
 
     move.spline = makeSpline<vec3>(
         SplineType::Hermite,
-        {pos, no_vel, mid_pos, swing_vel, target_pos, no_vel});
+        {start, no_vel, mid_pos, swing_vel, end, toe_drop});
 
-    Time start = getMoveStart(move, now);
-    foot.obj->setPos(vec3(0));
-    foot.obj->setRot(glm::quat());
-    move.anim = makeAnimation(move.spline, step_dur, start);
-    foot.obj->addPosAnim(&move.anim.value());
+    startMovement(move, now);
   }
 
   void plantFoot(Foot& foot) {
     foot.planted = true;
     foot.in_swing = false;
-    mat4 to_world = foot.obj->toRoot();
-    foot.world_pos = to_world * vec4(0, 0, 0, 1);
+    if (!options_.animate_in_world) {
+      foot.world_target = root_.toWorld() * vec4(foot.obj->getPos(), 1);
+    }
+    mat4 to_world = foot.obj->toWorld();
     foot.world_rot = glm::quat_cast(to_world);
-  }
-
-  void updateSkeleton() {
-    cog_.setPos(ik_.cog.pos);
-    updateLegs();
   }
 
   void updateLegs() {
@@ -538,22 +594,23 @@ class Skelly {
   }
 
   void updateLeg(Object& femur, Object& shin, Object& foot, Foot& ik_foot) {
-    glm::quat ankle_rot =
-        glm::angleAxis(glm::radians(ik_foot.angle), vec3(1, 0, 0));
+    float angle = ik_foot.angle;
+    glm::quat ankle_rot = glm::angleAxis(glm::radians(angle), vec3(1, 0, 0));
     vec3 ankle = sizes_.ankle;
-    if (ik_foot.angle >= 0) {
-      ankle = ankle_rot * ankle;
-    } else {
-      float lift =
-          glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(ik_foot.angle)).y;
-      ankle.y += lift;
+    ankle = ankle_rot * ankle;
+    if (angle < 0) {
+      // Lift up foot if it would go through the ground.
+      vec3 target = root_.toLocal() * vec4(ik_foot.world_target, 1);
+      float above = ik_foot.obj->getPos().y - target.y;
+      float lift = glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(angle)).y;
+      ankle.y += std::max(lift - above, 0.f);
+      // TODO: Move foot back so heel doesn't slide forward
     }
-    // TODO: Consider using root_ space for these positions.
-    vec3 root_foot = ik_foot.obj->getPos() + ankle;
-
+    // Ankle in root space
+    vec3 root_ankle = ik_foot.obj->getTransform() * vec4(ankle, 1);
     // Positions in pelvis space.
-    vec3 foot_pos = pelvis_->toLocal(&root_) * vec4(root_foot, 1);
-    vec3 target = foot_pos - femur.getPos();
+    vec3 pelvis_ankle = pelvis_->toLocal(&root_) * vec4(root_ankle, 1);
+    vec3 target = pelvis_ankle - femur.getPos();
     float target_l = glm::length(target);
 
     glm::quat point_foot =
@@ -594,8 +651,8 @@ class Skelly {
   Object* rshin_;
   Object* rfoot_;
 
-  float cycle_t_ = 0.f;
-  float cycle_dur_ = 0.f;
+  float cycle_t_ = 0;
+  float cycle_dur_ = 1000;
 
   vec2 input_dir_{0};
   std::optional<Animation<vec3>> vel_curve_;

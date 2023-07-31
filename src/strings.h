@@ -2,8 +2,10 @@
 
 #include <cstdio>
 #include <format>
+#include <iostream>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 // Snippet source:
 // https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
@@ -19,7 +21,6 @@ std::string strFmt(const std::string& format, Args... args) {
 }
 
 template <class... Args>
-void println(std::format_string<Args...> fmt, Args&&... args) {
-  // void println(const std::format_string<Args...>& format, Args... args) {
-  std::cout << std::format(fmt, args...) << std::endl;
+void log(const std::format_string<Args...> fmt, Args&&... args) {
+  std::cout << std::format(fmt, std::forward<Args>(args)...) << std::endl;
 }

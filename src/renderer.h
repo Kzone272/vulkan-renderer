@@ -24,6 +24,7 @@
 #include "glm-include.h"
 #include "object.h"
 #include "render-objects.h"
+#include "strings.h"
 #include "vulkan-include.h"
 
 namespace {
