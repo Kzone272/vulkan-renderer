@@ -51,7 +51,7 @@ class Skelly {
   Skelly() {
     root_.setPos(vec3(200, 0, 200));
     makeBones();
-    updateCurves();
+    updateMovements();
   }
 
   void makeBones() {
@@ -264,7 +264,6 @@ class Skelly {
     float dur;
     bool loop = false;
     bool should_start = false;
-    vec3 axis;  // used only for rotation
     Spline<T> spline;
     std::optional<Animation<T>> anim;
   };
@@ -285,10 +284,10 @@ class Skelly {
       .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
       .lheel = {.offset = 0.85, .dur = 0.7},
       .rheel = {.offset = 0.35, .dur = 0.7},
-      .bounce = {.offset = 0, .dur = 0.5, .loop = true},  // pelvis up/down
-      .sway = {.offset = 0, .dur = 1, .loop = true, .axis = {0, 0, -1}},
-      .spin = {.offset = 0, .dur = 1, .loop = true, .axis = {0, 1, 0}},
-      .heels_add = {.offset = 0.25, .dur = 1, .loop = true, .axis = {0, 1, 0}},
+      .bounce = {.offset = 0, .dur = 0.5, .loop = true},      // pelvis up/down
+      .sway = {.offset = 0, .dur = 1, .loop = true},          // z
+      .spin = {.offset = 0, .dur = 1, .loop = true},          // y
+      .heels_add = {.offset = 0.25, .dur = 1, .loop = true},  // x
   };
 
   void updateMove(Time now, float delta_s) {
@@ -339,50 +338,51 @@ class Skelly {
   }
 
   template <class T>
-  void checkStart(Movement<T>& move, float prev_t, float t) {
-    move.should_start = !inCycle(move, prev_t) && inCycle(move, t);
+  void checkMove(
+      Movement<T>& move, Time now, bool moves_changed, float prev_t) {
+    if (!move.loop) {
+      move.should_start = !inCycle(move, prev_t) && inCycle(move, cycle_t_);
+    } else if (moves_changed) {
+      startMovement(move, now);
+    }
   }
 
   void updateCycle(Time now, float delta_s) {
-    float prev_t = cycle_t_;
-
-    // TODO: This check probably needs word.
+    // TODO: Don't update cycle when standing?
     // Maybe it should start once we take the first step, then stop once
     // velocity reaches zero?
-    if ((false) && glm::length(vel_) < 0.1f) {
-      cycle_t_ = 0;
-      // TODO: This is smelly.
-      walk_.lstep.should_start = false;
-      walk_.rstep.should_start = false;
-      walk_.lheel.should_start = false;
-      walk_.rheel.should_start = false;
-    } else {
-      cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
-      // Don't check start for looping animations.
-      checkStart(walk_.lstep, prev_t, cycle_t_);
-      checkStart(walk_.rstep, prev_t, cycle_t_);
-      checkStart(walk_.lheel, prev_t, cycle_t_);
-      checkStart(walk_.rheel, prev_t, cycle_t_);
+    // if ((false) && glm::length(vel_) < 0.1f) {
+    //   cycle_t_ = 0;
+    // }
+
+    float prev_t = cycle_t_;
+    cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
+
+    if (target_speed_changed_) {
+      // TODO: Clean up this math. step_dur should not be a factor.
+      float speed = target_speed_;
+      float step_l = std::min(sizes_.leg * 0.6f, speed / 3);
+      float step_dur = 1.5f * (step_l / speed) * 1000.f;
+      if (speed == 0) {
+        step_dur = 500;
+      }
+      cycle_dur_ = step_dur / walk_.lstep.dur;
+
+      updateMovements();
     }
 
-    if (!target_speed_changed_) {
-      return;
-    }
-
-    // TODO: Clean up this math. step_dur should not be a factor.
-    float speed = target_speed_;
-    float step_l = std::min(sizes_.leg * 0.6f, speed / 3);
-    float step_dur = 1.5f * (step_l / speed) * 1000.f;
-    if (speed == 0) {
-      step_dur = 500;
-    }
-    cycle_dur_ = step_dur / walk_.lstep.dur;
-    updateCurves();
-    // TODO: clean up movement starting.
-    startMovement(walk_.heels_add, now);
+    // TODO: Easy way to put all moves in a list?
+    checkMove(walk_.lstep, now, target_speed_changed_, prev_t);
+    checkMove(walk_.rstep, now, target_speed_changed_, prev_t);
+    checkMove(walk_.lheel, now, target_speed_changed_, prev_t);
+    checkMove(walk_.rheel, now, target_speed_changed_, prev_t);
+    checkMove(walk_.bounce, now, target_speed_changed_, prev_t);
+    checkMove(walk_.sway, now, target_speed_changed_, prev_t);
+    checkMove(walk_.spin, now, target_speed_changed_, prev_t);
+    checkMove(walk_.heels_add, now, target_speed_changed_, prev_t);
   }
 
-  void updateCurves() {
+  void updateMovements() {
     float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
     walk_.bounce.spline = makeSpline<float>(
         SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
@@ -413,7 +413,7 @@ class Skelly {
   void startMovement(Movement<T>& move, Time now) {
     float dur = move.dur * cycle_dur_;
     Time start = getMoveStart(move, now);
-    move.anim = makeAnimation(move.spline, dur, start, move.loop, move.axis);
+    move.anim = makeAnimation(move.spline, dur, start, move.loop);
   }
 
   template <class T>
@@ -427,15 +427,23 @@ class Skelly {
     return addMs(now, -pos_in_anim * cycle_dur_);
   }
 
+  vec3 sampleMovement(Movement<vec3>& move, Time now) {
+    if (move.anim) {
+      return sampleAnimation(*move.anim, now);
+    }
+    return vec3(0);
+  }
+
+  float sampleMovement(Movement<float>& move, Time now) {
+    if (move.anim) {
+      return sampleAnimation(*move.anim, now);
+    }
+    return 0;
+  }
+
   void updateCog(Time now) {
     vec3 pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
-
-    if (target_speed_changed_) {
-      startMovement(walk_.bounce, now);
-    }
-    if (walk_.bounce.anim) {
-      pos.y += sampleAnimation(*walk_.bounce.anim, now);
-    }
+    pos.y += sampleMovement(walk_.bounce, now);
 
     vec2 lean = options_.lean * vel_.xz();
     vec3 offset = root_.toLocal() * vec4(vec3(lean.x, 0, lean.y), 0);
@@ -444,18 +452,8 @@ class Skelly {
   }
 
   void updatePelvis(Time now) {
-    if (target_speed_changed_) {
-      pelvis_->clearRotAnims();
-
-      startMovement(walk_.sway, now);
-      startMovement(walk_.spin, now);
-    }
-    if (walk_.sway.anim) {
-      ik_.pelvis.sway = sampleAnimation(*walk_.sway.anim, now);
-    }
-    if (walk_.spin.anim) {
-      ik_.pelvis.spin = sampleAnimation(*walk_.spin.anim, now);
-    }
+    ik_.pelvis.sway = sampleMovement(walk_.sway, now);
+    ik_.pelvis.spin = sampleMovement(walk_.spin, now);
 
     glm::quat rot = glm::angleAxis(ik_.pelvis.spin, vec3(0, 1, 0)) *
                     glm::angleAxis(ik_.pelvis.sway, vec3(0, 0, -1));
@@ -469,24 +467,18 @@ class Skelly {
     updateFoot(ik_.lfoot, now, walk_.lstep);
   }
 
-  void updateHeel(Time now, Foot& foot, Movement<float>& heel) {
-    if (heel.should_start) {
-      startMovement(heel, now);
+  void updateHeel(Time now, Foot& foot, Movement<float>& move) {
+    if (move.should_start) {
+      startMovement(move, now);
     }
 
-    if (heel.anim) {
-      foot.angle = sampleAnimation(*heel.anim, now);
-      if (now > heel.anim->to_time) {
-        heel.anim.reset();
-        foot.angle = 0;
-      }
-    } else {
+    foot.angle = sampleMovement(move, now);
+    if (move.anim && now > move.anim->to_time) {
+      move.anim.reset();
       foot.angle = 0;
     }
 
-    if (walk_.heels_add.anim) {
-      foot.angle += sampleAnimation(*walk_.heels_add.anim, now);
-    }
+    foot.angle += sampleMovement(walk_.heels_add, now);
   }
 
   void updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
@@ -518,7 +510,7 @@ class Skelly {
         move.anim.reset();
         plantFoot(foot);
       } else {
-        vec3 swing_pos = sampleAnimation(*move.anim, now);
+        vec3 swing_pos = sampleMovement(move, now);
         if (options_.animate_in_world) {
           swing_pos = root_.toLocal() * vec4(swing_pos, 1);
         }
