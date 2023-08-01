@@ -3,7 +3,6 @@ Things I Should Do Soon:
 Short-term ideas:
 - Add more movement to skeleton
   - shoulders
-  - arms
 - Adjust position of in-swing step if velocity changes significantly
 - Make prettier
   - Add scene selector
