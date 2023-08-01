@@ -676,19 +676,14 @@ class Skelly {
       ankle.y += std::max(lift - above, 0.f);
       // TODO: Move foot back so heel doesn't slide forward
     }
-    // Ankle in root space
-    vec3 root_ankle = ik_foot.obj->getTransform() * vec4(ankle, 1);
-    // Positions in pelvis space.
-    vec3 pelvis_ankle = pelvis_->toLocal(&root_) * vec4(root_ankle, 1);
-    vec3 target = pelvis_ankle - femur.getPos();
-    float target_l = glm::length(target);
 
-    glm::quat point_foot =
-        glm::rotation(vec3(0, -1, 0), glm::normalize(target));
+    // Ankle in pelvis space.
+    vec3 pelvis_ankle =
+        pelvis_->toLocal(&root_) * ik_foot.obj->getTransform() * vec4(ankle, 1);
 
-    auto [hip, knee] = solveIk(sizes_.femur, sizes_.shin, target_l);
-    femur.setRot(point_foot * glm::angleAxis(hip, vec3(1, 0, 0)));
-    shin.setRot(glm::angleAxis(knee, vec3(1, 0, 0)));
+    updateTwoBoneIk(
+        femur, sizes_.femur, shin, sizes_.shin, femur.getPos(), pelvis_ankle,
+        vec3(0, -1, 0), vec3(1, 0, 0));
 
     mat4 foot_to_root = shin.toLocal(&root_);
     glm::quat foot_rot = ankle_rot * glm::quat_cast(foot_to_root);
@@ -696,10 +691,10 @@ class Skelly {
   }
 
   void updateTwoBoneIk(
-      Object& bone1, float b1_l, Object& bone2, float b2_l, vec3 target,
-      vec3 main_axis, vec3 rot_axis) {
-    // Positions in bone1's parent space.
-    vec3 toward = target - bone1.getPos();
+      Object& bone1, float b1_l, Object& bone2, float b2_l, vec3 b1_pos,
+      vec3 target, vec3 main_axis, vec3 rot_axis) {
+    // target and b1_pos in the same space.
+    vec3 toward = target - b1_pos;
     float toward_l = glm::length(toward);
 
     glm::quat point = glm::rotation(main_axis, glm::normalize(toward));
@@ -716,10 +711,10 @@ class Skelly {
 
   void updateArms() {
     updateTwoBoneIk(
-        lbicep_, sizes_.bicep, lforearm_, sizes_.forearm,
+        lbicep_, sizes_.bicep, lforearm_, sizes_.forearm, lbicep_.getPos(),
         ik_.lhand.obj->getPos(), vec3(-1, 0, 0), vec3(0, 1, 0));
     updateTwoBoneIk(
-        rbicep_, sizes_.bicep, rforearm_, sizes_.forearm,
+        rbicep_, sizes_.bicep, rforearm_, sizes_.forearm, rbicep_.getPos(),
         ik_.rhand.obj->getPos(), vec3(1, 0, 0), vec3(0, -1, 0));
   }
 
