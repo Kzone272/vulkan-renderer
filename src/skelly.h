@@ -23,6 +23,7 @@ struct MoveOptions {
   float heel_shift = 0;
   float hand_height_pct = 0.95;
   float arm_width = 5;
+  float shoulder_rot = 12;
   // The option has very bad step placement when turning. Consider deleting.
   bool animate_in_world = false;
 };
@@ -238,6 +239,7 @@ class Skelly {
     updatePelvis(now);
     updateFeet(now);
     updateLegs();
+    updateShoulders(now);
     updateHands(now);
     updateArms();
   }
@@ -331,6 +333,7 @@ class Skelly {
     Movement<float> sway;
     Movement<float> spin;
     Movement<float> heels_add;  // Mostly for debugging heel angle
+    Movement<float> shoulders;
     Movement<vec3> larm;
     Movement<vec3> rarm;
   };
@@ -345,6 +348,7 @@ class Skelly {
       .sway = {.offset = 0, .dur = 1, .loop = true},          // z
       .spin = {.offset = 0, .dur = 1, .loop = true},          // y
       .heels_add = {.offset = 0.25, .dur = 1, .loop = true},  // x
+      .shoulders = {.offset = 0, .dur = 1, .loop = true},     // y
       .larm = {.offset = 0.5, .dur = 1, .loop = true},
       .rarm = {.offset = 0, .dur = 1, .loop = true},
   };
@@ -441,6 +445,7 @@ class Skelly {
     checkMove(walk_.heels_add, now, target_speed_changed_, prev_t);
     checkMove(walk_.larm, now, target_speed_changed_, prev_t);
     checkMove(walk_.rarm, now, target_speed_changed_, prev_t);
+    checkMove(walk_.shoulders, now, target_speed_changed_, prev_t);
   }
 
   void updateMovements() {
@@ -468,6 +473,11 @@ class Skelly {
     float heel = options_.heel_shift;
     walk_.heels_add.spline =
         makeSpline<float>(SplineType::Hermite, {-heel, 0, heel, 0, -heel, 0});
+
+    float shoulder_rot = glm::radians(options_.shoulder_rot);
+    walk_.shoulders.spline = makeSpline<float>(
+        SplineType::Hermite,
+        {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
 
     float hand_dist = options_.hand_height_pct * (sizes_.arm - sizes_.hand_l);
     vec3 shoulder = lbicep_.getPos();
@@ -702,6 +712,11 @@ class Skelly {
     auto [j1, j2] = solveIk(b1_l, b2_l, toward_l);
     bone1.setRot(point * glm::angleAxis(j1, rot_axis));
     bone2.setRot(glm::angleAxis(j2, rot_axis));
+  }
+
+  void updateShoulders(Time now) {
+    float angle = sampleMovement(walk_.shoulders, now);
+    torso_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
   }
 
   void updateHands(Time now) {

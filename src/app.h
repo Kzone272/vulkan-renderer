@@ -538,6 +538,7 @@ class HelloTriangleApp {
     ImGui::SliderFloat("Hip Spin", &move_options.hip_spin, 0, 45);
     ImGui::SliderFloat("Heel Lift %", &move_options.heel_lift_pct, 0, 2);
     ImGui::SliderFloat("Heels Shift", &move_options.heel_shift, 0, 90);
+    ImGui::SliderFloat("Shoulder Rot", &move_options.shoulder_rot, 0, 45);
     ImGui::SliderFloat("Arm Width", &move_options.arm_width, -20, 100);
     ImGui::SliderFloat("Hand Height", &move_options.hand_height_pct, 0, 1);
     ImGui::Checkbox("Animate in world", &move_options.animate_in_world);
