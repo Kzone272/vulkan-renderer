@@ -192,6 +192,9 @@ class Object {
     return children_;
   }
   void clearChildren() {
+    for (auto* child : children_) {
+      child->clearChildren();
+    }
     children_.clear();
     owned_children_.clear();
   }

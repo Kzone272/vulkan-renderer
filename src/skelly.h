@@ -30,20 +30,25 @@ struct SkellySizes {
   float height = 185;
   float bone_w = 6;
   float leg = 100;  // floor to hip
-  float femur_pct = 0.56;
+  float femur_pct = 0.5;
   float pelvis_w = 25;
   float shoulders_w = 50;
+  float arm = 70;
+  float bicep_pct = 0.5;
   // Constants
   vec3 ankle = vec3(0, 10, -18);  // from foot to ankle
   float pelvis_h = 15;            // height above hip
   float head_h = 25;              // length between shoulders and head
   float neck = 5;                 // length between shoulders and head
   float foot_l = 25;              // Toe to heel
+  float hand_l = 10;
   // Driven by params above.
   float pelvis_y;
   float shoulders_y;
   float femur;
   float shin;
+  float bicep;
+  float forearm;
 };
 
 class Skelly {
@@ -61,6 +66,9 @@ class Skelly {
     float leg_l = sizes_.leg - sizes_.ankle.y;
     sizes_.femur = sizes_.femur_pct * leg_l;
     sizes_.shin = leg_l - sizes_.femur;
+    float arm_l = sizes_.arm - sizes_.hand_l;
+    sizes_.bicep = sizes_.bicep_pct * arm_l;
+    sizes_.forearm = arm_l - sizes_.bicep;
 
     root_.clearChildren();
 
@@ -76,6 +84,31 @@ class Skelly {
     torso_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
     torso_->setPos(vec3(0, sizes_.shoulders_y, 0));
 
+    vec3 bicep_pos = {-(sizes_.shoulders_w / 2 + 3), -5, 0};
+    mat4 arm_rot =
+        glm::toMat4(glm::angleAxis(glm::radians(90.f), vec3(0, 0, 1)));
+    mat4 bicep_t =
+        glm::scale(vec3(sizes_.bicep, sizes_.bone_w, sizes_.bone_w)) * arm_rot;
+    lbicep_ = Object(ModelId::Bone, bicep_t);
+    torso_->addChild(&lbicep_);
+    lbicep_.setPos(bicep_pos);
+    lbicep_.setRot(glm::angleAxis(glm::radians(70.f), vec3(0, 0, 1)));
+
+    vec3 forearm_pos = {-sizes_.bicep, 0, 0};
+    mat4 forearm_t =
+        glm::scale(vec3(sizes_.forearm, sizes_.bone_w, sizes_.bone_w)) *
+        arm_rot;
+    lforearm_ = Object(ModelId::Bone, forearm_t);
+    lbicep_.addChild(&lforearm_);
+    lforearm_.setPos(forearm_pos);
+    lforearm_.setRot(glm::angleAxis(glm::radians(45.f), vec3(0, 1, 0)));
+
+    vec3 hand_pos = {-sizes_.forearm, 0, 0};
+    mat4 hand_t = glm::scale(vec3(sizes_.hand_l, 7, 9)) * arm_rot;
+    lhand_ = Object(ModelId::Bone, hand_t);
+    lforearm_.addChild(&lhand_);
+    lhand_.setPos(hand_pos);
+
     mat4 head_t = glm::scale(vec3(20, sizes_.head_h, 25));
     head_ = torso_->addChild(std::make_unique<Object>(ModelId::Bone, head_t));
     head_->setPos(vec3(0, sizes_.neck, 5));
@@ -84,7 +117,7 @@ class Skelly {
         glm::scale(vec3(sizes_.bone_w, -sizes_.femur, sizes_.bone_w));
     lfemur_ =
         pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
-    vec3 femur_pos = vec3(-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0);
+    vec3 femur_pos = {-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0};
     lfemur_->setPos(femur_pos);
 
     mat4 shin_t = glm::scale(vec3(sizes_.bone_w, -sizes_.shin, sizes_.bone_w));
@@ -100,19 +133,35 @@ class Skelly {
     lfoot_->setPos(foot_pos);
 
     // Add opposite limbs with flipped positions.
-    mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
+    mat4 flip = glm::scale(vec3(-1, 1, 1));
+    mat3 flip3 = mat3(flip);
 
     rfemur_ =
         pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
-    rfemur_->setPos(flip * femur_pos);
+    rfemur_->setPos(flip3 * femur_pos);
 
     rshin_ = rfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
-    rshin_->setPos(flip * shin_pos);
+    rshin_->setPos(flip3 * shin_pos);
 
     rfoot_ = rshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
-    rfoot_->setPos(flip * foot_pos);
+    rfoot_->setPos(flip3 * foot_pos);
 
-    makeIkControls();
+    rbicep_ = Object(ModelId::Bone, flip * bicep_t);
+    torso_->addChild(&rbicep_);
+    rbicep_.setPos(flip3 * bicep_pos);
+
+    rforearm_ = Object(ModelId::Bone, flip * forearm_t);
+    rbicep_.addChild(&rforearm_);
+    rforearm_.setPos(flip3 * forearm_pos);
+
+    rhand_ = Object(ModelId::Bone, flip * hand_t);
+    rforearm_.addChild(&rhand_);
+    rhand_.setPos(flip3 * hand_pos);
+
+    // Add non-bone control objects
+    vec3 foot_offset = {-options_.stance_w / 2, 0, 12};
+    initFoot(ik_.lfoot, foot_offset);
+    initFoot(ik_.rfoot, flip3 * foot_offset);
   }
 
   void handleInput(const InputState& input, Time now) {
@@ -237,14 +286,6 @@ class Skelly {
     Hand lhand;
     Hand rhand;
   } ik_ = {};
-
-  void makeIkControls() {
-    mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
-
-    vec3 foot_offset = {-options_.stance_w / 2, 0, 12};
-    initFoot(ik_.lfoot, foot_offset);
-    initFoot(ik_.rfoot, flip * vec4(foot_offset, 1));
-  }
 
   void initFoot(Foot& foot, vec3 offset) {
     mat4 control_t = glm::scale(vec3(5));
@@ -635,6 +676,12 @@ class Skelly {
   Object cog_;
   Object* pelvis_;
   Object* torso_;
+  Object lbicep_;
+  Object lforearm_;
+  Object lhand_;
+  Object rbicep_;
+  Object rforearm_;
+  Object rhand_;
   Object* head_;
   Object* lfemur_;
   Object* lshin_;

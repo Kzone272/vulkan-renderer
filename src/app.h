@@ -551,6 +551,8 @@ class HelloTriangleApp {
     changed |= ImGui::SliderFloat("Bone W", &sizes.bone_w, 0.5, 10);
     changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvis_w, 1, 60);
     changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shoulders_w, 1, 100);
+    changed |= ImGui::SliderFloat("Arm", &sizes.arm, 1, 150);
+    changed |= ImGui::SliderFloat("Bicep %", &sizes.bicep_pct, 0.05, 1);
     ImGui::End();
 
     if (changed) {
