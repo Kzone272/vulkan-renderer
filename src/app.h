@@ -524,24 +524,23 @@ class HelloTriangleApp {
     std::string pos_str = "Pos: " + glm::to_string(skelly_.getPos());
     ImGui::Text(pos_str.c_str());
     ImGui::SliderFloat("Max Speed", &move_options.max_speed, 0, 500);
-    ImGui::SliderFloat("Adjust Time", &move_options.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Vel Adjust Time", &move_options.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
     ImGui::SliderFloat("Crouch %", &move_options.crouch_pct, 0.01, 1.2);
     if (ImGui::SliderFloat("Stance W", &move_options.stance_w, 0, 60)) {
       skelly_.makeBones();
     }
-    ImGui::SliderFloat("Foot Dist", &move_options.foot_dist, 0, 50);
     ImGui::SliderFloat("Step Height", &move_options.step_height, 0, 50);
-    ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
     ImGui::SliderFloat("Lean", &move_options.lean, 0, 0.5);
     ImGui::SliderFloat("Bounce", &move_options.bounce, 0, 10);
     ImGui::SliderFloat("Hip Sway", &move_options.hip_sway, 0, 30);
     ImGui::SliderFloat("Hip Spin", &move_options.hip_spin, 0, 45);
     ImGui::SliderFloat("Heel Lift %", &move_options.heel_lift_pct, 0, 2);
     ImGui::SliderFloat("Heels Shift", &move_options.heel_shift, 0, 90);
-    ImGui::SliderFloat("Shoulder Rot", &move_options.shoulder_rot, 0, 45);
-    ImGui::SliderFloat("Arm Width", &move_options.arm_width, -20, 100);
-    ImGui::SliderFloat("Hand Height", &move_options.hand_height_pct, 0, 1);
-    ImGui::Checkbox("Animate in world", &move_options.animate_in_world);
+    ImGui::SliderFloat("Shoulder Spin", &move_options.shoulder_spin, 0, 45);
+    ImGui::SliderFloat("Arm Span %", &move_options.arm_span_pct, -0.2, 1);
+    ImGui::SliderFloat("Hand Height %", &move_options.hand_height_pct, -1, 1);
+    ImGui::SliderFloat("Hands Forward", &move_options.hands_forward, -50, 50);
 
     ImGui::End();
 

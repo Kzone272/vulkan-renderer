@@ -10,20 +10,21 @@
 struct MoveOptions {
   float max_speed = 200;
   float adjust_time = 500;
+  float max_rot_speed = 270;
   float crouch_pct = 0.95;
   float stance_w = 15;
   float foot_dist = 5;
   float step_height = 5;
-  float max_rot_speed = 270;
   float lean = 0.05;
   float bounce = 3;
   float hip_sway = 6;
-  float hip_spin = 12;
+  float hip_spin = 8;
   float heel_lift_pct = 0.75;
   float heel_shift = 0;
+  float shoulder_spin = 6;
+  float arm_span_pct = 0.1;
   float hand_height_pct = 0.95;
-  float arm_width = 5;
-  float shoulder_rot = 12;
+  float hands_forward = 0;
   // The option has very bad step placement when turning. Consider deleting.
   bool animate_in_world = false;
 };
@@ -50,6 +51,7 @@ struct SkellySizes {
   float shoulders_y;
   float femur;
   float shin;
+  float wrist_d;  // Distance from shoulder to wrist
   float bicep;
   float forearm;
 };
@@ -69,9 +71,9 @@ class Skelly {
     float leg_l = sizes_.leg - sizes_.ankle.y;
     sizes_.femur = sizes_.femur_pct * leg_l;
     sizes_.shin = leg_l - sizes_.femur;
-    float arm_l = sizes_.arm - sizes_.hand_l;
-    sizes_.bicep = sizes_.bicep_pct * arm_l;
-    sizes_.forearm = arm_l - sizes_.bicep;
+    sizes_.wrist_d = sizes_.arm - sizes_.hand_l;
+    sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
+    sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
 
     root_.clearChildren();
 
@@ -166,7 +168,7 @@ class Skelly {
     initFoot(ik_.lfoot, foot_offset);
     initFoot(ik_.rfoot, flip3 * foot_offset);
 
-    vec3 wrist_pos = vec3(-arm_l, 0, 0) + bicep_pos;
+    vec3 wrist_pos = vec3(-sizes_.wrist_d, 0, 0) + bicep_pos;
     mat4 control_t = glm::scale(vec3(5));
     ik_.lhand.obj =
         torso_->addChild(std::make_unique<Object>(ModelId::Control, control_t));
@@ -474,17 +476,22 @@ class Skelly {
     walk_.heels_add.spline =
         makeSpline<float>(SplineType::Hermite, {-heel, 0, heel, 0, -heel, 0});
 
-    float shoulder_rot = glm::radians(options_.shoulder_rot);
+    float shoulder_rot = glm::radians(options_.shoulder_spin);
     walk_.shoulders.spline = makeSpline<float>(
         SplineType::Hermite,
         {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
 
-    float hand_dist = options_.hand_height_pct * (sizes_.arm - sizes_.hand_l);
+    float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
     vec3 shoulder = lbicep_.getPos();
-    vec3 back =
-        vec3(-options_.arm_width, -hand_dist, -0.2 * hand_dist) + shoulder;
-    vec3 forward =
-        vec3(-options_.arm_width, -hand_dist + 5, 0.4 * hand_dist) + shoulder;
+    float hand_width = options_.arm_span_pct * sizes_.wrist_d;
+    vec3 back = vec3(
+                    -hand_width, -hand_dist,
+                    -0.2 * hand_dist + options_.hands_forward) +
+                shoulder;
+    vec3 forward = vec3(
+                       -hand_width, -hand_dist + 5,
+                       0.4 * hand_dist + options_.hands_forward) +
+                   shoulder;
     walk_.larm.spline = makeSpline<vec3>(
         SplineType::Hermite, {back, vec3(0), forward, vec3(0), back, vec3(0)});
 
