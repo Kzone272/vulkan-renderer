@@ -483,69 +483,114 @@ class HelloTriangleApp {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::Begin("Controls");
+    ImGui::Begin("Stats");
     ImGui::Text("%s", ui_.fps.c_str());
+    std::string pos_str = "Pos: " + tostr(skelly_.getPos());
+    ImGui::Text(pos_str.c_str());
+    ImGui::End();
 
-    ImGui::Text("Camera Type:");
-    int cam_ind = static_cast<int>(options_.cam_type);
-    ImGui::RadioButton("Spin", &cam_ind, 0);
-    ImGui::SameLine();
-    ImGui::RadioButton("Trackball", &cam_ind, 1);
-    ImGui::SameLine();
-    ImGui::RadioButton("Fps", &cam_ind, 2);
-    ImGui::SameLine();
-    ImGui::RadioButton("Follow", &cam_ind, 3);
-    CameraType cam_types[] = {
-        CameraType::Spin,
-        CameraType::Trackball,
-        CameraType::Fps,
-        CameraType::Follow,
-    };
-    options_.cam_type = cam_types[cam_ind];
-
-    ImGui::Checkbox("Animate", &options_.animate);
-    ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
-    if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
-      remakeGrid(options_.grid_size);
+    ImGui::Begin("Misc Controls");
+    if (ImGui::TreeNode("Camera")) {
+      ImGui::Text("Camera Type:");
+      int cam_ind = static_cast<int>(options_.cam_type);
+      ImGui::RadioButton("Spin", &cam_ind, 0);
+      ImGui::SameLine();
+      ImGui::RadioButton("Trackball", &cam_ind, 1);
+      ImGui::SameLine();
+      ImGui::RadioButton("Fps", &cam_ind, 2);
+      ImGui::SameLine();
+      ImGui::RadioButton("Follow", &cam_ind, 3);
+      CameraType cam_types[] = {
+          CameraType::Spin,
+          CameraType::Trackball,
+          CameraType::Fps,
+          CameraType::Follow,
+      };
+      options_.cam_type = cam_types[cam_ind];
+      ImGui::TreePop();
     }
+    if (ImGui::TreeNode("Objects")) {
+      ImGui::Checkbox("Animate", &options_.animate);
+      ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
+      if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
+        remakeGrid(options_.grid_size);
+      }
 
-    if (ImGui::Checkbox("In", &options_.tetra_in)) {
-      loadPrimitives();
-    }
-    ImGui::SameLine();
-    if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
-      loadPrimitives();
+      if (ImGui::Checkbox("In", &options_.tetra_in)) {
+        loadPrimitives();
+      }
+      ImGui::SameLine();
+      if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
+        loadPrimitives();
+      }
+      ImGui::TreePop();
     }
 
     ImGui::End();
 
-    MoveOptions& move_options = *skelly_.getMoveOptions();
+    MoveOptions& move = *skelly_.getMoveOptions();
     ImGui::Begin("Move Options");
-    std::string pos_str = "Pos: " + glm::to_string(skelly_.getPos());
-    ImGui::Text(pos_str.c_str());
-    ImGui::SliderFloat("Max Speed", &move_options.max_speed, 0, 500);
-    ImGui::SliderFloat("Vel Adjust Time", &move_options.adjust_time, 0, 1000);
-    ImGui::SliderFloat("Max Rot Speed", &move_options.max_rot_speed, 1, 360);
-    ImGui::SliderFloat("Crouch %", &move_options.crouch_pct, 0.01, 1.2);
-    if (ImGui::SliderFloat("Stance W", &move_options.stance_w, 0, 60)) {
+    if (ImGui::Combo(
+            "Movement Presets", &move_preset_,
+            "Normal\0Tightrope\0Preppy\0Snow\0Feminine\0Crouch")) {
+      if (move_preset_ == 0) {
+        moveDefault(move);
+      } else if (move_preset_ == 1) {
+        moveTightrope(move);
+      } else if (move_preset_ == 2) {
+        movePreppy(move);
+      } else if (move_preset_ == 3) {
+        moveSnow(move);
+      } else if (move_preset_ == 4) {
+        moveFeminine(move);
+      } else if (move_preset_ == 5) {
+        moveCrouch(move);
+      }
       skelly_.makeBones();
     }
-    ImGui::SliderFloat("Step Height", &move_options.step_height, 0, 50);
-    ImGui::SliderFloat("Lean", &move_options.lean, 0, 0.5);
-    ImGui::SliderFloat("Bounce", &move_options.bounce, 0, 10);
-    ImGui::SliderFloat("Hip Sway", &move_options.hip_sway, 0, 30);
-    ImGui::SliderFloat("Hip Spin", &move_options.hip_spin, 0, 45);
-    ImGui::SliderFloat("Heel Lift %", &move_options.heel_lift_pct, 0, 2);
-    ImGui::SliderFloat("Heels Shift", &move_options.heel_shift, 0, 90);
-    ImGui::SliderFloat("Shoulder Spin", &move_options.shoulder_spin, 0, 45);
-    ImGui::SliderFloat("Arm Span %", &move_options.arm_span_pct, -0.2, 1);
-    ImGui::SliderFloat("Hand Height %", &move_options.hand_height_pct, -1, 1);
-    ImGui::SliderFloat("Hands Forward", &move_options.hands_forward, -50, 50);
+    ImGui::Separator();
+
+    ImGui::SliderFloat("Max Speed", &move.max_speed, 0, 500);
+    ImGui::SliderFloat("Vel Adjust Time", &move.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Max Rot Speed", &move.max_rot_speed, 1, 360);
+    ImGui::SliderFloat("Crouch %", &move.crouch_pct, 0.01, 1.2);
+    if (ImGui::SliderFloat("Stance W", &move.stance_w, 0, 60)) {
+      skelly_.makeBones();
+    }
+    ImGui::SliderFloat("Step Height", &move.step_height, 0, 50);
+    ImGui::SliderFloat("Lean", &move.lean, 0, 0.5);
+    ImGui::SliderFloat("Bounce", &move.bounce, 0, 10);
+    ImGui::SliderFloat("Hip Sway", &move.hip_sway, 0, 30);
+    ImGui::SliderFloat("Hip Spin", &move.hip_spin, 0, 45);
+    ImGui::SliderFloat("Heel Lift %", &move.heel_lift_pct, 0, 2);
+    ImGui::SliderFloat("Heels Shift", &move.heel_shift, 0, 90);
+    ImGui::SliderFloat("Shoulder Spin", &move.shoulder_spin, 0, 45);
+    ImGui::SliderFloat("Arm Span %", &move.arm_span_pct, -0.2, 1);
+    ImGui::SliderFloat("Hand Height %", &move.hand_height_pct, -1, 1);
+    ImGui::SliderFloat("Hands Forward", &move.hands_forward, -50, 50);
 
     ImGui::End();
 
     SkellySizes& sizes = *skelly_.getSkellySizes();
-    ImGui::Begin("Skelly Sizes");
+    ImGui::Begin("Skeleton Sizes");
+
+    if (ImGui::Combo(
+            "Size Presets", &size_preset_, "Normal\0Tall\0Big\0Dwarf\0Chimp")) {
+      if (size_preset_ == 0) {
+        sizeDefault(sizes);
+      } else if (size_preset_ == 1) {
+        sizeTall(sizes);
+      } else if (size_preset_ == 2) {
+        sizeBig(sizes);
+      } else if (size_preset_ == 3) {
+        sizeDwarf(sizes);
+      } else if (size_preset_ == 4) {
+        sizeChimp(sizes);
+      }
+      skelly_.makeBones();
+    }
+    ImGui::Separator();
+
     bool changed = false;
     changed |= ImGui::SliderFloat("Height", &sizes.height, 1, 250);
     changed |= ImGui::SliderFloat("Leg", &sizes.leg, 1, sizes.height);
@@ -622,6 +667,8 @@ class HelloTriangleApp {
   Object world_;
   Object grid_;
   Skelly skelly_;
+  int move_preset_ = 0;
+  int size_preset_ = 0;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
