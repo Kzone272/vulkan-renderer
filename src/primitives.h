@@ -5,27 +5,67 @@
 #include "render-objects.h"
 
 // Make a cube with origin at bottom middle.
-Mesh makeCube() {
+constexpr Mesh makeCube() {
   Mesh m;
+
+  // Vertices:
+  // top x {back, front} x {left, right}
+  vec3 tbl{-0.5, 1, 0.5};
+  vec3 tbr{0.5, 1, 0.5};
+  vec3 tfr{0.5, 1, -0.5};
+  vec3 tfl{-0.5, 1, -0.5};
+  // bottom x {back, front} x {left, right}
+  vec3 bbl{-0.5, 0, 0.5};
+  vec3 bbr{0.5, 0, 0.5};
+  vec3 bfr{0.5, 0, -0.5};
+  vec3 bfl{-0.5, 0, -0.5};
+  // Normals:
+  vec3 up{0, 1, 0};         // up
+  vec3 down{0, -1, 0};      // down
+  vec3 left{-1, 0, 0};      // left
+  vec3 right{1, 0, 0};      // right
+  vec3 forward{0, 0, 1};    // forward
+  vec3 backward{0, 0, -1};  // backward
+
   m.vertices = {
-      // Bottom
-      {.pos{-0.5, 0, 0.5}},   // bl
-      {.pos{0.5, 0, 0.5}},    // br
-      {.pos{0.5, 0, -0.5}},   // fr
-      {.pos{-0.5, 0, -0.5}},  // fl
       // Top
-      {.pos{-0.5, 1, 0.5}},   // bl
-      {.pos{0.5, 1, 0.5}},    // br
-      {.pos{0.5, 1, -0.5}},   // fr
-      {.pos{-0.5, 1, -0.5}},  // fl
+      {.pos{tbl}, .normal{up}},
+      {.pos{tbr}, .normal{up}},
+      {.pos{tfl}, .normal{up}},
+      {.pos{tfr}, .normal{up}},
+      // Bottom
+      {.pos{bfl}, .normal{down}},
+      {.pos{bfr}, .normal{down}},
+      {.pos{bbl}, .normal{down}},
+      {.pos{bbr}, .normal{down}},
+      // Left
+      {.pos{tbl}, .normal{left}},
+      {.pos{tfl}, .normal{left}},
+      {.pos{bbl}, .normal{left}},
+      {.pos{bfl}, .normal{left}},
+      // Right
+      {.pos{tfr}, .normal{right}},
+      {.pos{tbr}, .normal{right}},
+      {.pos{bfr}, .normal{right}},
+      {.pos{bbr}, .normal{right}},
+      // Front
+      {.pos{tfl}, .normal{backward}},
+      {.pos{tfr}, .normal{backward}},
+      {.pos{bfl}, .normal{backward}},
+      {.pos{bfr}, .normal{backward}},
+      // Back
+      {.pos{tbr}, .normal{forward}},
+      {.pos{tbl}, .normal{forward}},
+      {.pos{bbr}, .normal{forward}},
+      {.pos{bbl}, .normal{forward}},
   };
   m.indices = {
-      3, 2, 1, 3, 1, 0,  // bot
-      4, 5, 6, 4, 6, 7,  // top
-      4, 7, 3, 4, 3, 0,  // left
-      6, 5, 1, 6, 1, 2,  // right
-      7, 6, 2, 7, 2, 3,  // front
-      5, 4, 0, 5, 0, 1,  // back
+      0,  1,  2,  2,  1,  3,   // top
+      4,  5,  6,  6,  5,  7,   // bottom
+      8,  9,  10, 10, 9,  11,  // left
+      12, 13, 14, 14, 13, 15,  // right
+      16, 17, 18, 18, 17, 19,  // front
+      20, 21, 22, 22, 21, 23,  // back
   };
   return std::move(m);
 }
