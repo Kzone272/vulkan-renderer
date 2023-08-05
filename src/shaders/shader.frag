@@ -11,8 +11,15 @@ layout(location = 2) in vec2 fragUv;
 
 layout(location = 0) out vec4 outColor;
 
+vec3 lightDir = vec3(0.3,-1,0);
+
 void main() {
-  outColor = texture(texSampler, fragUv)
+  vec4 diffuse = texture(texSampler, fragUv)
       * vec4(fragColor, 1.0)
       * vec4(material.color, 1.0);
+
+  vec3 norm = normalize(fragNormal);
+  float lambert = max(0, dot(normalize(-lightDir), norm));
+
+  outColor = diffuse * vec4(vec3(lambert), 1);
 }

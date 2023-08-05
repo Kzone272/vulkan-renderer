@@ -97,11 +97,11 @@ struct Mesh {
 
 namespace std {
 
-// TODO: Add normal to this. Or better, hash this more generally.
+// TODO: Hash this more generally.
 template <>
 struct hash<Vertex> {
   size_t operator()(Vertex const& vertex) const {
-    return ((hash<vec3>()(vertex.pos) ^ (hash<vec3>()(vertex.color) << 1)) >>
+    return ((hash<vec3>()(vertex.pos) ^ (hash<vec3>()(vertex.normal) << 1)) >>
             1) ^
            (hash<vec2>()(vertex.uv) << 1);
   }
