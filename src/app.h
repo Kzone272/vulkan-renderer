@@ -151,8 +151,9 @@ class HelloTriangleApp {
     MaterialId bone_mat = renderer_->useMaterial({.ubo{.color{0.9, 0.2, 0.1}}});
     MaterialId control_mat =
         renderer_->useMaterial({.ubo{.color{0.1, 1, 0.2}}});
-    MaterialId floor_mat =
-        renderer_->useMaterial({.ubo{.color{0.2, 0.2, 0.2}}});
+    MaterialId floor_mat = renderer_->useMaterial(
+        {.diffuse_path = "assets/textures/viking_room.png",
+         .ubo{.color{0.2, 0.2, 0.2}}});
     MaterialId white_mat = renderer_->useMaterial({});
 
     renderer_->useMesh(ModelId::Cube, makeCube(), cube_mat);
