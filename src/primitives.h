@@ -75,13 +75,16 @@ Mesh makePlane(float x_size, float z_size) {
   // repeat texture every 1m
   float x_reps = x_size / 100;
   float y_reps = z_size / 100;
+  float hw = x_size / 2;  // half width
+  float hd = z_size / 2;  // half depth
+  vec3 up{0, 1, 0};
   m.vertices = {
-      {.pos{-x_size / 2, 0, z_size / 2}, .uv{0, 0}},            // bl
-      {.pos{x_size / 2, 0, z_size / 2}, .uv{x_reps, 0}},        // br
-      {.pos{x_size / 2, 0, -z_size / 2}, .uv{x_reps, y_reps}},  // fr
-      {.pos{-x_size / 2, 0, -z_size / 2}, .uv{0, y_reps}},      // fl
+      {.pos{-hw, 0, hd}, .normal{up}, .uv{0, 0}},            // bl
+      {.pos{hw, 0, hd}, .normal{up}, .uv{x_reps, 0}},        // br
+      {.pos{-hw, 0, -hd}, .normal{up}, .uv{0, y_reps}},      // fl
+      {.pos{hw, 0, -hd}, .normal{up}, .uv{x_reps, y_reps}},  // fr
   };
-  m.indices = {0, 1, 2, 0, 2, 3};
+  m.indices = {0, 1, 2, 2, 1, 3};
   return std::move(m);
 }
 
