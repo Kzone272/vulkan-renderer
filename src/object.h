@@ -26,6 +26,14 @@ struct ModelInfo {
   mat4 model_transform{1};
 };
 
+struct MaterialInfo {
+  std::optional<std::string> diffuse_path;
+  struct UniformBufferObject {
+    vec3 color = {1, 1, 1};
+  } ubo;
+};
+typedef uint32_t MaterialId;
+
 std::map<ModelId, ModelInfo> model_registry = {
     {ModelId::Viking,
      {

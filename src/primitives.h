@@ -5,19 +5,19 @@
 #include "render-objects.h"
 
 // Make a cube with origin at bottom middle.
-Mesh makeCube(vec3 color) {
+Mesh makeCube() {
   Mesh m;
   m.vertices = {
       // Bottom
-      {{-0.5, 0, 0.5}, color, {0, 0}},   // bl
-      {{0.5, 0, 0.5}, color, {0, 0}},    // br
-      {{0.5, 0, -0.5}, color, {0, 0}},   // fr
-      {{-0.5, 0, -0.5}, color, {0, 0}},  // fl
+      {.pos{-0.5, 0, 0.5}},   // bl
+      {.pos{0.5, 0, 0.5}},    // br
+      {.pos{0.5, 0, -0.5}},   // fr
+      {.pos{-0.5, 0, -0.5}},  // fl
       // Top
-      {{-0.5, 1, 0.5}, color, {0, 0}},   // bl
-      {{0.5, 1, 0.5}, color, {0, 0}},    // br
-      {{0.5, 1, -0.5}, color, {0, 0}},   // fr
-      {{-0.5, 1, -0.5}, color, {0, 0}},  // fl
+      {.pos{-0.5, 1, 0.5}},   // bl
+      {.pos{0.5, 1, 0.5}},    // br
+      {.pos{0.5, 1, -0.5}},   // fr
+      {.pos{-0.5, 1, -0.5}},  // fl
   };
   m.indices = {
       3, 2, 1, 3, 1, 0,  // bot
@@ -30,16 +30,16 @@ Mesh makeCube(vec3 color) {
   return std::move(m);
 }
 
-Mesh makePlane(float x_size, float z_size, vec3 color) {
+Mesh makePlane(float x_size, float z_size) {
   Mesh m;
   // repeat texture every 1m
   float x_reps = x_size / 100;
   float y_reps = z_size / 100;
   m.vertices = {
-      {{-x_size / 2, 0, z_size / 2}, color, {0, 0}},            // bl
-      {{x_size / 2, 0, z_size / 2}, color, {x_reps, 0}},        // br
-      {{x_size / 2, 0, -z_size / 2}, color, {x_reps, y_reps}},  // fr
-      {{-x_size / 2, 0, -z_size / 2}, color, {0, y_reps}},      // fl
+      {.pos{-x_size / 2, 0, z_size / 2}, .uv{0, 0}},            // bl
+      {.pos{x_size / 2, 0, z_size / 2}, .uv{x_reps, 0}},        // br
+      {.pos{x_size / 2, 0, -z_size / 2}, .uv{x_reps, y_reps}},  // fr
+      {.pos{-x_size / 2, 0, -z_size / 2}, .uv{0, y_reps}},      // fl
   };
   m.indices = {0, 1, 2, 0, 2, 3};
   return std::move(m);
@@ -59,10 +59,10 @@ Mesh tetrahedron(int steps, bool in) {
   Mesh tetra;
   vec3 color = {0.1, 0.8, 1};
   tetra.vertices.insert(
-      tetra.vertices.begin(), {{a, color, {0, 0}},
-                               {b, color, {0, 0}},
-                               {c, color, {0, 0}},
-                               {d, color, {0, 0}}});
+      tetra.vertices.begin(), {{.pos{a}, .color{color}},
+                               {.pos{b}, .color{color}},
+                               {.pos{c}, .color{color}},
+                               {.pos{d}, .color{color}}});
   uint32_t ai = 0, bi = 1, ci = 2, di = 3;
 
   tetra.indices.insert(
@@ -91,17 +91,17 @@ void iter(Mesh& mesh, int steps, bool in) {
       vec3 d = (b + c) / 2.f;
       vec3 dcol = (bv.color + cv.color) / 2.f;
       uint32_t di = mesh.vertices.size();
-      mesh.vertices.push_back({d, dcol, {0, 0}});
+      mesh.vertices.push_back({.pos{d}, .color{dcol}});
 
       vec3 e = (a + c) / 2.f;
       vec3 ecol = (av.color + cv.color) / 2.f;
       uint32_t ei = mesh.vertices.size();
-      mesh.vertices.push_back({e, ecol, {0, 0}});
+      mesh.vertices.push_back({.pos{e}, .color{ecol}});
 
       vec3 f = (a + b) / 2.f;
       vec3 fcol = (av.color + bv.color) / 2.f;
       uint32_t fi = mesh.vertices.size();
-      mesh.vertices.push_back({f, fcol, {0, 0}});
+      mesh.vertices.push_back({.pos{f}, .color{fcol}});
 
       new_indices.insert(
           new_indices.end(), {ai, fi, ei, fi, bi, di, di, ci, ei});
@@ -124,7 +124,7 @@ void iter(Mesh& mesh, int steps, bool in) {
       gcol.g *= 0.5;
 
       uint32_t gi = mesh.vertices.size();
-      mesh.vertices.push_back({g, gcol, {0, 0}});
+      mesh.vertices.push_back({.pos{g}, .color{gcol}});
 
       new_indices.insert(
           new_indices.end(), {ei, fi, gi, fi, di, gi, di, ei, gi});

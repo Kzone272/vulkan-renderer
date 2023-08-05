@@ -94,15 +94,21 @@ class Renderer {
     height_ = height;
   }
 
-  void useModel(ModelId model_id, ModelInfo& model_info) {
+  void useModel(ModelId model_id, const ModelInfo& model_info) {
     if (!loaded_models_.contains(model_id)) {
       auto model = loadModel(model_info);
       loaded_models_.insert({model_id, std::move(model)});
     }
   }
 
-  void useMesh(ModelId model_id, const Mesh& mesh) {
+  MaterialId useMaterial(const MaterialInfo& mat_info) {
+    loadMaterial(mat_info);
+    return loaded_materials_.size() - 1;
+  }
+
+  void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id) {
     auto model = loadMesh(mesh);
+    model->material = loaded_materials_[mat_id].get();
     loaded_models_[model_id] = std::move(model);
   }
 
@@ -700,14 +706,22 @@ class Renderer {
     frame_layout_ =
         device_->createDescriptorSetLayoutUnique(frame_layout_ci).value;
 
-    vk::DescriptorSetLayoutBinding material_binding{
+    vk::DescriptorSetLayoutBinding diffuse_binding{
         .binding = 0,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment,
     };
+    vk::DescriptorSetLayoutBinding ubo_binding{
+        .binding = 1,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment,
+    };
     vk::DescriptorSetLayoutCreateInfo material_layout_ci{};
-    material_layout_ci.setBindings(material_binding);
+    std::vector<vk::DescriptorSetLayoutBinding> mat_binds{
+        diffuse_binding, ubo_binding};
+    material_layout_ci.setBindings(mat_binds);
     material_layout_ =
         device_->createDescriptorSetLayoutUnique(material_layout_ci).value;
   }
@@ -1000,7 +1014,6 @@ class Renderer {
     texture->image_view = createImageView(
         *texture->image, texture->format, texture->mip_levels,
         vk::ImageAspectFlagBits::eColor);
-    texture->desc_set = createMaterialDescriptorSet(*texture->image_view);
 
     auto* ptr = texture.get();
     loaded_textures_.push_back(std::move(texture));
@@ -1253,10 +1266,10 @@ class Renderer {
   std::unique_ptr<Model> loadModel(const ModelInfo& model_info) {
     auto model = std::make_unique<Model>();
 
-    auto* texture_surface = loadImage(model_info.texture_path);
-    model->texture = createTexture(
-        texture_surface->pixels, texture_surface->w, texture_surface->h);
-    SDL_FreeSurface(texture_surface);
+    MaterialInfo mat_info{
+        .diffuse_path = model_info.texture_path,
+    };
+    model->material = loadMaterial(mat_info);
 
     Mesh mesh = loadObj(model_info.obj_path);
 
@@ -1267,12 +1280,40 @@ class Renderer {
     return model;
   }
 
+  Material* loadMaterial(const MaterialInfo& mat_info) {
+    auto material = std::make_unique<Material>();
+    auto* ptr = material.get();
+
+    // Use 1x1 pixel white texture when none is specified.
+    Texture* white_texture = getColorTexture(0xFFFFFFFF);
+
+    material->diffuse = mat_info.diffuse_path
+                            ? loadTexture(*mat_info.diffuse_path)
+                            : white_texture;
+
+    vk::DeviceSize ubo_size = sizeof(MaterialInfo::UniformBufferObject);
+    stageBuffer(
+        ubo_size, (void*)&mat_info.ubo, vk::BufferUsageFlagBits::eUniformBuffer,
+        material->ubo_buf, material->ubo_buf_mem);
+
+    material->desc_set = createMaterialDescriptorSet(*material);
+
+    loaded_materials_.push_back(std::move(material));
+
+    return ptr;
+  }
+
+  Texture* loadTexture(std::string path) {
+    auto* texture_surface = loadImage(path);
+    Texture* texture = createTexture(
+        texture_surface->pixels, texture_surface->w, texture_surface->h);
+    SDL_FreeSurface(texture_surface);
+
+    return texture;
+  }
+
   std::unique_ptr<Model> loadMesh(const Mesh& mesh) {
     auto model = std::make_unique<Model>();
-
-    // Use 1x1 pixel white texture.
-    uint32_t white = 0xFFFFFFFF;
-    model->texture = getColorTexture(white);
 
     model->index_count = mesh.indices.size();
     stageVertices(mesh.vertices, *model);
@@ -1466,16 +1507,17 @@ class Renderer {
   void createDescriptorPool() {
     // Arbitrary. 10 textures seems fine for now.
     const uint32_t kMaxSamplers = 10;
+    const uint32_t kMaxUbos = 20;
 
     std::vector<vk::DescriptorPoolSize> pool_sizes{
         {.type = vk::DescriptorType::eUniformBuffer,
-         .descriptorCount = MAX_FRAMES_IN_FLIGHT},
+         .descriptorCount = kMaxUbos},
         {.type = vk::DescriptorType::eCombinedImageSampler,
          .descriptorCount = kMaxSamplers},
     };
 
     vk::DescriptorPoolCreateInfo pool_ci{
-        .maxSets = MAX_FRAMES_IN_FLIGHT + kMaxSamplers,
+        .maxSets = kMaxUbos + kMaxSamplers,
     };
     pool_ci.setPoolSizes(pool_sizes);
     desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
@@ -1543,7 +1585,7 @@ class Renderer {
     }
   }
 
-  vk::DescriptorSet createMaterialDescriptorSet(const vk::ImageView& img_view) {
+  vk::DescriptorSet createMaterialDescriptorSet(const Material& material) {
     vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = *desc_pool_,
     };
@@ -1554,20 +1596,34 @@ class Renderer {
     ASSERT(desc_sets.size() == 1);
     auto& desc_set = desc_sets[0];
 
-    vk::DescriptorImageInfo image_info{
+    vk::DescriptorImageInfo diffuse_info{
         .sampler = *texture_sampler_,
-        .imageView = img_view,
+        .imageView = *material.diffuse->image_view,
         .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
     };
-    vk::WriteDescriptorSet desc_write{
+    vk::WriteDescriptorSet diffuse_write{
         .dstSet = desc_set,
         .dstBinding = 0,
         .dstArrayElement = 0,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
     };
-    desc_write.setImageInfo(image_info);
+    diffuse_write.setImageInfo(diffuse_info);
 
-    device_->updateDescriptorSets(desc_write, nullptr);
+    vk::DescriptorBufferInfo buffer_info{
+        .buffer = *material.ubo_buf,
+        .offset = 0,
+        .range = sizeof(MaterialInfo::UniformBufferObject),
+    };
+    vk::WriteDescriptorSet ubo_write{
+        .dstSet = desc_set,
+        .dstBinding = 1,
+        .dstArrayElement = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+    };
+    ubo_write.setBufferInfo(buffer_info);
+
+    std::vector<vk::WriteDescriptorSet> writes = {diffuse_write, ubo_write};
+    device_->updateDescriptorSets(writes, nullptr);
 
     return desc_set;
   }
@@ -1625,21 +1681,27 @@ class Renderer {
         vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
         buf_state.desc_set, nullptr);
 
+    // TODO: Sort by material, then by model.
     std::sort(
         frame_state_->objects.begin(), frame_state_->objects.end(),
         [](auto& left, auto& right) { return left.model < right.model; });
 
     ModelId curr_model_id = ModelId::None;
+    Material* curr_material = nullptr;
     for (auto& obj : frame_state_->objects) {
       auto it = loaded_models_.find(obj.model);
       ASSERT(it != loaded_models_.end());
       auto* model = it->second.get();
 
-      if (curr_model_id != obj.model) {
-        curr_model_id = obj.model;
+      if (curr_material != model->material) {
+        curr_material = model->material;
         cmd_buf.bindDescriptorSets(
             vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 1,
-            model->texture->desc_set, nullptr);
+            model->material->desc_set, nullptr);
+      }
+
+      if (curr_model_id != obj.model) {
+        curr_model_id = obj.model;
         vk::DeviceSize offsets[] = {0};
         cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
         cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
@@ -1747,6 +1809,7 @@ class Renderer {
   };
   std::vector<UniformBufferState> uniform_bufs_;
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
+  std::vector<std::unique_ptr<Material>> loaded_materials_;
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
 

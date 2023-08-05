@@ -1,10 +1,11 @@
 #pragma once
 
 #include <map>
+#include <optional>
 
 #include "glm-include.h"
-#include "vulkan-include.h"
 #include "object.h"
+#include "vulkan-include.h"
 
 struct UniformBufferData {
   alignas(16) mat4 proj_view;
@@ -20,6 +21,12 @@ struct Texture {
   vk::UniqueImageView image_view;
   vk::Format format;
   uint32_t mip_levels = 1;
+};
+
+struct Material {
+  Texture* diffuse;
+  vk::UniqueBuffer ubo_buf;
+  vk::UniqueDeviceMemory ubo_buf_mem;
   vk::DescriptorSet desc_set;
 };
 
@@ -29,16 +36,18 @@ struct Model {
   vk::UniqueBuffer ind_buf;
   vk::UniqueDeviceMemory ind_buf_mem;
   uint32_t index_count;
-  Texture* texture;
+  Material* material;
 };
 
 struct Vertex {
-  vec3 pos;
-  vec3 color;
-  vec2 uv;
+  vec3 pos = {0, 0, 0};
+  vec3 normal = {0, 1, 0};
+  vec3 color = {1, 1, 1};
+  vec2 uv = {0, 0};
 
   bool operator==(const Vertex& other) const {
-    return pos == other.pos && color == other.color && uv == other.uv;
+    return pos == other.pos && normal == other.normal && color == other.color &&
+           uv == other.uv;
   }
 
   static vk::VertexInputBindingDescription getBindingDesc() {
@@ -49,25 +58,32 @@ struct Vertex {
     };
   }
 
-  static std::array<vk::VertexInputAttributeDescription, 3> getAttrDescs() {
-    std::array<vk::VertexInputAttributeDescription, 3> attrs{};
-    attrs[0] = {
-        .location = 0,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,  // vec3
-        .offset = offsetof(Vertex, pos),
-    };
-    attrs[1] = {
-        .location = 1,
-        .binding = 0,
-        .format = vk::Format::eR32G32B32Sfloat,  // vec3
-        .offset = offsetof(Vertex, color),
-    };
-    attrs[2] = {
-        .location = 2,
-        .binding = 0,
-        .format = vk::Format::eR32G32Sfloat,  // vec2
-        .offset = offsetof(Vertex, uv),
+  static std::vector<vk::VertexInputAttributeDescription> getAttrDescs() {
+    std::vector<vk::VertexInputAttributeDescription> attrs = {
+        {
+            .location = 0,
+            .binding = 0,
+            .format = vk::Format::eR32G32B32Sfloat,  // vec3
+            .offset = offsetof(Vertex, pos),
+        },
+        {
+            .location = 1,
+            .binding = 0,
+            .format = vk::Format::eR32G32B32Sfloat,  // vec3
+            .offset = offsetof(Vertex, normal),
+        },
+        {
+            .location = 2,
+            .binding = 0,
+            .format = vk::Format::eR32G32B32Sfloat,  // vec3
+            .offset = offsetof(Vertex, color),
+        },
+        {
+            .location = 3,
+            .binding = 0,
+            .format = vk::Format::eR32G32Sfloat,  // vec2
+            .offset = offsetof(Vertex, uv),
+        },
     };
 
     return attrs;
@@ -81,6 +97,7 @@ struct Mesh {
 
 namespace std {
 
+// TODO: Add normal to this. Or better, hash this more generally.
 template <>
 struct hash<Vertex> {
   size_t operator()(Vertex const& vertex) const {

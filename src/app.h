@@ -147,13 +147,21 @@ class HelloTriangleApp {
   }
 
   void loadPrimitives() {
-    renderer_->useMesh(ModelId::Cube, makeCube({0, 0.8, 0.8}));
-    renderer_->useMesh(ModelId::Bone, makeCube({0.9, 0.2, 0.1}));
-    renderer_->useMesh(ModelId::Control, makeCube({0.1, 1, 0.2}));
+    MaterialId cube_mat = renderer_->useMaterial({.ubo{.color{0, 0.8, 0.8}}});
+    MaterialId bone_mat = renderer_->useMaterial({.ubo{.color{0.9, 0.2, 0.1}}});
+    MaterialId control_mat =
+        renderer_->useMaterial({.ubo{.color{0.1, 1, 0.2}}});
+    MaterialId floor_mat =
+        renderer_->useMaterial({.ubo{.color{0.2, 0.2, 0.2}}});
+    MaterialId white_mat = renderer_->useMaterial({});
+
+    renderer_->useMesh(ModelId::Cube, makeCube(), cube_mat);
+    renderer_->useMesh(ModelId::Bone, makeCube(), bone_mat);
+    renderer_->useMesh(ModelId::Control, makeCube(), control_mat);
+    renderer_->useMesh(ModelId::Floor, makePlane(10000, 10000), floor_mat);
     renderer_->useMesh(
-        ModelId::Floor, makePlane(10000, 10000, {0.2, 0.2, 0.2}));
-    renderer_->useMesh(
-        ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
+        ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in),
+        white_mat);
   }
 
   void remakeGrid(int grid) {
