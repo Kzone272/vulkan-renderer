@@ -19,7 +19,7 @@ layout(push_constant) uniform PushData {
 
 void main() {
   gl_Position = ubo.proj_view * push.model * vec4(inPosition, 1.0);
-  fragNormal = vec3(push.model *vec4(inNormal, 0));
+  fragNormal = vec3(push.model * vec4(inNormal, 0));
   fragColor = inColor;
   fragUv = inUv;
 }

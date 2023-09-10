@@ -1360,8 +1360,8 @@ class Renderer {
         };
         vert.normal = {
             attrib.normals[3 * index.normal_index],
-            attrib.normals[3 * index.normal_index] + 1,
-            attrib.normals[3 * index.normal_index] + 2,
+            attrib.normals[3 * index.normal_index + 1],
+            attrib.normals[3 * index.normal_index + 2],
         };
 
         auto it = uniq_verts.find(vert);
