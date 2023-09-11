@@ -129,6 +129,8 @@ class HelloTriangleApp {
 
     loadModels();
     loadPrimitives();
+
+    setupLights();
   }
 
   void loadModels() {
@@ -177,6 +179,51 @@ class HelloTriangleApp {
         grid_.addChild(std::move(obj));
       }
     }
+  }
+
+  void setupLights() {
+    frame_state_.lights.clear();
+    // Mostly downward sun
+    frame_state_.lights.push_back({
+        .type = Light::Type::Directional,
+        .vec = vec3(0.3, -1, 0),
+        .color = vec3(1),
+    });
+    // Corner torch
+    frame_state_.lights.push_back({
+        .type = Light::Type::Point,
+        .vec = vec3(385, 200, 475),
+        .color = vec3(1, 1, 0),
+        .falloff = 400,
+    });
+    // Front torch
+    frame_state_.lights.push_back({
+        .type = Light::Type::Point,
+        .vec = vec3(385, 200, 110),
+        .color = vec3(1, 1, 0),
+        .falloff = 400,
+    });
+    // Cauldron
+    frame_state_.lights.push_back({
+        .type = Light::Type::Point,
+        .vec = vec3(270, 20, 300),
+        .color = vec3(2, 1.2, 0),
+        .falloff = 500,
+    });
+    // Right tail light
+    frame_state_.lights.push_back({
+        .type = Light::Type::Point,
+        .vec = vec3(-225, 40, -180),
+        .color = vec3(4, 0, 0),
+        .falloff = 500,
+    });
+    // Left tail light
+    frame_state_.lights.push_back({
+        .type = Light::Type::Point,
+        .vec = vec3(-370, 40, -180),
+        .color = vec3(4, 0, 0),
+        .falloff = 500,
+    });
   }
 
   void mainLoop() {

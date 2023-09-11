@@ -164,6 +164,18 @@ class Renderer {
 
     UniformBufferData data;
     data.proj_view = frame_state_->proj * frame_state_->view;
+
+    const size_t max_lights = std::size(data.lights);
+    // Add the first max_lights lights to the frame UBO, and set the rest to
+    // None.
+    for (size_t i = 0; i < max_lights; i++) {
+      if (i >= frame_state_->lights.size()) {
+        data.lights[i].type = Light::Type::None;
+      } else {
+        data.lights[i] = frame_state_->lights[i];
+      }
+    }
+
     memcpy(buf.buf_mapped, &data, sizeof(data));
   }
 
@@ -699,7 +711,8 @@ class Renderer {
         .binding = 0,
         .descriptorType = vk::DescriptorType::eUniformBuffer,
         .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex |
+                      vk::ShaderStageFlagBits::eFragment,
     };
     vk::DescriptorSetLayoutCreateInfo frame_layout_ci{};
     frame_layout_ci.setBindings(frame_binding);

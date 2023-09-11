@@ -7,8 +7,21 @@
 #include "object.h"
 #include "vulkan-include.h"
 
+struct Light {
+  enum class Type {
+    None,
+    Directional,
+    Point,
+  };
+  Type type = Type::None;
+  alignas(16) vec3 vec{0, 0, 0};  // Direction, or position.
+  alignas(16) vec3 color{1, 1, 1};
+  float falloff = 0;
+};
+
 struct UniformBufferData {
   alignas(16) mat4 proj_view;
+  alignas(16) Light lights[8];
 };
 
 struct PushData {
