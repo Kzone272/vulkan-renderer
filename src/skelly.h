@@ -35,15 +35,15 @@ struct SkellySizes {
   float bone_w = 6;
   float leg = 100;  // floor to hip
   float femur_pct = 0.5;
-  float pelvis_w = 25;
-  float shoulders_w = 50;
+  float pelvis_w = 30;
+  float shoulders_w = 40;
   float arm = 70;
   float bicep_pct = 0.5;
   // Constants
   vec3 ankle = vec3(0, 10, -18);  // from foot to ankle
   float pelvis_h = 15;            // height above hip
   float head_h = 25;              // length between shoulders and head
-  float neck = 5;                 // length between shoulders and head
+  float neck = 10;                // length between shoulders and head
   float foot_l = 25;              // Toe to heel
   float hand_l = 10;
   // Driven by params above.
@@ -81,11 +81,11 @@ class Skelly {
     root_.addChild(&cog_);
     cog_.setPos(vec3(0, sizes_.pelvis_y, 0));
 
-    mat4 pelvis_t = glm::scale(vec3(sizes_.pelvis_w, -sizes_.pelvis_h, 20));
+    mat4 pelvis_t = glm::scale(vec3(sizes_.pelvis_w, -sizes_.pelvis_h, 15));
     pelvis_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
     pelvis_->setPos(vec3(0, 0, 0));
 
-    mat4 torso_t = glm::scale(vec3(sizes_.shoulders_w, -20, 25));
+    mat4 torso_t = glm::scale(vec3(sizes_.shoulders_w, -15, 15));
     torso_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
     torso_->setPos(vec3(0, sizes_.shoulders_y, 0));
 
@@ -114,7 +114,8 @@ class Skelly {
     lforearm_.addChild(&lhand_);
     lhand_.setPos(hand_pos);
 
-    mat4 head_t = glm::scale(vec3(20, sizes_.head_h, 25));
+    mat4 head_t =
+        glm::translate(vec3(0, 0, 2)) * glm::scale(vec3(20, sizes_.head_h, 20));
     head_ = torso_->addChild(std::make_unique<Object>(ModelId::Bone, head_t));
     head_->setPos(vec3(0, sizes_.neck, 5));
 
@@ -130,8 +131,8 @@ class Skelly {
     vec3 shin_pos = vec3(0, -sizes_.femur, 0);
     lshin_->setPos(shin_pos);
 
-    mat4 foot_t = glm::translate(-sizes_.ankle) *
-                  glm::scale(vec3(10, 8, sizes_.foot_l)) *
+    mat4 foot_t = glm::translate(-sizes_.ankle + vec3(-1, 0, 0)) *
+                  glm::scale(vec3(13, 4, sizes_.foot_l)) *
                   glm::translate(vec3(0, 0, -0.5));
     lfoot_ = lshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
     vec3 foot_pos = vec3(0, -sizes_.shin, 0);
@@ -148,7 +149,8 @@ class Skelly {
     rshin_ = rfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
     rshin_->setPos(flip3 * shin_pos);
 
-    rfoot_ = rshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
+    rfoot_ = rshin_->addChild(
+        std::make_unique<Object>(ModelId::Bone, flip * foot_t));
     rfoot_->setPos(flip3 * foot_pos);
 
     rbicep_ = Object(ModelId::Bone, flip * bicep_t);
