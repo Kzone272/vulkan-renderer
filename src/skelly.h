@@ -15,7 +15,7 @@ struct MoveOptions {
   float stance_w = 15;
   float foot_dist = 5;
   float step_height = 5;
-  float lean = 0.05;
+  float lean = 0;
   float bounce = 3;
   float hip_sway = 6;
   float hip_spin = 8;
@@ -424,15 +424,11 @@ class Skelly {
     cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
 
     if (target_speed_changed_) {
-      // TODO: Clean up this math. step_dur should not be a factor.
-      float speed = target_speed_;
-      float step_l = std::min(sizes_.leg * 0.6f, speed / 3);
-      float step_dur = 1.5f * (step_l / speed) * 1000.f;
-      if (speed == 0) {
-        step_dur = 500;
+      if (target_speed_ != 0) {
+        float step_l = sizes_.leg * 0.76f;
+        float step_dur = (step_l / target_speed_) * 1000.f;
+        cycle_dur_ = std::min(1200.f, 2 * step_dur);
       }
-      cycle_dur_ = step_dur / walk_.lstep.dur;
-
       updateMovements();
     }
 
@@ -640,8 +636,8 @@ class Skelly {
       foot.world_target = getPos() + going + step + offset;
       end = foot.world_target;
     } else {
-      float step_l = std::min(sizes_.leg * 0.6f, target_speed_ / 3);
-      end = vec3(0, 0, step_l) + foot.offset;
+      float forward = std::min(sizes_.leg * 0.3f, target_speed_ / 3);
+      end = vec3(0, 0, forward) + foot.offset;
       foot.world_target = to_world * vec4(end, 1);
     }
 
