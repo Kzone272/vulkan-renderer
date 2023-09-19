@@ -614,7 +614,7 @@ class HelloTriangleApp {
       skelly_.makeBones();
     }
     ImGui::SliderFloat("Step Height", &move.step_height, 0, 50);
-    ImGui::SliderFloat("Lean", &move.lean, 0, 0.5);
+    ImGui::SliderFloat("Lean", &move.lean, -0.2, 0.2);
     ImGui::SliderFloat("Bounce", &move.bounce, 0, 10);
     ImGui::SliderFloat("Hip Sway", &move.hip_sway, 0, 30);
     ImGui::SliderFloat("Hip Spin", &move.hip_spin, 0, 45);
