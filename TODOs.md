@@ -1,6 +1,10 @@
 Things I Should Do Soon:
 
 Short-term ideas:
+- Refactor allocating descriptor sets
+- Refactor shader creation
+- Refactor offscreen buffer creation
+- Refactor render pass and framebuffer creation
 - Add hand forward offset
 - Adjust position of in-swing step if velocity changes significantly
 - Make prettier

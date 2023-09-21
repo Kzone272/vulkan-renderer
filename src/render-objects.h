@@ -47,6 +47,9 @@ struct Material {
   vk::UniqueBuffer ubo_buf;
   vk::UniqueDeviceMemory ubo_buf_mem;
   vk::DescriptorSet desc_set;
+
+  constexpr static vk::DeviceSize size =
+      sizeof(MaterialInfo::UniformBufferObject);
 };
 
 struct Model {

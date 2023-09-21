@@ -17,6 +17,7 @@ add_executable(main
   time-include.h
   primitives.h
   skelly.h
+  descriptors.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

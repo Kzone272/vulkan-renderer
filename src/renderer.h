@@ -20,6 +20,7 @@
 
 #include "asserts.h"
 #include "defines.h"
+#include "descriptors.h"
 #include "frame-state.h"
 #include "glm-include.h"
 #include "object.h"
@@ -733,41 +734,9 @@ class Renderer {
   }
 
   void createDescriptorSetLayouts() {
-    vk::DescriptorSetLayoutBinding frame_binding{
-        .binding = 0,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eVertex |
-                      vk::ShaderStageFlagBits::eFragment,
-    };
-    vk::DescriptorSetLayoutCreateInfo frame_layout_ci{};
-    frame_layout_ci.setBindings(frame_binding);
-    frame_layout_ =
-        device_->createDescriptorSetLayoutUnique(frame_layout_ci).value;
-
-    vk::DescriptorSetLayoutBinding diffuse_binding{
-        .binding = 0,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eFragment,
-    };
-    vk::DescriptorSetLayoutBinding ubo_binding{
-        .binding = 1,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eFragment,
-    };
-    vk::DescriptorSetLayoutCreateInfo material_layout_ci{};
-    std::vector<vk::DescriptorSetLayoutBinding> mat_binds{
-        diffuse_binding, ubo_binding};
-    material_layout_ci.setBindings(mat_binds);
-    material_layout_ =
-        device_->createDescriptorSetLayoutUnique(material_layout_ci).value;
-
-    vk::DescriptorSetLayoutCreateInfo post_lo_ci{};
-    std::vector<vk::DescriptorSetLayoutBinding> post_binds{diffuse_binding};
-    post_lo_ci.setBindings(post_binds);
-    post_layout_ = device_->createDescriptorSetLayoutUnique(post_lo_ci).value;
+    createDescLayout(*device_, frame_);
+    createDescLayout(*device_, material_);
+    createDescLayout(*device_, post_);
   }
 
   void createGraphicsPipelines() {
@@ -860,7 +829,7 @@ class Renderer {
 
     vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
     std::vector<vk::DescriptorSetLayout> set_layouts{
-        *frame_layout_, *material_layout_};
+        *frame_.layout, *material_.layout};
     pipeline_layout_ci.setSetLayouts(set_layouts);
     pipeline_layout_ci.setPushConstantRanges(push_range);
     pipeline_layout_ =
@@ -900,7 +869,7 @@ class Renderer {
     pipeline_ci.renderPass = *post_rp_;
 
     vk::PipelineLayoutCreateInfo post_pipe_lo_ci{};
-    std::vector<vk::DescriptorSetLayout> post_layouts{*post_layout_};
+    std::vector<vk::DescriptorSetLayout> post_layouts{*post_.layout};
     post_pipe_lo_ci.setSetLayouts(post_layouts);
     post_pipe_lo_ = device_->createPipelineLayoutUnique(post_pipe_lo_ci).value;
     pipeline_ci.layout = *post_pipe_lo_;
@@ -1378,10 +1347,10 @@ class Renderer {
                             ? loadTexture(*mat_info.diffuse_path)
                             : white_texture;
 
-    vk::DeviceSize ubo_size = sizeof(MaterialInfo::UniformBufferObject);
     stageBuffer(
-        ubo_size, (void*)&mat_info.ubo, vk::BufferUsageFlagBits::eUniformBuffer,
-        material->ubo_buf, material->ubo_buf_mem);
+        Material::size, (void*)&mat_info.ubo,
+        vk::BufferUsageFlagBits::eUniformBuffer, material->ubo_buf,
+        material->ubo_buf_mem);
 
     material->desc_set = createMaterialDescriptorSet(*material);
 
@@ -1647,7 +1616,7 @@ class Renderer {
 
   void createFrameDescriptorSet() {
     std::vector<vk::DescriptorSetLayout> layouts(
-        MAX_FRAMES_IN_FLIGHT, *frame_layout_);
+        MAX_FRAMES_IN_FLIGHT, *frame_.layout);
     vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = *desc_pool_,
     };
@@ -1661,20 +1630,10 @@ class Renderer {
       auto& buf_state = uniform_bufs_[i];
       buf_state.desc_set = std::move(desc_sets[i]);
 
-      vk::DescriptorBufferInfo buffer_info{
-          .buffer = *buf_state.buf,
-          .offset = 0,
-          .range = sizeof(UniformBufferData),
-      };
-      vk::WriteDescriptorSet desc_write{
-          .dstSet = buf_state.desc_set,
-          .dstBinding = 0,
-          .dstArrayElement = 0,
-          .descriptorType = vk::DescriptorType::eUniformBuffer,
-      };
-      desc_write.setBufferInfo(buffer_info);
-
-      device_->updateDescriptorSets(desc_write, nullptr);
+      updateDescSet(
+          *device_, buf_state.desc_set, frame_,
+          {UboUpdate{
+              .buffer = *buf_state.buf, .size = sizeof(UniformBufferData)}});
     }
   }
 
@@ -1682,41 +1641,19 @@ class Renderer {
     vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = *desc_pool_,
     };
-    alloc_info.setSetLayouts(*material_layout_);
+    alloc_info.setSetLayouts(*material_.layout);
 
     std::vector<vk::DescriptorSet> desc_sets =
         device_->allocateDescriptorSets(alloc_info).value;
     ASSERT(desc_sets.size() == 1);
     auto& desc_set = desc_sets[0];
 
-    vk::DescriptorImageInfo diffuse_info{
-        .sampler = *texture_sampler_,
-        .imageView = *material.diffuse->image_view,
-        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-    };
-    vk::WriteDescriptorSet diffuse_write{
-        .dstSet = desc_set,
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-    };
-    diffuse_write.setImageInfo(diffuse_info);
-
-    vk::DescriptorBufferInfo buffer_info{
-        .buffer = *material.ubo_buf,
-        .offset = 0,
-        .range = sizeof(MaterialInfo::UniformBufferObject),
-    };
-    vk::WriteDescriptorSet ubo_write{
-        .dstSet = desc_set,
-        .dstBinding = 1,
-        .dstArrayElement = 0,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-    };
-    ubo_write.setBufferInfo(buffer_info);
-
-    std::vector<vk::WriteDescriptorSet> writes = {diffuse_write, ubo_write};
-    device_->updateDescriptorSets(writes, nullptr);
+    updateDescSet(
+        *device_, desc_set, material_,
+        {CombinedSamplerUpdate{
+             .view = *material.diffuse->image_view,
+             .sampler = *texture_sampler_},
+         UboUpdate{.buffer = *material.ubo_buf, .size = Material::size}});
 
     return desc_set;
   }
@@ -1725,32 +1662,21 @@ class Renderer {
     vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = *desc_pool_,
     };
-    alloc_info.setSetLayouts(*post_layout_);
+    alloc_info.setSetLayouts(*post_.layout);
 
     std::vector<vk::DescriptorSet> desc_sets =
         device_->allocateDescriptorSets(alloc_info).value;
     ASSERT(desc_sets.size() == 1);
     post_desc_set_ = desc_sets[0];
 
-    updateSamplerDescriptorSet(post_desc_set_, *scene_tx_);
+    updatePostDescSet();
   }
 
-  void updateSamplerDescriptorSet(vk::DescriptorSet desc, Texture& texture) {
-    vk::DescriptorImageInfo color_info{
-        .sampler = *texture_sampler_,
-        .imageView = *texture.image_view,
-        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-    };
-    vk::WriteDescriptorSet color_write{
-        .dstSet = desc,
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-    };
-    color_write.setImageInfo(color_info);
-
-    std::vector<vk::WriteDescriptorSet> writes = {color_write};
-    device_->updateDescriptorSets(writes, nullptr);
+  void updatePostDescSet() {
+    updateDescSet(
+        *device_, post_desc_set_, post_,
+        {CombinedSamplerUpdate{
+            .view = *scene_tx_->image_view, .sampler = *texture_sampler_}});
   }
 
   void createCommandBuffers() {
@@ -1884,7 +1810,7 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createFrameBuffers();
-    updateSamplerDescriptorSet(post_desc_set_, *scene_tx_);
+    updatePostDescSet();
 
     window_resized_ = false;
   }
@@ -1924,15 +1850,10 @@ class Renderer {
   std::vector<vk::UniqueImageView> swapchain_views_;
   vk::UniqueRenderPass scene_rp_;
   vk::UniqueRenderPass post_rp_;
-  // Bound per frame.
-  vk::UniqueDescriptorSetLayout frame_layout_;
-  // Bound per material
-  vk::UniqueDescriptorSetLayout material_layout_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
   vk::UniquePipelineLayout pipeline_layout_;
   vk::UniquePipeline gfx_pipeline_;
-  vk::UniqueDescriptorSetLayout post_layout_;
   vk::UniquePipelineLayout post_pipe_lo_;
   vk::UniquePipeline post_pipeline_;
   vk::UniqueFramebuffer scene_fb_;
@@ -1963,6 +1884,25 @@ class Renderer {
   std::vector<std::unique_ptr<Material>> loaded_materials_;
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
+
+  // Bound per frame.
+  DescLayout frame_{
+      .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
+      .stages =
+          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+  };
+  // Bound per material
+  DescLayout material_{
+      .binds =
+          {{.type = vk::DescriptorType::eCombinedImageSampler},
+           {.type = vk::DescriptorType::eUniformBuffer}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+  // Bound in post processing step.
+  DescLayout post_{
+      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
