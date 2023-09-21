@@ -126,9 +126,9 @@ class Renderer {
     createSwapchain();
     createColorResources();
     createDepthResources();
-    createRenderPass();
+    createRenderPasses();
     createDescriptorSetLayouts();
-    createGraphicsPipeline();
+    createGraphicsPipelines();
     createFrameBuffers();
 
     createUniformBuffers();
@@ -137,6 +137,7 @@ class Renderer {
     createDescriptorPool();
     createImguiDescriptorPool();
     createFrameDescriptorSet();
+    createPostDescriptorSet();
     createSyncObjects();
   }
 
@@ -149,9 +150,9 @@ class Renderer {
         .DescriptorPool = *imgui_desc_pool_,
         .MinImageCount = MAX_FRAMES_IN_FLIGHT,
         .ImageCount = MAX_FRAMES_IN_FLIGHT,
-        .MSAASamples = (VkSampleCountFlagBits)msaa_samples_,
+        .MSAASamples = (VkSampleCountFlagBits)vk::SampleCountFlagBits::e1,
     };
-    ImGui_ImplVulkan_Init(&init_info, *render_pass_);
+    ImGui_ImplVulkan_Init(&init_info, *post_rp_);
 
     auto cmd_buf = beginSingleTimeCommands();
     ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
@@ -627,7 +628,7 @@ class Renderer {
     return device_->createImageViewUnique(ci).value;
   }
 
-  void createRenderPass() {
+  void createRenderPasses() {
     vk::AttachmentDescription color_att{
         .format = swapchain_format_,
         .samples = msaa_samples_,
@@ -658,17 +659,17 @@ class Renderer {
         .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
     };
 
-    vk::AttachmentDescription color_resolve_att{
-        .format = swapchain_format_,
+    vk::AttachmentDescription scene_resolve_att{
+        .format = scene_tx_->format,
         .samples = vk::SampleCountFlagBits::e1,
         .loadOp = vk::AttachmentLoadOp::eDontCare,
         .storeOp = vk::AttachmentStoreOp::eStore,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
         .initialLayout = vk::ImageLayout::eUndefined,
-        .finalLayout = vk::ImageLayout::ePresentSrcKHR,
+        .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
     };
-    vk::AttachmentReference color_resolve_att_ref{
+    vk::AttachmentReference scene_resolve_att_ref{
         .attachment = 2,
         .layout = vk::ImageLayout::eColorAttachmentOptimal,
     };
@@ -677,7 +678,7 @@ class Renderer {
         .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_att_ref,
-        .pResolveAttachments = &color_resolve_att_ref,
+        .pResolveAttachments = &scene_resolve_att_ref,
         .pDepthStencilAttachment = &depth_att_ref,
     };
 
@@ -697,13 +698,38 @@ class Renderer {
 
     };
 
-    std::array<vk::AttachmentDescription, 3> atts = {
-        color_att, depth_att, color_resolve_att};
+    std::vector<vk::AttachmentDescription> atts = {
+        color_att, depth_att, scene_resolve_att};
     vk::RenderPassCreateInfo rp_ci{};
     rp_ci.setAttachments(atts);
     rp_ci.setSubpasses(subpass);
     rp_ci.setDependencies(dep);
-    render_pass_ = device_->createRenderPassUnique(rp_ci).value;
+    scene_rp_ = device_->createRenderPassUnique(rp_ci).value;
+
+    vk::AttachmentDescription swap_att = scene_resolve_att;
+    swap_att.format = swapchain_format_;
+    swap_att.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+    rp_ci.setAttachments(swap_att);
+    vk::AttachmentReference swap_att_ref{
+        .attachment = 0,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    };
+    vk::SubpassDescription post_subpass{
+        .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
+    };
+    post_subpass.setColorAttachments(swap_att_ref);
+    rp_ci.setSubpasses(post_subpass);
+    vk::SubpassDependency post_dep{
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        .dstStageMask = vk::PipelineStageFlagBits::eFragmentShader,
+        .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+        .dstAccessMask = vk::AccessFlagBits::eShaderRead,
+
+    };
+    rp_ci.setDependencies(post_dep);
+    post_rp_ = device_->createRenderPassUnique(rp_ci).value;
   }
 
   void createDescriptorSetLayouts() {
@@ -737,12 +763,16 @@ class Renderer {
     material_layout_ci.setBindings(mat_binds);
     material_layout_ =
         device_->createDescriptorSetLayoutUnique(material_layout_ci).value;
+
+    vk::DescriptorSetLayoutCreateInfo post_lo_ci{};
+    std::vector<vk::DescriptorSetLayoutBinding> post_binds{diffuse_binding};
+    post_lo_ci.setBindings(post_binds);
+    post_layout_ = device_->createDescriptorSetLayoutUnique(post_lo_ci).value;
   }
 
-  void createGraphicsPipeline() {
+  void createGraphicsPipelines() {
     auto vert_shader_code = readFile("shaders/shader.vert.spv");
     auto frag_shader_code = readFile("shaders/shader.frag.spv");
-
     vk::UniqueShaderModule vert_shader = createShaderModule(vert_shader_code);
     vk::UniqueShaderModule frag_shader = createShaderModule(frag_shader_code);
 
@@ -751,7 +781,6 @@ class Renderer {
         .module = *vert_shader,
         .pName = "main",
     };
-
     vk::PipelineShaderStageCreateInfo frag_shader_stage_ci{
         .stage = vk::ShaderStageFlagBits::eFragment,
         .module = *frag_shader,
@@ -847,11 +876,36 @@ class Renderer {
         .pColorBlendState = &color_blending,
         .pDynamicState = &dyn_state,
         .layout = *pipeline_layout_,
-        .renderPass = *render_pass_,
+        .renderPass = *scene_rp_,
         .subpass = 0,
     };
     pipeline_ci.setStages(shader_stages);
     gfx_pipeline_ =
+        device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
+
+    // Post processing pipeline
+    vert_shader_code = readFile("shaders/fullscreen.vert.spv");
+    frag_shader_code = readFile("shaders/post.frag.spv");
+    vert_shader = createShaderModule(vert_shader_code);
+    frag_shader = createShaderModule(frag_shader_code);
+    shader_stages[0].module = *vert_shader;
+    shader_stages[1].module = *frag_shader;
+
+    vk::PipelineVertexInputStateCreateInfo empty_vert_in{};
+    pipeline_ci.pVertexInputState = &empty_vert_in;
+
+    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
+    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    pipeline_ci.pDepthStencilState = nullptr;
+    pipeline_ci.renderPass = *post_rp_;
+
+    vk::PipelineLayoutCreateInfo post_pipe_lo_ci{};
+    std::vector<vk::DescriptorSetLayout> post_layouts{*post_layout_};
+    post_pipe_lo_ci.setSetLayouts(post_layouts);
+    post_pipe_lo_ = device_->createPipelineLayoutUnique(post_pipe_lo_ci).value;
+    pipeline_ci.layout = *post_pipe_lo_;
+
+    post_pipeline_ =
         device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
   }
 
@@ -864,18 +918,23 @@ class Renderer {
   }
 
   void createFrameBuffers() {
+    std::vector<vk::ImageView> atts = {
+        *color_->image_view, *depth_->image_view, *scene_tx_->image_view};
+
+    vk::FramebufferCreateInfo fb_ci{
+        .renderPass = *scene_rp_,
+        .width = swapchain_extent_.width,
+        .height = swapchain_extent_.height,
+        .layers = 1,
+    };
+    fb_ci.setAttachments(atts);
+    scene_fb_ = device_->createFramebufferUnique(fb_ci).value;
+
     swapchain_fbs_.resize(swapchain_views_.size());
     for (size_t i = 0; i < swapchain_views_.size(); i++) {
-      std::array<vk::ImageView, 3> atts = {
-          *color_->image_view, *depth_->image_view, *swapchain_views_[i]};
-
-      vk::FramebufferCreateInfo fb_ci{
-          .renderPass = *render_pass_,
-          .width = swapchain_extent_.width,
-          .height = swapchain_extent_.height,
-          .layers = 1,
-      };
+      atts = {*swapchain_views_[i]};
       fb_ci.setAttachments(atts);
+      fb_ci.renderPass = *post_rp_;
       swapchain_fbs_[i] = device_->createFramebufferUnique(fb_ci).value;
     }
   }
@@ -901,6 +960,21 @@ class Renderer {
         color_->image_mem);
     color_->image_view = createImageView(
         *color_->image, color_->format, color_->mip_levels,
+        vk::ImageAspectFlagBits::eColor);
+
+    scene_tx_ = std::make_unique<Texture>();
+    scene_tx_->format = swapchain_format_;
+    scene_tx_->mip_levels = 1;
+    createImage(
+        swapchain_extent_.width, swapchain_extent_.height, scene_tx_->format,
+        scene_tx_->mip_levels, vk::SampleCountFlagBits::e1,
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eColorAttachment |
+            vk::ImageUsageFlagBits::eSampled,
+        vk::MemoryPropertyFlagBits::eDeviceLocal, scene_tx_->image,
+        scene_tx_->image_mem);
+    scene_tx_->image_view = createImageView(
+        *scene_tx_->image, scene_tx_->format, scene_tx_->mip_levels,
         vk::ImageAspectFlagBits::eColor);
   }
 
@@ -1562,6 +1636,8 @@ class Renderer {
 
     const uint32_t kMaxSets = kCount * pool_sizes.size();
     vk::DescriptorPoolCreateInfo pool_ci{
+        // TODO: Apparently FreeDescriptorSet can make allocations slower. Maybe
+        // remove it.
         .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
         .maxSets = kMaxSets,
     };
@@ -1645,6 +1721,38 @@ class Renderer {
     return desc_set;
   }
 
+  void createPostDescriptorSet() {
+    vk::DescriptorSetAllocateInfo alloc_info{
+        .descriptorPool = *desc_pool_,
+    };
+    alloc_info.setSetLayouts(*post_layout_);
+
+    std::vector<vk::DescriptorSet> desc_sets =
+        device_->allocateDescriptorSets(alloc_info).value;
+    ASSERT(desc_sets.size() == 1);
+    post_desc_set_ = desc_sets[0];
+
+    updateSamplerDescriptorSet(post_desc_set_, *scene_tx_);
+  }
+
+  void updateSamplerDescriptorSet(vk::DescriptorSet desc, Texture& texture) {
+    vk::DescriptorImageInfo color_info{
+        .sampler = *texture_sampler_,
+        .imageView = *texture.image_view,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
+    vk::WriteDescriptorSet color_write{
+        .dstSet = desc,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+    };
+    color_write.setImageInfo(color_info);
+
+    std::vector<vk::WriteDescriptorSet> writes = {color_write};
+    device_->updateDescriptorSets(writes, nullptr);
+  }
+
   void createCommandBuffers() {
     vk::CommandBufferAllocateInfo alloc_info{
         .commandPool = *cmd_pool_,
@@ -1661,8 +1769,8 @@ class Renderer {
     std::ignore = cmd_buf.begin(begin_info);
 
     vk::RenderPassBeginInfo rp_info{
-        .renderPass = *render_pass_,
-        .framebuffer = *swapchain_fbs_[img_ind],
+        .renderPass = *scene_rp_,
+        .framebuffer = *scene_fb_,
         .renderArea = {
             .offset = {0, 0},
             .extent = swapchain_extent_,
@@ -1731,9 +1839,25 @@ class Renderer {
       cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
     }
 
+    cmd_buf.endRenderPass();
+
+    // Post processing render pass.
+    rp_info.renderPass = *post_rp_,
+    rp_info.framebuffer = *swapchain_fbs_[img_ind],
+    cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pipeline_);
+    cmd_buf.setViewport(0, viewport);
+    cmd_buf.setScissor(0, scissor);
+    cmd_buf.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, *post_pipe_lo_, 0, post_desc_set_,
+        nullptr);
+
+    cmd_buf.draw(3, 1, 0, 0);
+
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
 
     cmd_buf.endRenderPass();
+
     std::ignore = cmd_buf.end();
   }
 
@@ -1760,12 +1884,15 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createFrameBuffers();
+    updateSamplerDescriptorSet(post_desc_set_, *scene_tx_);
+
     window_resized_ = false;
   }
 
   void cleanupSwapchain() {
     depth_.reset();
     color_.reset();
+    scene_tx_.reset();
 
     swapchain_fbs_.clear();
     swapchain_views_.clear();
@@ -1795,7 +1922,8 @@ class Renderer {
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
-  vk::UniqueRenderPass render_pass_;
+  vk::UniqueRenderPass scene_rp_;
+  vk::UniqueRenderPass post_rp_;
   // Bound per frame.
   vk::UniqueDescriptorSetLayout frame_layout_;
   // Bound per material
@@ -1804,6 +1932,10 @@ class Renderer {
   vk::UniqueDescriptorPool imgui_desc_pool_;
   vk::UniquePipelineLayout pipeline_layout_;
   vk::UniquePipeline gfx_pipeline_;
+  vk::UniqueDescriptorSetLayout post_layout_;
+  vk::UniquePipelineLayout post_pipe_lo_;
+  vk::UniquePipeline post_pipeline_;
+  vk::UniqueFramebuffer scene_fb_;
   std::vector<vk::UniqueFramebuffer> swapchain_fbs_;
   vk::UniqueCommandPool cmd_pool_;
   std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
@@ -1813,6 +1945,8 @@ class Renderer {
   vk::UniqueSampler texture_sampler_;
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
+  std::unique_ptr<Texture> scene_tx_;
+  vk::DescriptorSet post_desc_set_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 

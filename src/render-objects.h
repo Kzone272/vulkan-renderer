@@ -28,6 +28,12 @@ struct PushData {
   mat4 model;
 };
 
+// Uniform buffer data for post processing stage
+struct PostData {
+  float v1 = 0;
+  float v2 = 0;
+};
+
 struct Texture {
   vk::UniqueImage image;
   vk::UniqueDeviceMemory image_mem;
