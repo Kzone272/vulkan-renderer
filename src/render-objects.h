@@ -29,9 +29,15 @@ struct PushData {
 };
 
 // Uniform buffer data for post processing stage
-struct PostData {
+struct PostFxData {
   float v1 = 0;
   float v2 = 0;
+  float v3 = 0;
+  float v4 = 0;
+  bool b1 = false;
+  bool b2 = false;
+  bool b3 = false;
+  bool b4 = false;
 };
 
 struct Texture {

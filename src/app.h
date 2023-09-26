@@ -546,7 +546,23 @@ class HelloTriangleApp {
     ImGui::End();
 
     ImGui::Begin("Misc Controls");
-    if (ImGui::TreeNode("Camera")) {
+
+    ImGui::BeginTabBar("Misc Tabs");
+    if (ImGui::BeginTabItem("Post Fx")) {
+      ImGui::Checkbox("b1", &frame_state_.post_fx.b1);
+      ImGui::SameLine();
+      ImGui::Checkbox("b2", &frame_state_.post_fx.b2);
+      ImGui::SameLine();
+      ImGui::Checkbox("b3", &frame_state_.post_fx.b3);
+      ImGui::SameLine();
+      ImGui::Checkbox("b4", &frame_state_.post_fx.b4);
+      ImGui::SliderFloat("v1", &frame_state_.post_fx.v1, 0, 10);
+      ImGui::SliderFloat("v2", &frame_state_.post_fx.v2, 0, 10);
+      ImGui::SliderFloat("v3", &frame_state_.post_fx.v3, 0, 10);
+      ImGui::SliderFloat("v4", &frame_state_.post_fx.v4, 0, 10);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Camera")) {
       ImGui::Text("Camera Type:");
       int cam_ind = static_cast<int>(options_.cam_type);
       ImGui::RadioButton("Spin", &cam_ind, 0);
@@ -563,9 +579,9 @@ class HelloTriangleApp {
           CameraType::Follow,
       };
       options_.cam_type = cam_types[cam_ind];
-      ImGui::TreePop();
+      ImGui::EndTabItem();
     }
-    if (ImGui::TreeNode("Objects")) {
+    if (ImGui::BeginTabItem("Objects")) {
       ImGui::Checkbox("Animate", &options_.animate);
       ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
       if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
@@ -575,92 +591,99 @@ class HelloTriangleApp {
       if (ImGui::Checkbox("In", &options_.tetra_in)) {
         loadPrimitives();
       }
-      ImGui::SameLine();
       if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
         loadPrimitives();
       }
-      ImGui::TreePop();
+      ImGui::EndTabItem();
     }
-
+    ImGui::EndTabBar();
     ImGui::End();
+
+    ImGui::Begin("Skeleton");
 
     MoveOptions& move = *skelly_.getMoveOptions();
-    ImGui::Begin("Move Options");
-    if (ImGui::Combo(
-            "Movement Presets", &move_preset_,
-            "Normal\0Tightrope\0Preppy\0Snow\0Feminine\0Crouch")) {
-      if (move_preset_ == 0) {
-        moveDefault(move);
-      } else if (move_preset_ == 1) {
-        moveTightrope(move);
-      } else if (move_preset_ == 2) {
-        movePreppy(move);
-      } else if (move_preset_ == 3) {
-        moveSnow(move);
-      } else if (move_preset_ == 4) {
-        moveFeminine(move);
-      } else if (move_preset_ == 5) {
-        moveCrouch(move);
-      }
-      skelly_.makeBones();
-    }
-    ImGui::Separator();
-
     ImGui::SliderFloat("Max Speed", &move.max_speed, 0, 500);
-    ImGui::SliderFloat("Vel Adjust Time", &move.adjust_time, 0, 1000);
-    ImGui::SliderFloat("Max Rot Speed", &move.max_rot_speed, 1, 360);
-    ImGui::SliderFloat("Crouch %", &move.crouch_pct, 0.01, 1.2);
-    if (ImGui::SliderFloat("Stance W", &move.stance_w, 0, 60)) {
-      skelly_.makeBones();
-    }
-    ImGui::SliderFloat("Step Height", &move.step_height, 0, 50);
-    ImGui::SliderFloat("Lean", &move.lean, -0.2, 0.2);
-    ImGui::SliderFloat("Bounce", &move.bounce, 0, 10);
-    ImGui::SliderFloat("Hip Sway", &move.hip_sway, 0, 30);
-    ImGui::SliderFloat("Hip Spin", &move.hip_spin, 0, 45);
-    ImGui::SliderFloat("Heel Lift %", &move.heel_lift_pct, 0, 2);
-    ImGui::SliderFloat("Heels Shift", &move.heel_shift, 0, 90);
-    ImGui::SliderFloat("Shoulder Spin", &move.shoulder_spin, 0, 45);
-    ImGui::SliderFloat("Arm Span %", &move.arm_span_pct, -0.2, 1);
-    ImGui::SliderFloat("Hand Height %", &move.hand_height_pct, -1, 1);
-    ImGui::SliderFloat("Hands Forward", &move.hands_forward, -50, 50);
-
-    ImGui::End();
-
-    SkellySizes& sizes = *skelly_.getSkellySizes();
-    ImGui::Begin("Skeleton Sizes");
-
-    if (ImGui::Combo(
-            "Size Presets", &size_preset_, "Normal\0Tall\0Big\0Dwarf\0Chimp")) {
-      if (size_preset_ == 0) {
-        sizeDefault(sizes);
-      } else if (size_preset_ == 1) {
-        sizeTall(sizes);
-      } else if (size_preset_ == 2) {
-        sizeBig(sizes);
-      } else if (size_preset_ == 3) {
-        sizeDwarf(sizes);
-      } else if (size_preset_ == 4) {
-        sizeChimp(sizes);
-      }
-      skelly_.makeBones();
-    }
     ImGui::Separator();
 
-    bool changed = false;
-    changed |= ImGui::SliderFloat("Height", &sizes.height, 1, 250);
-    changed |= ImGui::SliderFloat("Leg", &sizes.leg, 1, sizes.height);
-    changed |= ImGui::SliderFloat("Femur", &sizes.femur_pct, 0.05, 1);
-    changed |= ImGui::SliderFloat("Bone W", &sizes.bone_w, 0.5, 10);
-    changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvis_w, 1, 60);
-    changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shoulders_w, 1, 100);
-    changed |= ImGui::SliderFloat("Arm", &sizes.arm, 1, 150);
-    changed |= ImGui::SliderFloat("Bicep %", &sizes.bicep_pct, 0.05, 1);
-    ImGui::End();
+    ImGui::BeginTabBar("Skeleton Tabs");
+    if (ImGui::BeginTabItem("Movement")) {
+      if (ImGui::Combo(
+              "Movement Presets", &move_preset_,
+              "Normal\0Tightrope\0Preppy\0Snow\0Feminine\0Crouch")) {
+        if (move_preset_ == 0) {
+          moveDefault(move);
+        } else if (move_preset_ == 1) {
+          moveTightrope(move);
+        } else if (move_preset_ == 2) {
+          movePreppy(move);
+        } else if (move_preset_ == 3) {
+          moveSnow(move);
+        } else if (move_preset_ == 4) {
+          moveFeminine(move);
+        } else if (move_preset_ == 5) {
+          moveCrouch(move);
+        }
+        skelly_.makeBones();
+      }
 
-    if (changed) {
-      skelly_.makeBones();
+      ImGui::SliderFloat("Vel Adjust Time", &move.adjust_time, 0, 1000);
+      ImGui::SliderFloat("Max Rot Speed", &move.max_rot_speed, 1, 360);
+      ImGui::SliderFloat("Crouch %", &move.crouch_pct, 0.01, 1.2);
+      if (ImGui::SliderFloat("Stance W", &move.stance_w, 0, 60)) {
+        skelly_.makeBones();
+      }
+      ImGui::SliderFloat("Step Height", &move.step_height, 0, 50);
+      ImGui::SliderFloat("Lean", &move.lean, -0.2, 0.2);
+      ImGui::SliderFloat("Bounce", &move.bounce, 0, 10);
+      ImGui::SliderFloat("Hip Sway", &move.hip_sway, 0, 30);
+      ImGui::SliderFloat("Hip Spin", &move.hip_spin, 0, 45);
+      ImGui::SliderFloat("Heel Lift %", &move.heel_lift_pct, 0, 2);
+      ImGui::SliderFloat("Heels Shift", &move.heel_shift, 0, 90);
+      ImGui::SliderFloat("Shoulder Spin", &move.shoulder_spin, 0, 45);
+      ImGui::SliderFloat("Arm Span %", &move.arm_span_pct, -0.2, 1);
+      ImGui::SliderFloat("Hand Height %", &move.hand_height_pct, -1, 1);
+      ImGui::SliderFloat("Hands Forward", &move.hands_forward, -50, 50);
+
+      ImGui::EndTabItem();
     }
+
+    if (ImGui::BeginTabItem("Sizes")) {
+      SkellySizes& sizes = *skelly_.getSkellySizes();
+      if (ImGui::Combo(
+              "Size Presets", &size_preset_,
+              "Normal\0Tall\0Big\0Dwarf\0Chimp")) {
+        if (size_preset_ == 0) {
+          sizeDefault(sizes);
+        } else if (size_preset_ == 1) {
+          sizeTall(sizes);
+        } else if (size_preset_ == 2) {
+          sizeBig(sizes);
+        } else if (size_preset_ == 3) {
+          sizeDwarf(sizes);
+        } else if (size_preset_ == 4) {
+          sizeChimp(sizes);
+        }
+        skelly_.makeBones();
+      }
+      ImGui::Separator();
+
+      bool changed = false;
+      changed |= ImGui::SliderFloat("Height", &sizes.height, 1, 250);
+      changed |= ImGui::SliderFloat("Leg", &sizes.leg, 1, sizes.height);
+      changed |= ImGui::SliderFloat("Femur", &sizes.femur_pct, 0.05, 1);
+      changed |= ImGui::SliderFloat("Bone W", &sizes.bone_w, 0.5, 10);
+      changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvis_w, 1, 60);
+      changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shoulders_w, 1, 100);
+      changed |= ImGui::SliderFloat("Arm", &sizes.arm, 1, 150);
+      changed |= ImGui::SliderFloat("Bicep %", &sizes.bicep_pct, 0.05, 1);
+      if (changed) {
+        skelly_.makeBones();
+      }
+
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
+    ImGui::End();
 
     ImGui::Render();
   }
