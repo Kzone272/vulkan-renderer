@@ -21,6 +21,7 @@
 #include "asserts.h"
 #include "defines.h"
 #include "descriptors.h"
+#include "files.h"
 #include "frame-state.h"
 #include "glm-include.h"
 #include "object.h"
@@ -48,17 +49,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     void* user_data) {
   printf("dbg_layer: %s\n\n", callback_data->pMessage);
   return VK_FALSE;
-}
-
-static std::vector<char> readFile(const std::string& filename) {
-  std::ifstream file(filename, std::ios::ate | std::ios::binary);
-  ASSERT(file.is_open());
-  size_t file_size = static_cast<size_t>(file.tellg());
-  std::vector<char> buffer(file_size);
-  file.seekg(0);
-  file.read(buffer.data(), file_size);
-  file.close();
-  return buffer;
 }
 
 }  // namespace
@@ -740,10 +730,10 @@ class Renderer {
   }
 
   void createGraphicsPipelines() {
-    auto vert_shader_code = readFile("shaders/shader.vert.spv");
-    auto frag_shader_code = readFile("shaders/shader.frag.spv");
-    vk::UniqueShaderModule vert_shader = createShaderModule(vert_shader_code);
-    vk::UniqueShaderModule frag_shader = createShaderModule(frag_shader_code);
+    vk::UniqueShaderModule vert_shader =
+        createShaderModule("shaders/shader.vert.spv");
+    vk::UniqueShaderModule frag_shader =
+        createShaderModule("shaders/shader.frag.spv");
 
     vk::PipelineShaderStageCreateInfo vert_shader_stage_ci{
         .stage = vk::ShaderStageFlagBits::eVertex,
@@ -853,12 +843,10 @@ class Renderer {
         device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
 
     // Post processing pipeline
-    vert_shader_code = readFile("shaders/fullscreen.vert.spv");
-    frag_shader_code = readFile("shaders/post.frag.spv");
-    vert_shader = createShaderModule(vert_shader_code);
-    frag_shader = createShaderModule(frag_shader_code);
-    shader_stages[0].module = *vert_shader;
-    shader_stages[1].module = *frag_shader;
+    auto fullscreen_shader = createShaderModule("shaders/fullscreen.vert.spv");
+    auto post_shader = createShaderModule("shaders/post.frag.spv");
+    shader_stages[0].module = *fullscreen_shader;
+    shader_stages[1].module = *post_shader;
 
     vk::PipelineVertexInputStateCreateInfo empty_vert_in{};
     pipeline_ci.pVertexInputState = &empty_vert_in;
@@ -878,7 +866,8 @@ class Renderer {
         device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
   }
 
-  vk::UniqueShaderModule createShaderModule(const std::vector<char>& code) {
+  vk::UniqueShaderModule createShaderModule(std::string filename) {
+    auto code = readFile(filename);
     vk::ShaderModuleCreateInfo ci{
         .codeSize = code.size(),
         .pCode = reinterpret_cast<const uint32_t*>(code.data()),
