@@ -556,7 +556,7 @@ class HelloTriangleApp {
       ImGui::Checkbox("b3", &frame_state_.post_fx.b3);
       ImGui::SameLine();
       ImGui::Checkbox("b4", &frame_state_.post_fx.b4);
-      ImGui::SliderFloat("v1", &frame_state_.post_fx.v1, 0, 10);
+      ImGui::SliderFloat("v1", &frame_state_.post_fx.v1, 0, 1);
       ImGui::SliderFloat("v2", &frame_state_.post_fx.v2, 0, 10);
       ImGui::SliderFloat("v3", &frame_state_.post_fx.v3, 0, 10);
       ImGui::SliderFloat("v4", &frame_state_.post_fx.v4, 0, 10);

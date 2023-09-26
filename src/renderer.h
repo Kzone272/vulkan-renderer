@@ -105,6 +105,13 @@ class Renderer {
   }
 
  private:
+  struct UniformBuffer {
+    vk::UniqueBuffer buf;
+    vk::UniqueDeviceMemory buf_mem;
+    void* buf_mapped;
+    vk::DescriptorSet desc_set;
+  };
+
   void initVulkan() {
     createInstance();
     if (enable_validation_layers_) {
@@ -123,13 +130,12 @@ class Renderer {
     createGraphicsPipelines();
     createFrameBuffers();
 
-    createUniformBuffers();
+    createInFlightBuffers();
     createTextureSampler();
     initSdlImage();
     createDescriptorPool();
     createImguiDescriptorPool();
-    createFrameDescriptorSet();
-    createPostDescriptorSet();
+    createInFlightDescSets();
     createSyncObjects();
   }
 
@@ -152,10 +158,8 @@ class Renderer {
     ImGui_ImplVulkan_DestroyFontUploadObjects();
   }
 
-  void updateUniformBuffer(int frame) {
-    auto& buf = uniform_bufs_[frame];
-
-    UniformBufferData data;
+  void updateFrameData(UniformBuffer& buf) {
+    FrameData data;
     data.proj_view = frame_state_->proj * frame_state_->view;
 
     const size_t max_lights = std::size(data.lights);
@@ -170,6 +174,10 @@ class Renderer {
     }
 
     memcpy(buf.buf_mapped, &data, sizeof(data));
+  }
+
+  void updatePostFxData(UniformBuffer& buf) {
+    memcpy(buf.buf_mapped, &frame_state_->post_fx, sizeof(PostFxData));
   }
 
   void drawFrame() {
@@ -196,7 +204,8 @@ class Renderer {
     // Only reset the fence if we're submitting work.
     device_->resetFences(*in_flight_fences_[frame]);
 
-    updateUniformBuffer(frame);
+    updateFrameData(in_flight_[frame].frame);
+    updatePostFxData(in_flight_[frame].post_fx);
 
     cmd_bufs_[frame]->reset();
     recordCommandBuffer(frame, img_ind);
@@ -1347,19 +1356,28 @@ class Renderer {
         model.ind_buf, model.ind_buf_mem);
   }
 
-  void createUniformBuffers() {
-    vk::DeviceSize buf_size = sizeof(UniformBufferData);
-    uniform_bufs_.resize(MAX_FRAMES_IN_FLIGHT);
+  void createInFlightBuffers() {
+    vk::DeviceSize frame_data_size = sizeof(FrameData);
+    vk::DeviceSize post_fx_size = sizeof(PostFxData);
+
+    in_flight_.resize(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      createBuffer(
-          buf_size, vk::BufferUsageFlagBits::eUniformBuffer,
-          vk::MemoryPropertyFlagBits::eHostVisible |
-              vk::MemoryPropertyFlagBits::eHostCoherent,
-          uniform_bufs_[i].buf, uniform_bufs_[i].buf_mem);
-      uniform_bufs_[i].buf_mapped =
-          device_->mapMemory(*uniform_bufs_[i].buf_mem, 0, buf_size).value;
-      updateUniformBuffer(i);
+      auto& in_flight = in_flight_[i];
+      in_flight.frame = createMappedBuf(frame_data_size);
+      updateFrameData(in_flight.frame);
+      in_flight.post_fx = createMappedBuf(post_fx_size);
     }
+  }
+
+  UniformBuffer createMappedBuf(vk::DeviceSize size) {
+    UniformBuffer buf;
+    createBuffer(
+        size, vk::BufferUsageFlagBits::eUniformBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible |
+            vk::MemoryPropertyFlagBits::eHostCoherent,
+        buf.buf, buf.buf_mem);
+    buf.buf_mapped = device_->mapMemory(*buf.buf_mem, 0, size).value;
+    return buf;
   }
 
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
@@ -1510,19 +1528,32 @@ class Renderer {
     imgui_desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
   }
 
-  void createFrameDescriptorSet() {
-    auto desc_sets = allocDescSets(
+  void createInFlightDescSets() {
+    auto frame_desc_sets = allocDescSets(
         *device_, *desc_pool_, *frame_.layout, MAX_FRAMES_IN_FLIGHT);
+    auto post_desc_sets = allocDescSets(
+        *device_, *desc_pool_, *post_.layout, MAX_FRAMES_IN_FLIGHT);
 
-    for (int i = 0; i < uniform_bufs_.size(); i++) {
-      auto& buf_state = uniform_bufs_[i];
-      buf_state.desc_set = std::move(desc_sets[i]);
-
-      updateDescSet(
-          *device_, buf_state.desc_set, frame_,
-          {UboUpdate{
-              .buffer = *buf_state.buf, .size = sizeof(UniformBufferData)}});
+    for (int i = 0; i < in_flight_.size(); i++) {
+      updateFrameDesc(in_flight_[i].frame, frame_desc_sets[i]);
+      updatePostDesc(in_flight_[i].post_fx, post_desc_sets[i]);
     }
+  }
+
+  void updateFrameDesc(UniformBuffer& buf, vk::DescriptorSet desc_set) {
+    buf.desc_set = desc_set;
+    updateDescSet(
+        *device_, desc_set, frame_,
+        {UboUpdate{.buffer = *buf.buf, .size = sizeof(FrameData)}});
+  }
+
+  void updatePostDesc(UniformBuffer& buf, vk::DescriptorSet desc_set) {
+    buf.desc_set = desc_set;
+    updateDescSet(
+        *device_, desc_set, post_,
+        {UboUpdate{.buffer = *buf.buf, .size = sizeof(PostFxData)},
+         CombinedSamplerUpdate{
+             .view = *scene_tx_->image_view, .sampler = *texture_sampler_}});
   }
 
   vk::DescriptorSet createMaterialDescriptorSet(const Material& material) {
@@ -1536,18 +1567,6 @@ class Renderer {
          UboUpdate{.buffer = *material.ubo_buf, .size = Material::size}});
 
     return desc_set;
-  }
-
-  void createPostDescriptorSet() {
-    post_desc_set_ = allocDescSet(*device_, *desc_pool_, *post_.layout);
-    updatePostDescSet();
-  }
-
-  void updatePostDescSet() {
-    updateDescSet(
-        *device_, post_desc_set_, post_,
-        {CombinedSamplerUpdate{
-            .view = *scene_tx_->image_view, .sampler = *texture_sampler_}});
   }
 
   void createCommandBuffers() {
@@ -1598,10 +1617,10 @@ class Renderer {
     };
     cmd_buf.setScissor(0, scissor);
 
-    auto& buf_state = uniform_bufs_[frame];
+    auto frame_desc = in_flight_[frame].frame.desc_set;
     cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0,
-        buf_state.desc_set, nullptr);
+        vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0, frame_desc,
+        nullptr);
 
     // TODO: Sort by material, then by model.
     std::sort(
@@ -1645,8 +1664,10 @@ class Renderer {
     cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
     cmd_buf.setViewport(0, viewport);
     cmd_buf.setScissor(0, scissor);
+
+    auto post_fx_desc = in_flight_[frame].post_fx.desc_set;
     cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0, post_desc_set_,
+        vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0, post_fx_desc,
         nullptr);
 
     cmd_buf.draw(3, 1, 0, 0);
@@ -1681,7 +1702,6 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createFrameBuffers();
-    updatePostDescSet();
 
     window_resized_ = false;
   }
@@ -1736,19 +1756,17 @@ class Renderer {
   std::unique_ptr<Texture> color_;
   std::unique_ptr<Texture> depth_;
   std::unique_ptr<Texture> scene_tx_;
-  vk::DescriptorSet post_desc_set_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   FrameState* frame_state_ = nullptr;
 
-  struct UniformBufferState {
-    vk::UniqueBuffer buf;
-    vk::UniqueDeviceMemory buf_mem;
-    void* buf_mapped;
-    vk::DescriptorSet desc_set;
+  struct InFlightState {
+    UniformBuffer frame;
+    UniformBuffer post_fx;
   };
-  std::vector<UniformBufferState> uniform_bufs_;
+  std::vector<InFlightState> in_flight_;
+
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
   std::vector<std::unique_ptr<Material>> loaded_materials_;
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
@@ -1769,7 +1787,9 @@ class Renderer {
   };
   // Bound in post processing step.
   DescLayout post_{
-      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
+      .binds =
+          {{.type = vk::DescriptorType::eUniformBuffer},
+           {.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 

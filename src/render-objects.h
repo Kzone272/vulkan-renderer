@@ -19,7 +19,7 @@ struct Light {
   float falloff = 0;
 };
 
-struct UniformBufferData {
+struct FrameData {
   alignas(16) mat4 proj_view;
   alignas(16) Light lights[8];
 };
