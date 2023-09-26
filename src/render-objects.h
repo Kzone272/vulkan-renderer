@@ -40,23 +40,7 @@ struct PostFxData {
   bool b4 = false;
 };
 
-struct Texture {
-  vk::UniqueImage image;
-  vk::UniqueDeviceMemory image_mem;
-  vk::UniqueImageView image_view;
-  vk::Format format;
-  uint32_t mip_levels = 1;
-};
-
-struct Material {
-  Texture* diffuse;
-  vk::UniqueBuffer ubo_buf;
-  vk::UniqueDeviceMemory ubo_buf_mem;
-  vk::DescriptorSet desc_set;
-
-  constexpr static vk::DeviceSize size =
-      sizeof(MaterialInfo::UniformBufferObject);
-};
+struct Material;
 
 struct Model {
   vk::UniqueBuffer vert_buf;

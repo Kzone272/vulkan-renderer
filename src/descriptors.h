@@ -38,25 +38,15 @@ void createDescLayout(vk::Device& device, DescLayout& layout) {
   layout.layout = device.createDescriptorSetLayoutUnique(layout_ci).value;
 }
 
-struct CombinedSamplerUpdate {
-  vk::ImageView view;
-  vk::Sampler sampler;
-};
-struct UboUpdate {
-  vk::Buffer buffer;
-  vk::DeviceSize offset = 0;
-  vk::DeviceSize size;
-};
-
 void updateDescSet(
     const vk::Device& device, const vk::DescriptorSet& desc,
     const DescLayout& layout,
-    std::vector<std::variant<CombinedSamplerUpdate, UboUpdate>>&& updates) {
+    std::vector<
+        std::variant<vk::DescriptorImageInfo*, vk::DescriptorBufferInfo*>>&&
+        updates) {
   assert(layout.binds.size() == updates.size());
 
   std::vector<vk::WriteDescriptorSet> writes;
-  std::vector<std::unique_ptr<vk::DescriptorImageInfo>> image_infos;
-  std::vector<std::unique_ptr<vk::DescriptorBufferInfo>> buffer_infos;
 
   for (uint32_t i = 0; i < updates.size(); i++) {
     auto& update = updates[i];
@@ -71,29 +61,13 @@ void updateDescSet(
 
     switch (bind.type) {
       case vk::DescriptorType::eCombinedImageSampler: {
-        assert(std::holds_alternative<CombinedSamplerUpdate>(update));
-        auto& sampler_update = std::get<CombinedSamplerUpdate>(update);
-        std::unique_ptr<vk::DescriptorImageInfo> info(
-            new vk::DescriptorImageInfo{
-                .sampler = sampler_update.sampler,
-                .imageView = sampler_update.view,
-                .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-            });
-        write.setImageInfo(*info.get());
-        image_infos.push_back(std::move(info));
+        assert(std::holds_alternative<vk::DescriptorImageInfo*>(update));
+        write.setImageInfo(*std::get<vk::DescriptorImageInfo*>(update));
         break;
       }
       case vk::DescriptorType::eUniformBuffer: {
-        assert(std::holds_alternative<UboUpdate>(update));
-        auto& ubo_update = std::get<UboUpdate>(update);
-        std::unique_ptr<vk::DescriptorBufferInfo> info(
-            new vk::DescriptorBufferInfo{
-                .buffer = ubo_update.buffer,
-                .offset = ubo_update.offset,
-                .range = ubo_update.size,
-            });
-        write.setBufferInfo(*info.get());
-        buffer_infos.push_back(std::move(info));
+        assert(std::holds_alternative<vk::DescriptorBufferInfo*>(update));
+        write.setBufferInfo(*std::get<vk::DescriptorBufferInfo*>(update));
         break;
       }
       default:

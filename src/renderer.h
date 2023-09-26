@@ -54,6 +54,34 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 
 }  // namespace
 
+struct Texture {
+  vk::UniqueImage image;
+  vk::UniqueDeviceMemory image_mem;
+  vk::UniqueImageView image_view;
+  vk::Format format;
+  uint32_t mip_levels = 1;
+  vk::DescriptorImageInfo image_info;
+};
+
+// TODO: Rename. UniformData?
+struct UniformBuffer {
+  vk::UniqueBuffer buf;
+  vk::UniqueDeviceMemory buf_mem;
+  void* buf_mapped;
+  // TODO: The desc set should probably be in a higher level object.
+  vk::DescriptorSet desc_set;
+  vk::DescriptorBufferInfo buf_info;
+};
+
+struct Material {
+  Texture* diffuse;
+  UniformBuffer buf;
+  vk::DescriptorSet desc_set;
+
+  constexpr static vk::DeviceSize size =
+      sizeof(MaterialInfo::UniformBufferObject);
+};
+
 class Renderer {
  public:
   Renderer(SDL_Window* window, uint32_t width, uint32_t height) {
@@ -105,13 +133,6 @@ class Renderer {
   }
 
  private:
-  struct UniformBuffer {
-    vk::UniqueBuffer buf;
-    vk::UniqueDeviceMemory buf_mem;
-    void* buf_mapped;
-    vk::DescriptorSet desc_set;
-  };
-
   void initVulkan() {
     createInstance();
     if (enable_validation_layers_) {
@@ -123,6 +144,7 @@ class Renderer {
     createCommandPool();
     createCommandBuffers();
     createSwapchain();
+    createTextureSampler();
     createColorResources();
     createDepthResources();
     createRenderPasses();
@@ -131,7 +153,6 @@ class Renderer {
     createFrameBuffers();
 
     createInFlightBuffers();
-    createTextureSampler();
     initSdlImage();
     createDescriptorPool();
     createImguiDescriptorPool();
@@ -835,6 +856,11 @@ class Renderer {
     color_->image_view = createImageView(
         *color_->image, color_->format, color_->mip_levels,
         vk::ImageAspectFlagBits::eColor);
+    color_->image_info = {
+        .sampler = *texture_sampler_,
+        .imageView = *color_->image_view,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
 
     scene_tx_ = std::make_unique<Texture>();
     scene_tx_->format = swapchain_format_;
@@ -850,6 +876,11 @@ class Renderer {
     scene_tx_->image_view = createImageView(
         *scene_tx_->image, scene_tx_->format, scene_tx_->mip_levels,
         vk::ImageAspectFlagBits::eColor);
+    scene_tx_->image_info = {
+        .sampler = *texture_sampler_,
+        .imageView = *scene_tx_->image_view,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
   }
 
   void createDepthResources() {
@@ -975,6 +1006,11 @@ class Renderer {
     texture->image_view = createImageView(
         *texture->image, texture->format, texture->mip_levels,
         vk::ImageAspectFlagBits::eColor);
+    texture->image_info = {
+        .sampler = *texture_sampler_,
+        .imageView = *texture->image_view,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
 
     auto* ptr = texture.get();
     loaded_textures_.push_back(std::move(texture));
@@ -1254,8 +1290,13 @@ class Renderer {
 
     stageBuffer(
         Material::size, (void*)&mat_info.ubo,
-        vk::BufferUsageFlagBits::eUniformBuffer, material->ubo_buf,
-        material->ubo_buf_mem);
+        vk::BufferUsageFlagBits::eUniformBuffer, material->buf.buf,
+        material->buf.buf_mem);
+    material->buf.buf_info = vk::DescriptorBufferInfo{
+        .buffer = *material->buf.buf,
+        .offset = 0,
+        .range = Material::size,
+    };
 
     material->desc_set = createMaterialDescriptorSet(*material);
 
@@ -1377,6 +1418,12 @@ class Renderer {
             vk::MemoryPropertyFlagBits::eHostCoherent,
         buf.buf, buf.buf_mem);
     buf.buf_mapped = device_->mapMemory(*buf.buf_mem, 0, size).value;
+
+    buf.buf_info = vk::DescriptorBufferInfo{
+        .buffer = *buf.buf,
+        .offset = 0,
+        .range = size,
+    };
     return buf;
   }
 
@@ -1542,29 +1589,27 @@ class Renderer {
 
   void updateFrameDesc(UniformBuffer& buf, vk::DescriptorSet desc_set) {
     buf.desc_set = desc_set;
-    updateDescSet(
-        *device_, desc_set, frame_,
-        {UboUpdate{.buffer = *buf.buf, .size = sizeof(FrameData)}});
+    updateDescSet(*device_, desc_set, frame_, {&buf.buf_info});
   }
 
   void updatePostDesc(UniformBuffer& buf, vk::DescriptorSet desc_set) {
     buf.desc_set = desc_set;
     updateDescSet(
-        *device_, desc_set, post_,
-        {UboUpdate{.buffer = *buf.buf, .size = sizeof(PostFxData)},
-         CombinedSamplerUpdate{
-             .view = *scene_tx_->image_view, .sampler = *texture_sampler_}});
+        *device_, desc_set, post_, {&buf.buf_info, &scene_tx_->image_info});
   }
 
-  vk::DescriptorSet createMaterialDescriptorSet(const Material& material) {
+  void updatePostDescSets() {
+    for (int i = 0; i < in_flight_.size(); i++) {
+      updatePostDesc(in_flight_[i].post_fx, in_flight_[i].post_fx.desc_set);
+    }
+  }
+
+  vk::DescriptorSet createMaterialDescriptorSet(Material& material) {
     auto desc_set = allocDescSet(*device_, *desc_pool_, *material_.layout);
 
     updateDescSet(
         *device_, desc_set, material_,
-        {CombinedSamplerUpdate{
-             .view = *material.diffuse->image_view,
-             .sampler = *texture_sampler_},
-         UboUpdate{.buffer = *material.ubo_buf, .size = Material::size}});
+        {&material.diffuse->image_info, &material.buf.buf_info});
 
     return desc_set;
   }
@@ -1702,6 +1747,7 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createFrameBuffers();
+    updatePostDescSets();
 
     window_resized_ = false;
   }

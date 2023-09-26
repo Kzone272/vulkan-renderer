@@ -1,7 +1,8 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- I can probably move ImageInfos into Texture and BufferInfos into UniformBuffer
+- Refactor image creation
+- Reconsider when we set image and buffer infos
 - Refactor offscreen buffer creation
 - Refactor render pass and framebuffer creation
 - Add hand forward offset
