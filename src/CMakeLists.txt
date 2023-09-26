@@ -18,6 +18,8 @@ add_executable(main
   primitives.h
   skelly.h
   descriptors.h
+  files.h
+  pipelines.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

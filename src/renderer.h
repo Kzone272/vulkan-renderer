@@ -25,6 +25,7 @@
 #include "frame-state.h"
 #include "glm-include.h"
 #include "object.h"
+#include "pipelines.h"
 #include "render-objects.h"
 #include "strings.h"
 #include "vulkan-include.h"
@@ -730,140 +731,46 @@ class Renderer {
   }
 
   void createGraphicsPipelines() {
-    vk::UniqueShaderModule vert_shader =
-        createShaderModule("shaders/shader.vert.spv");
-    vk::UniqueShaderModule frag_shader =
-        createShaderModule("shaders/shader.frag.spv");
-
-    vk::PipelineShaderStageCreateInfo vert_shader_stage_ci{
-        .stage = vk::ShaderStageFlagBits::eVertex,
-        .module = *vert_shader,
-        .pName = "main",
-    };
-    vk::PipelineShaderStageCreateInfo frag_shader_stage_ci{
-        .stage = vk::ShaderStageFlagBits::eFragment,
-        .module = *frag_shader,
-        .pName = "main",
-    };
-    std::array<vk::PipelineShaderStageCreateInfo, 2> shader_stages = {
-        vert_shader_stage_ci, frag_shader_stage_ci};
-
-    std::array<vk::DynamicState, 2> dyn_states = {
-        vk::DynamicState::eViewport,
-        vk::DynamicState::eScissor,
-    };
-    vk::PipelineDynamicStateCreateInfo dyn_state{};
-    dyn_state.setDynamicStates(dyn_states);
-
-    auto binding = Vertex::getBindingDesc();
-    auto attrs = Vertex::getAttrDescs();
-
-    vk::PipelineVertexInputStateCreateInfo vert_in_info{};
-    vert_in_info.setVertexBindingDescriptions(binding);
-    vert_in_info.setVertexAttributeDescriptions(attrs);
-
-    vk::PipelineInputAssemblyStateCreateInfo input_assembly{
-        .topology = vk::PrimitiveTopology::eTriangleList,
-        .primitiveRestartEnable = VK_FALSE,
-    };
-
-    vk::PipelineViewportStateCreateInfo viewport_state{
-        .viewportCount = 1,
-        .scissorCount = 1,
-    };
-
-    vk::PipelineRasterizationStateCreateInfo rasterizer{
-        .depthClampEnable = VK_FALSE,
-        .rasterizerDiscardEnable = VK_FALSE,
-        .polygonMode = vk::PolygonMode::eFill,
-        .cullMode = vk::CullModeFlagBits::eNone,
-        .frontFace = vk::FrontFace::eClockwise,
-        .depthBiasEnable = VK_FALSE,
-        .lineWidth = 1.0f,
-    };
-
-    vk::PipelineMultisampleStateCreateInfo multisampling{
-        .rasterizationSamples = msaa_samples_,
-        .sampleShadingEnable = VK_FALSE,
-    };
-
-    vk::PipelineColorBlendAttachmentState color_blend_att{
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
-        .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-        .colorBlendOp = vk::BlendOp::eAdd,
-        .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-        .dstAlphaBlendFactor = vk::BlendFactor::eZero,
-        .alphaBlendOp = vk::BlendOp::eAdd,
-        .colorWriteMask =
-            vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-            vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-    };
-
-    vk::PipelineColorBlendStateCreateInfo color_blending{
-        .logicOpEnable = VK_FALSE};
-    color_blending.setAttachments(color_blend_att);
-
-    vk::PipelineDepthStencilStateCreateInfo depth_ci{
-        .depthTestEnable = VK_TRUE,
-        .depthWriteEnable = VK_TRUE,
-        .depthCompareOp = vk::CompareOp::eLess,
-        .stencilTestEnable = VK_FALSE,
-    };
-
-    vk::PushConstantRange push_range{
+    // Scene pipeline
+    auto scene_vert = createShaderModule("shaders/shader.vert.spv");
+    auto scene_frag = createShaderModule("shaders/shader.frag.spv");
+    vk::PushConstantRange scene_push{
         .stageFlags = vk::ShaderStageFlagBits::eVertex,
         .offset = 0,
         .size = sizeof(PushData),
     };
-
-    vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-    std::vector<vk::DescriptorSetLayout> set_layouts{
-        *frame_.layout, *material_.layout};
-    pipeline_layout_ci.setSetLayouts(set_layouts);
-    pipeline_layout_ci.setPushConstantRanges(push_range);
-    pipeline_layout_ =
-        device_->createPipelineLayoutUnique(pipeline_layout_ci).value;
-
-    vk::GraphicsPipelineCreateInfo pipeline_ci{
-        .pVertexInputState = &vert_in_info,
-        .pInputAssemblyState = &input_assembly,
-        .pViewportState = &viewport_state,
-        .pRasterizationState = &rasterizer,
-        .pMultisampleState = &multisampling,
-        .pDepthStencilState = &depth_ci,
-        .pColorBlendState = &color_blending,
-        .pDynamicState = &dyn_state,
-        .layout = *pipeline_layout_,
-        .renderPass = *scene_rp_,
-        .subpass = 0,
-    };
-    pipeline_ci.setStages(shader_stages);
-    gfx_pipeline_ =
-        device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
+    vk::PipelineVertexInputStateCreateInfo vertex_in{};
+    auto vert_binding = Vertex::getBindingDesc();
+    auto vert_attrs = Vertex::getAttrDescs();
+    vertex_in.setVertexBindingDescriptions(vert_binding);
+    vertex_in.setVertexAttributeDescriptions(vert_attrs);
+    scene_pl_ = createPipeline(
+        *device_, {
+                      .vert_shader = *scene_vert,
+                      .frag_shader = *scene_frag,
+                      .render_pass = *scene_rp_,
+                      .desc_layouts = {*frame_.layout, *material_.layout},
+                      .push_ranges = {scene_push},
+                      .vert_in = vertex_in,
+                      .cull_mode = vk::CullModeFlagBits::eNone,
+                      .samples = msaa_samples_,
+                      .depth_test = true,
+                  });
 
     // Post processing pipeline
     auto fullscreen_shader = createShaderModule("shaders/fullscreen.vert.spv");
     auto post_shader = createShaderModule("shaders/post.frag.spv");
-    shader_stages[0].module = *fullscreen_shader;
-    shader_stages[1].module = *post_shader;
-
-    vk::PipelineVertexInputStateCreateInfo empty_vert_in{};
-    pipeline_ci.pVertexInputState = &empty_vert_in;
-
-    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
-    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
-    pipeline_ci.pDepthStencilState = nullptr;
-    pipeline_ci.renderPass = *post_rp_;
-
-    vk::PipelineLayoutCreateInfo post_pipe_lo_ci{};
-    std::vector<vk::DescriptorSetLayout> post_layouts{*post_.layout};
-    post_pipe_lo_ci.setSetLayouts(post_layouts);
-    post_pipe_lo_ = device_->createPipelineLayoutUnique(post_pipe_lo_ci).value;
-    pipeline_ci.layout = *post_pipe_lo_;
-
-    post_pipeline_ =
-        device_->createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
+    post_pl_ = createPipeline(
+        *device_, {
+                      .vert_shader = *fullscreen_shader,
+                      .frag_shader = *post_shader,
+                      .render_pass = *post_rp_,
+                      .desc_layouts = {*post_.layout},
+                      .vert_in = {},
+                      .cull_mode = vk::CullModeFlagBits::eBack,
+                      .samples = vk::SampleCountFlagBits::e1,
+                      .depth_test = false,
+                  });
   }
 
   vk::UniqueShaderModule createShaderModule(std::string filename) {
@@ -1673,7 +1580,7 @@ class Renderer {
     rp_info.setClearValues(clear_values);
 
     cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *gfx_pipeline_);
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
 
     vk::Viewport viewport{
         .x = 0.0f,
@@ -1693,7 +1600,7 @@ class Renderer {
 
     auto& buf_state = uniform_bufs_[frame];
     cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 0,
+        vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0,
         buf_state.desc_set, nullptr);
 
     // TODO: Sort by material, then by model.
@@ -1711,7 +1618,7 @@ class Renderer {
       if (curr_material != model->material) {
         curr_material = model->material;
         cmd_buf.bindDescriptorSets(
-            vk::PipelineBindPoint::eGraphics, *pipeline_layout_, 1,
+            vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 1,
             model->material->desc_set, nullptr);
       }
 
@@ -1724,7 +1631,7 @@ class Renderer {
 
       PushData push_data{obj.transform};
       cmd_buf.pushConstants<PushData>(
-          *pipeline_layout_, vk::ShaderStageFlagBits::eVertex, 0, push_data);
+          *scene_pl_.layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
       cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
     }
@@ -1735,11 +1642,11 @@ class Renderer {
     rp_info.renderPass = *post_rp_,
     rp_info.framebuffer = *swapchain_fbs_[img_ind],
     cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pipeline_);
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
     cmd_buf.setViewport(0, viewport);
     cmd_buf.setScissor(0, scissor);
     cmd_buf.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, *post_pipe_lo_, 0, post_desc_set_,
+        vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0, post_desc_set_,
         nullptr);
 
     cmd_buf.draw(3, 1, 0, 0);
@@ -1816,10 +1723,8 @@ class Renderer {
   vk::UniqueRenderPass post_rp_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
-  vk::UniquePipelineLayout pipeline_layout_;
-  vk::UniquePipeline gfx_pipeline_;
-  vk::UniquePipelineLayout post_pipe_lo_;
-  vk::UniquePipeline post_pipeline_;
+  Pipeline scene_pl_;
+  Pipeline post_pl_;
   vk::UniqueFramebuffer scene_fb_;
   std::vector<vk::UniqueFramebuffer> swapchain_fbs_;
   vk::UniqueCommandPool cmd_pool_;

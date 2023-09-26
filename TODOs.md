@@ -1,7 +1,6 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Refactor pipeline creation
 - Refactor offscreen buffer creation
 - Refactor render pass and framebuffer creation
 - Add hand forward offset
