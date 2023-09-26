@@ -1615,16 +1615,8 @@ class Renderer {
   }
 
   void createFrameDescriptorSet() {
-    std::vector<vk::DescriptorSetLayout> layouts(
-        MAX_FRAMES_IN_FLIGHT, *frame_.layout);
-    vk::DescriptorSetAllocateInfo alloc_info{
-        .descriptorPool = *desc_pool_,
-    };
-    alloc_info.setSetLayouts(layouts);
-
-    std::vector<vk::DescriptorSet> desc_sets =
-        device_->allocateDescriptorSets(alloc_info).value;
-    ASSERT(desc_sets.size() == uniform_bufs_.size());
+    auto desc_sets = allocDescSets(
+        *device_, *desc_pool_, *frame_.layout, MAX_FRAMES_IN_FLIGHT);
 
     for (int i = 0; i < uniform_bufs_.size(); i++) {
       auto& buf_state = uniform_bufs_[i];
@@ -1638,15 +1630,7 @@ class Renderer {
   }
 
   vk::DescriptorSet createMaterialDescriptorSet(const Material& material) {
-    vk::DescriptorSetAllocateInfo alloc_info{
-        .descriptorPool = *desc_pool_,
-    };
-    alloc_info.setSetLayouts(*material_.layout);
-
-    std::vector<vk::DescriptorSet> desc_sets =
-        device_->allocateDescriptorSets(alloc_info).value;
-    ASSERT(desc_sets.size() == 1);
-    auto& desc_set = desc_sets[0];
+    auto desc_set = allocDescSet(*device_, *desc_pool_, *material_.layout);
 
     updateDescSet(
         *device_, desc_set, material_,
@@ -1659,16 +1643,7 @@ class Renderer {
   }
 
   void createPostDescriptorSet() {
-    vk::DescriptorSetAllocateInfo alloc_info{
-        .descriptorPool = *desc_pool_,
-    };
-    alloc_info.setSetLayouts(*post_.layout);
-
-    std::vector<vk::DescriptorSet> desc_sets =
-        device_->allocateDescriptorSets(alloc_info).value;
-    ASSERT(desc_sets.size() == 1);
-    post_desc_set_ = desc_sets[0];
-
+    post_desc_set_ = allocDescSet(*device_, *desc_pool_, *post_.layout);
     updatePostDescSet();
   }
 

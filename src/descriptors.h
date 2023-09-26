@@ -106,3 +106,25 @@ void updateDescSet(
 
   device.updateDescriptorSets(writes, nullptr);
 }
+
+std::vector<vk::DescriptorSet> allocDescSets(
+    vk::Device device, vk::DescriptorPool pool, vk::DescriptorSetLayout layout,
+    size_t count) {
+  std::vector<vk::DescriptorSetLayout> layouts(count, layout);
+  vk::DescriptorSetAllocateInfo ai{
+      .descriptorPool = pool,
+  };
+  ai.setSetLayouts(layouts);
+
+  auto desc_sets = device.allocateDescriptorSets(ai).value;
+  DASSERT(desc_sets.size() == count);
+
+  return desc_sets;
+}
+
+vk::DescriptorSet allocDescSet(
+    vk::Device device, vk::DescriptorPool pool,
+    vk::DescriptorSetLayout layout) {
+  auto desc_sets = allocDescSets(device, pool, layout, 1);
+  return desc_sets[0];
+}
