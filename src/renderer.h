@@ -647,7 +647,6 @@ class Renderer {
             .baseArrayLayer = 0,
             .layerCount = 1,
         }};
-
     return device_->createImageViewUnique(ci).value;
   }
 
@@ -852,15 +851,8 @@ class Renderer {
         *color_.get(), msaa_samples_, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransientAttachment |
             vk::ImageUsageFlagBits::eColorAttachment,
-        vk::MemoryPropertyFlagBits::eDeviceLocal);
-    color_->image_view = createImageView(
-        *color_->image, color_->format, color_->mip_levels,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor);
-    color_->image_info = {
-        .sampler = *texture_sampler_,
-        .imageView = *color_->image_view,
-        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-    };
 
     scene_tx_ = std::make_unique<Texture>();
     scene_tx_->size = swapchain_extent_;
@@ -871,15 +863,8 @@ class Renderer {
         vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eColorAttachment |
             vk::ImageUsageFlagBits::eSampled,
-        vk::MemoryPropertyFlagBits::eDeviceLocal);
-    scene_tx_->image_view = createImageView(
-        *scene_tx_->image, scene_tx_->format, scene_tx_->mip_levels,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor);
-    scene_tx_->image_info = {
-        .sampler = *texture_sampler_,
-        .imageView = *scene_tx_->image_view,
-        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-    };
   }
 
   void createDepthResources() {
@@ -890,9 +875,7 @@ class Renderer {
     createImage(
         *depth_.get(), msaa_samples_, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
-        vk::MemoryPropertyFlagBits::eDeviceLocal);
-    depth_->image_view = createImageView(
-        *depth_->image, depth_->format, depth_->mip_levels,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth);
     transitionImageLayout(
         *depth_->image, depth_->format, depth_->mip_levels,
@@ -989,7 +972,8 @@ class Renderer {
         vk::ImageUsageFlagBits::eTransferSrc |
             vk::ImageUsageFlagBits::eTransferDst |
             vk::ImageUsageFlagBits::eSampled,
-        vk::MemoryPropertyFlagBits::eDeviceLocal);
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        vk::ImageAspectFlagBits::eColor);
 
     transitionImageLayout(
         *texture->image, texture->format, texture->mip_levels,
@@ -1000,15 +984,6 @@ class Renderer {
     // Transitioned to vk::ImageLayout::eShaderReadOnlyOptimal while generating
     // mipmaps.
 
-    texture->image_view = createImageView(
-        *texture->image, texture->format, texture->mip_levels,
-        vk::ImageAspectFlagBits::eColor);
-    texture->image_info = {
-        .sampler = *texture_sampler_,
-        .imageView = *texture->image_view,
-        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-    };
-
     auto* ptr = texture.get();
     loaded_textures_.push_back(std::move(texture));
     return ptr;
@@ -1017,7 +992,7 @@ class Renderer {
   void createImage(
       Texture& texture, vk::SampleCountFlagBits num_samples,
       vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-      vk::MemoryPropertyFlags props) {
+      vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect) {
     vk::ImageCreateInfo img_ci{
         .imageType = vk::ImageType::e2D,
         .format = texture.format,
@@ -1043,9 +1018,16 @@ class Renderer {
         .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
     };
     texture.image_mem = device_->allocateMemoryUnique(alloc_info).value;
-
     std::ignore =
         device_->bindImageMemory(*texture.image, *texture.image_mem, 0);
+
+    texture.image_view = createImageView(
+        *texture.image, texture.format, texture.mip_levels, aspect);
+    texture.image_info = {
+        .sampler = *texture_sampler_,
+        .imageView = *texture.image_view,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
   }
 
   void transitionImageLayout(
