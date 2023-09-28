@@ -652,7 +652,7 @@ class Renderer {
 
   void createRenderPasses() {
     vk::AttachmentDescription color_att{
-        .format = swapchain_format_,
+        .format = color_fmt_,
         .samples = msaa_samples_,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
@@ -682,7 +682,7 @@ class Renderer {
     };
 
     vk::AttachmentDescription scene_resolve_att{
-        .format = scene_tx_->format,
+        .format = color_fmt_,
         .samples = vk::SampleCountFlagBits::e1,
         .loadOp = vk::AttachmentLoadOp::eDontCare,
         .storeOp = vk::AttachmentStoreOp::eStore,
@@ -844,7 +844,7 @@ class Renderer {
 
   void createColorResources() {
     color_ = std::make_unique<Texture>();
-    color_->format = swapchain_format_;
+    color_->format = color_fmt_;
     color_->mip_levels = 1;
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, color_->format,
@@ -863,7 +863,7 @@ class Renderer {
     };
 
     scene_tx_ = std::make_unique<Texture>();
-    scene_tx_->format = swapchain_format_;
+    scene_tx_->format = color_fmt_;
     scene_tx_->mip_levels = 1;
     createImage(
         swapchain_extent_.width, swapchain_extent_.height, scene_tx_->format,
@@ -951,7 +951,7 @@ class Renderer {
     ASSERT(texture_surface->pixels);
     // Vulkan likes images to have alpha channels. The SDL byte order is also
     // defined opposite to vk::Format.
-    SDL_PixelFormatEnum desired_fmt = SDL_PIXELFORMAT_ABGR8888;
+    SDL_PixelFormatEnum desired_fmt = SDL_PIXELFORMAT_ARGB8888;
     if (texture_surface->format->format != desired_fmt) {
       printf(
           "converting image pixel format from %s to %s\n",
@@ -984,7 +984,7 @@ class Renderer {
     memcpy(mapped_data, texture_data, static_cast<size_t>(image_size));
     device_->unmapMemory(*staging_buf_mem);
 
-    texture->format = vk::Format::eR8G8B8A8Srgb;
+    texture->format = vk::Format::eB8G8R8A8Srgb;
     createImage(
         width, height, texture->format, texture->mip_levels,
         vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
@@ -1025,12 +1025,7 @@ class Renderer {
     vk::ImageCreateInfo img_ci{
         .imageType = vk::ImageType::e2D,
         .format = format,
-        .extent =
-            {
-                .width = width,
-                .height = height,
-                .depth = 1,
-            },
+        .extent = {.width = width, .height = height, .depth = 1},
         .mipLevels = mip_levels,
         .arrayLayers = 1,
         .samples = num_samples,
@@ -1782,6 +1777,7 @@ class Renderer {
   vk::Queue present_q_;
   SwapchainSupportDetails swapchain_support_;
   vk::UniqueSwapchainKHR swapchain_;
+  vk::Format color_fmt_ = vk::Format::eB8G8R8A8Unorm;
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
