@@ -58,6 +58,7 @@ struct Texture {
   vk::UniqueImage image;
   vk::UniqueDeviceMemory image_mem;
   vk::UniqueImageView image_view;
+  vk::Extent2D size;
   vk::Format format;
   uint32_t mip_levels = 1;
   vk::DescriptorImageInfo image_info;
@@ -844,15 +845,14 @@ class Renderer {
 
   void createColorResources() {
     color_ = std::make_unique<Texture>();
+    color_->size = swapchain_extent_;
     color_->format = color_fmt_;
     color_->mip_levels = 1;
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, color_->format,
-        color_->mip_levels, msaa_samples_, vk::ImageTiling::eOptimal,
+        *color_.get(), msaa_samples_, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransientAttachment |
             vk::ImageUsageFlagBits::eColorAttachment,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, color_->image,
-        color_->image_mem);
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
     color_->image_view = createImageView(
         *color_->image, color_->format, color_->mip_levels,
         vk::ImageAspectFlagBits::eColor);
@@ -863,16 +863,15 @@ class Renderer {
     };
 
     scene_tx_ = std::make_unique<Texture>();
+    scene_tx_->size = swapchain_extent_;
     scene_tx_->format = color_fmt_;
     scene_tx_->mip_levels = 1;
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, scene_tx_->format,
-        scene_tx_->mip_levels, vk::SampleCountFlagBits::e1,
+        *scene_tx_.get(), vk::SampleCountFlagBits::e1,
         vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eColorAttachment |
             vk::ImageUsageFlagBits::eSampled,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, scene_tx_->image,
-        scene_tx_->image_mem);
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
     scene_tx_->image_view = createImageView(
         *scene_tx_->image, scene_tx_->format, scene_tx_->mip_levels,
         vk::ImageAspectFlagBits::eColor);
@@ -885,14 +884,13 @@ class Renderer {
 
   void createDepthResources() {
     depth_ = std::make_unique<Texture>();
+    depth_->size = swapchain_extent_;
     depth_->format = findDepthFormat();
     depth_->mip_levels = 1;
     createImage(
-        swapchain_extent_.width, swapchain_extent_.height, depth_->format,
-        depth_->mip_levels, msaa_samples_, vk::ImageTiling::eOptimal,
+        *depth_.get(), msaa_samples_, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, depth_->image,
-        depth_->image_mem);
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
     depth_->image_view = createImageView(
         *depth_->image, depth_->format, depth_->mip_levels,
         vk::ImageAspectFlagBits::eDepth);
@@ -968,11 +966,13 @@ class Renderer {
 
   Texture* createTexture(void* texture_data, uint32_t width, uint32_t height) {
     auto texture = std::make_unique<Texture>();
-    vk::DeviceSize image_size = width * height * 4;
+    texture->size = {width, height};
+    texture->format = vk::Format::eB8G8R8A8Srgb;
     texture->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
 
     vk::UniqueBuffer staging_buf;
     vk::UniqueDeviceMemory staging_buf_mem;
+    vk::DeviceSize image_size = width * height * 4;
     createBuffer(
         image_size, vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible |
@@ -984,15 +984,12 @@ class Renderer {
     memcpy(mapped_data, texture_data, static_cast<size_t>(image_size));
     device_->unmapMemory(*staging_buf_mem);
 
-    texture->format = vk::Format::eB8G8R8A8Srgb;
     createImage(
-        width, height, texture->format, texture->mip_levels,
-        vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
+        *texture.get(), vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransferSrc |
             vk::ImageUsageFlagBits::eTransferDst |
             vk::ImageUsageFlagBits::eSampled,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, texture->image,
-        texture->image_mem);
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     transitionImageLayout(
         *texture->image, texture->format, texture->mip_levels,
@@ -1018,15 +1015,17 @@ class Renderer {
   }
 
   void createImage(
-      uint32_t width, uint32_t height, vk::Format format, uint32_t mip_levels,
-      vk::SampleCountFlagBits num_samples, vk::ImageTiling tiling,
-      vk::ImageUsageFlags usage, vk::MemoryPropertyFlags props,
-      vk::UniqueImage& img, vk::UniqueDeviceMemory& img_mem) {
+      Texture& texture, vk::SampleCountFlagBits num_samples,
+      vk::ImageTiling tiling, vk::ImageUsageFlags usage,
+      vk::MemoryPropertyFlags props) {
     vk::ImageCreateInfo img_ci{
         .imageType = vk::ImageType::e2D,
-        .format = format,
-        .extent = {.width = width, .height = height, .depth = 1},
-        .mipLevels = mip_levels,
+        .format = texture.format,
+        .extent =
+            {.width = texture.size.width,
+             .height = texture.size.height,
+             .depth = 1},
+        .mipLevels = texture.mip_levels,
         .arrayLayers = 1,
         .samples = num_samples,
         .tiling = tiling,
@@ -1034,17 +1033,19 @@ class Renderer {
         .sharingMode = vk::SharingMode::eExclusive,
         .initialLayout = vk::ImageLayout::eUndefined,
     };
-    img = device_->createImageUnique(img_ci).value;
+    texture.image = device_->createImageUnique(img_ci).value;
 
-    vk::MemoryRequirements mem_reqs = device_->getImageMemoryRequirements(*img);
+    vk::MemoryRequirements mem_reqs =
+        device_->getImageMemoryRequirements(*texture.image);
 
     vk::MemoryAllocateInfo alloc_info{
         .allocationSize = mem_reqs.size,
         .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
     };
-    img_mem = device_->allocateMemoryUnique(alloc_info).value;
+    texture.image_mem = device_->allocateMemoryUnique(alloc_info).value;
 
-    std::ignore = device_->bindImageMemory(*img, *img_mem, 0);
+    std::ignore =
+        device_->bindImageMemory(*texture.image, *texture.image_mem, 0);
   }
 
   void transitionImageLayout(
