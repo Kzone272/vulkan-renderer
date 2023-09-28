@@ -1,9 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Refactor image creation
+- Use Canvas for other offscreen passes?
+- Clean up in flight uniform buffers by a lot.
 - Reconsider when we set image and buffer infos
-- Refactor offscreen buffer creation
 - Refactor render pass and framebuffer creation
 - Add hand forward offset
 - Adjust position of in-swing step if velocity changes significantly

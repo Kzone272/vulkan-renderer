@@ -38,12 +38,13 @@ void createDescLayout(vk::Device& device, DescLayout& layout) {
   layout.layout = device.createDescriptorSetLayoutUnique(layout_ci).value;
 }
 
+typedef std::vector<
+    std::variant<vk::DescriptorImageInfo*, vk::DescriptorBufferInfo*>>
+    DescSetUpdates;
+
 void updateDescSet(
     const vk::Device& device, const vk::DescriptorSet& desc,
-    const DescLayout& layout,
-    std::vector<
-        std::variant<vk::DescriptorImageInfo*, vk::DescriptorBufferInfo*>>&&
-        updates) {
+    const DescLayout& layout, DescSetUpdates updates) {
   assert(layout.binds.size() == updates.size());
 
   std::vector<vk::WriteDescriptorSet> writes;

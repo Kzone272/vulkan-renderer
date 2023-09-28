@@ -26,7 +26,11 @@ struct ModelInfo {
   mat4 model_transform{1};
 };
 
+struct Texture;
+
 struct MaterialInfo {
+  // TODO: Make this a TextureId
+  Texture* diffuse_texture;
   std::optional<std::string> diffuse_path;
   struct UniformBufferObject {
     vec3 color = {1, 1, 1};

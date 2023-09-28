@@ -31,7 +31,7 @@ struct PushData {
 // Uniform buffer data for post processing stage
 struct PostFxData {
   float v1 = 0;
-  float v2 = 0;
+  float v2 = 0.5;
   float v3 = 0;
   float v4 = 0;
   bool b1 = false;

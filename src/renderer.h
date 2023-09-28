@@ -55,12 +55,15 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 }  // namespace
 
 struct Texture {
-  vk::UniqueImage image;
-  vk::UniqueDeviceMemory image_mem;
-  vk::UniqueImageView image_view;
+  // Inputs
   vk::Extent2D size;
   vk::Format format;
   uint32_t mip_levels = 1;
+  vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
+  // Outputs
+  vk::UniqueImage image;
+  vk::UniqueDeviceMemory image_mem;
+  vk::UniqueImageView image_view;
   vk::DescriptorImageInfo image_info;
 };
 
@@ -81,6 +84,21 @@ struct Material {
 
   constexpr static vk::DeviceSize size =
       sizeof(MaterialInfo::UniformBufferObject);
+};
+
+struct Pipe {
+  std::vector<DescLayout> los;
+  // Keyed by DescLayout index, then by frame in flight.
+  std::vector<std::vector<vk::DescriptorSet>> descs;
+  Pipeline pl;
+};
+
+// An offscreen render target that can be sampled.
+struct Canvas {
+  Texture texture;
+  vk::UniqueRenderPass rp;
+  vk::UniqueFramebuffer fb;
+  std::vector<Pipe> pipes;
 };
 
 class Renderer {
@@ -133,6 +151,11 @@ class Renderer {
     loaded_models_[model_id] = std::move(model);
   }
 
+  // TODO: Return a TextureId instead.
+  Texture* getDrawingTexture() {
+    return &drawing_.texture;
+  }
+
  private:
   void initVulkan() {
     createInstance();
@@ -149,16 +172,19 @@ class Renderer {
     createColorResources();
     createDepthResources();
     createRenderPasses();
-    createDescriptorSetLayouts();
-    createGraphicsPipelines();
     createFrameBuffers();
-
+    createDescriptorSetLayouts();
+    createShaders();
+    createGraphicsPipelines();
     createInFlightBuffers();
     initSdlImage();
     createDescriptorPool();
     createImguiDescriptorPool();
     createInFlightDescSets();
     createSyncObjects();
+
+    createCanvas(drawing_);
+    createCanvasPipe(drawing_);
   }
 
   void initImgui() {
@@ -760,10 +786,16 @@ class Renderer {
     createDescLayout(*device_, post_);
   }
 
+  void createShaders() {
+    scene_vert_ = createShaderModule("shaders/shader.vert.spv");
+    scene_frag_ = createShaderModule("shaders/shader.frag.spv");
+    fullscreen_vert_ = createShaderModule("shaders/fullscreen.vert.spv");
+    post_frag_ = createShaderModule("shaders/post.frag.spv");
+    circle_frag_ = createShaderModule("shaders/circle.frag.spv");
+  }
+
   void createGraphicsPipelines() {
     // Scene pipeline
-    auto scene_vert = createShaderModule("shaders/shader.vert.spv");
-    auto scene_frag = createShaderModule("shaders/shader.frag.spv");
     vk::PushConstantRange scene_push{
         .stageFlags = vk::ShaderStageFlagBits::eVertex,
         .offset = 0,
@@ -776,8 +808,8 @@ class Renderer {
     vertex_in.setVertexAttributeDescriptions(vert_attrs);
     scene_pl_ = createPipeline(
         *device_, {
-                      .vert_shader = *scene_vert,
-                      .frag_shader = *scene_frag,
+                      .vert_shader = *scene_vert_,
+                      .frag_shader = *scene_frag_,
                       .render_pass = *scene_rp_,
                       .desc_layouts = {*frame_.layout, *material_.layout},
                       .push_ranges = {scene_push},
@@ -788,12 +820,10 @@ class Renderer {
                   });
 
     // Post processing pipeline
-    auto fullscreen_shader = createShaderModule("shaders/fullscreen.vert.spv");
-    auto post_shader = createShaderModule("shaders/post.frag.spv");
     post_pl_ = createPipeline(
         *device_, {
-                      .vert_shader = *fullscreen_shader,
-                      .frag_shader = *post_shader,
+                      .vert_shader = *fullscreen_vert_,
+                      .frag_shader = *post_frag_,
                       .render_pass = *post_rp_,
                       .desc_layouts = {*post_.layout},
                       .vert_in = {},
@@ -834,6 +864,101 @@ class Renderer {
     }
   }
 
+  void createCanvas(Canvas& canvas) {
+    vk::Extent2D size = {512, 512};
+    canvas.texture = {
+        .size = size,
+        .format = color_fmt_,
+    };
+    createImage(
+        canvas.texture, vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eColorAttachment |
+            vk::ImageUsageFlagBits::eSampled,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        vk::ImageAspectFlagBits::eColor);
+
+    vk::AttachmentDescription att{
+        .format = color_fmt_,
+        .samples = canvas.texture.samples,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    };
+    vk::AttachmentReference att_ref{
+        .attachment = 0,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    };
+
+    vk::SubpassDescription subpass{
+        .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &att_ref,
+    };
+
+    vk::SubpassDependency dep{
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        .srcAccessMask = {},
+        .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+    };
+
+    vk::RenderPassCreateInfo rp_ci{};
+    rp_ci.setAttachments(att);
+    rp_ci.setSubpasses(subpass);
+    rp_ci.setDependencies(dep);
+    canvas.rp = device_->createRenderPassUnique(rp_ci).value;
+
+    vk::FramebufferCreateInfo fb_ci{
+        .renderPass = *canvas.rp,
+        .width = size.width,
+        .height = size.height,
+        .layers = 1,
+    };
+    fb_ci.setAttachments(*canvas.texture.image_view);
+    canvas.fb = device_->createFramebufferUnique(fb_ci).value;
+  };
+
+  void createCanvasPipe(Canvas& canvas) {
+    Pipe pipe;
+    pipe.los.push_back({
+        .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
+        .stages = vk::ShaderStageFlagBits::eFragment,
+    });
+    // TODO: Icky. Maybe pass in the array of buffers?
+    std::array<DescSetUpdates, MAX_FRAMES_IN_FLIGHT> updates{
+        DescSetUpdates{&in_flight_[0].post_fx.buf_info},
+        DescSetUpdates{&in_flight_[1].post_fx.buf_info}};
+
+    std::vector<vk::DescriptorSetLayout> layouts;
+    size_t i = 0;
+    for (auto& lo : pipe.los) {
+      createDescLayout(*device_, lo);
+      auto descs = allocDescSets(
+          *device_, *desc_pool_, *lo.layout, MAX_FRAMES_IN_FLIGHT);
+      for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        updateDescSet(*device_, descs[i], lo, updates[i]);
+      }
+      pipe.descs.push_back(std::move(descs));
+
+      layouts.push_back(*lo.layout);
+    }
+
+    pipe.pl = createPipeline(
+        *device_, {
+                      .vert_shader = *fullscreen_vert_,
+                      .frag_shader = *circle_frag_,
+                      .render_pass = *canvas.rp,
+                      .desc_layouts = layouts,
+                      .depth_test = false,
+                  });
+    canvas.pipes.push_back(std::move(pipe));
+  }
+
   void createCommandPool() {
     vk::CommandPoolCreateInfo ci{
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
@@ -846,9 +971,9 @@ class Renderer {
     color_ = std::make_unique<Texture>();
     color_->size = swapchain_extent_;
     color_->format = color_fmt_;
-    color_->mip_levels = 1;
+    color_->samples = msaa_samples_;
     createImage(
-        *color_.get(), msaa_samples_, vk::ImageTiling::eOptimal,
+        *color_.get(), vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransientAttachment |
             vk::ImageUsageFlagBits::eColorAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
@@ -857,10 +982,8 @@ class Renderer {
     scene_tx_ = std::make_unique<Texture>();
     scene_tx_->size = swapchain_extent_;
     scene_tx_->format = color_fmt_;
-    scene_tx_->mip_levels = 1;
     createImage(
-        *scene_tx_.get(), vk::SampleCountFlagBits::e1,
-        vk::ImageTiling::eOptimal,
+        *scene_tx_.get(), vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eColorAttachment |
             vk::ImageUsageFlagBits::eSampled,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
@@ -871,9 +994,9 @@ class Renderer {
     depth_ = std::make_unique<Texture>();
     depth_->size = swapchain_extent_;
     depth_->format = findDepthFormat();
-    depth_->mip_levels = 1;
+    depth_->samples = msaa_samples_;
     createImage(
-        *depth_.get(), msaa_samples_, vk::ImageTiling::eOptimal,
+        *depth_.get(), vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth);
@@ -968,7 +1091,7 @@ class Renderer {
     device_->unmapMemory(*staging_buf_mem);
 
     createImage(
-        *texture.get(), vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
+        *texture.get(), vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransferSrc |
             vk::ImageUsageFlagBits::eTransferDst |
             vk::ImageUsageFlagBits::eSampled,
@@ -990,8 +1113,7 @@ class Renderer {
   }
 
   void createImage(
-      Texture& texture, vk::SampleCountFlagBits num_samples,
-      vk::ImageTiling tiling, vk::ImageUsageFlags usage,
+      Texture& texture, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
       vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect) {
     vk::ImageCreateInfo img_ci{
         .imageType = vk::ImageType::e2D,
@@ -1002,7 +1124,7 @@ class Renderer {
              .depth = 1},
         .mipLevels = texture.mip_levels,
         .arrayLayers = 1,
-        .samples = num_samples,
+        .samples = texture.samples,
         .tiling = tiling,
         .usage = usage,
         .sharingMode = vk::SharingMode::eExclusive,
@@ -1259,12 +1381,14 @@ class Renderer {
     auto material = std::make_unique<Material>();
     auto* ptr = material.get();
 
-    // Use 1x1 pixel white texture when none is specified.
-    Texture* white_texture = getColorTexture(0xFFFFFFFF);
-
-    material->diffuse = mat_info.diffuse_path
-                            ? loadTexture(*mat_info.diffuse_path)
-                            : white_texture;
+    if (mat_info.diffuse_texture) {
+      material->diffuse = mat_info.diffuse_texture;
+    } else if (mat_info.diffuse_path) {
+      material->diffuse = loadTexture(*mat_info.diffuse_path);
+    } else {
+      // Use 1x1 pixel white texture when none is specified.
+      material->diffuse = getColorTexture(0xFFFFFFFF);
+    }
 
     stageBuffer(
         Material::size, (void*)&mat_info.ubo,
@@ -1601,11 +1725,57 @@ class Renderer {
     cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
   }
 
+  void renderCanvas(
+      const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas) {
+    vk::Viewport viewport{
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(canvas.texture.size.width),
+        .height = static_cast<float>(canvas.texture.size.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vk::Rect2D scissor{
+        .offset = {0, 0},
+        .extent = canvas.texture.size,
+    };
+    cmd_buf.setViewport(0, viewport);
+    cmd_buf.setScissor(0, scissor);
+
+    vk::RenderPassBeginInfo rp_info{
+        .renderPass = *canvas.rp,
+        .framebuffer = *canvas.fb,
+        .renderArea = {
+            .offset = {0, 0},
+            .extent = canvas.texture.size,
+        }};
+    vk::ClearValue clear{};
+    clear.color = {0, 0, 0, 1};
+    rp_info.setClearValues(clear);
+    cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
+
+    for (auto& pipe : canvas.pipes) {
+      cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipe.pl.pipeline);
+
+      auto post_fx_desc = in_flight_[frame].post_fx.desc_set;
+
+      cmd_buf.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, *pipe.pl.layout, 0,
+          pipe.descs[0][frame], nullptr);
+
+      // TODO: Make this more general.
+      cmd_buf.draw(3, 1, 0, 0);
+    }
+    cmd_buf.endRenderPass();
+  }
+
   void recordCommandBuffer(int frame, uint32_t img_ind) {
     auto& cmd_buf = *cmd_bufs_[frame];
 
     vk::CommandBufferBeginInfo begin_info{};
     std::ignore = cmd_buf.begin(begin_info);
+
+    renderCanvas(cmd_buf, frame, drawing_);
 
     vk::RenderPassBeginInfo rp_info{
         .renderPass = *scene_rp_,
@@ -1768,6 +1938,11 @@ class Renderer {
   vk::UniqueRenderPass post_rp_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
+  vk::UniqueShaderModule scene_vert_;
+  vk::UniqueShaderModule scene_frag_;
+  vk::UniqueShaderModule fullscreen_vert_;
+  vk::UniqueShaderModule post_frag_;
+  vk::UniqueShaderModule circle_frag_;
   Pipeline scene_pl_;
   Pipeline post_pl_;
   vk::UniqueFramebuffer scene_fb_;
@@ -1786,6 +1961,8 @@ class Renderer {
 
   FrameState* frame_state_ = nullptr;
 
+  // TODO: This struct should probably have vectors, rather than having a vector
+  // of InFlightStates.
   struct InFlightState {
     UniformBuffer frame;
     UniformBuffer post_fx;
@@ -1817,6 +1994,8 @@ class Renderer {
            {.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
+
+  Canvas drawing_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

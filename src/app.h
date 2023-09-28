@@ -153,9 +153,11 @@ class HelloTriangleApp {
     MaterialId bone_mat = renderer_->useMaterial({.ubo{.color{0.9, 0.2, 0.1}}});
     MaterialId control_mat =
         renderer_->useMaterial({.ubo{.color{0.1, 1, 0.2}}});
-    MaterialId floor_mat = renderer_->useMaterial(
-        {.diffuse_path = "assets/textures/viking_room.png",
-         .ubo{.color{0.2, 0.2, 0.2}}});
+    MaterialId floor_mat = renderer_->useMaterial({
+        .diffuse_texture = renderer_->getDrawingTexture(),
+        // .diffuse_path = "assets/textures/viking_room.png",
+        .ubo{.color{0.2, 0.2, 0.2}},
+    });
     MaterialId white_mat = renderer_->useMaterial({});
 
     renderer_->useMesh(ModelId::Cube, makeCube(), cube_mat);
@@ -557,7 +559,7 @@ class HelloTriangleApp {
       ImGui::SameLine();
       ImGui::Checkbox("b4", &frame_state_.post_fx.b4);
       ImGui::SliderFloat("v1", &frame_state_.post_fx.v1, 0, 1);
-      ImGui::SliderFloat("v2", &frame_state_.post_fx.v2, 0, 10);
+      ImGui::SliderFloat("v2", &frame_state_.post_fx.v2, 0, 1);
       ImGui::SliderFloat("v3", &frame_state_.post_fx.v3, 0, 10);
       ImGui::SliderFloat("v4", &frame_state_.post_fx.v4, 0, 10);
       ImGui::EndTabItem();

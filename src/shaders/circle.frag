@@ -6,16 +6,14 @@ layout(set = 0, binding = 0) uniform PostFxData {
   float v1, v2, v3, v4;
   bool b1, b2, b3, b4;
 } post;
-layout(set = 0, binding = 1) uniform sampler2D colorSampler;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
-  vec4 tx = texture(colorSampler, fragUv);
-  float grey = (tx.r + tx.g + tx.b) / 3;
-
-  float desat = post.b1 ? post.v1 : 1;
-  vec3 col = mix(vec3(grey), tx.rgb, desat);
+  vec3 col = vec3(0);
+  if (length(fragUv - vec2(0.5)) < post.v2) {
+    col = vec3(1,0,0);
+  }
 
   outColor = vec4(col, 1.0);
 }
