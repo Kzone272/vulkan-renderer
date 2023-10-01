@@ -6,6 +6,7 @@
 #include "maths.h"
 #include "object.h"
 #include "strings.h"
+#include "time-include.h"
 
 struct MoveOptions {
   float max_speed = 200;

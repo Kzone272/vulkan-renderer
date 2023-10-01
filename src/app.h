@@ -28,7 +28,6 @@
 #include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
-#include "vulkan-include.h"
 
 namespace {
 

@@ -8,35 +8,7 @@
 
 #include "animation.h"
 #include "glm-include.h"
-
-enum class ModelId {
-  None,
-  Viking,
-  Pony,
-  Cube,
-  Bone,
-  Control,
-  Tetra,
-  Floor,
-};
-
-struct ModelInfo {
-  std::string obj_path;
-  std::string texture_path;
-  mat4 model_transform{1};
-};
-
-struct Texture;
-
-struct MaterialInfo {
-  // TODO: Make this a TextureId
-  Texture* diffuse_texture;
-  std::optional<std::string> diffuse_path;
-  struct UniformBufferObject {
-    vec3 color = {1, 1, 1};
-  } ubo;
-};
-typedef uint32_t MaterialId;
+#include "render-objects.h"
 
 std::map<ModelId, ModelInfo> model_registry = {
     {ModelId::Viking,
@@ -52,11 +24,6 @@ std::map<ModelId, ModelInfo> model_registry = {
          "assets/models/pony/pony-body-diffuse.jpg",
          glm::scale(mat4(1), vec3(0.5)),
      }},
-};
-
-struct RenderObject {
-  ModelId model;
-  mat4 transform;
 };
 
 class Object {

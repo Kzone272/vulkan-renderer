@@ -3,6 +3,7 @@ add_executable(main
   main.cc
   app.h
   renderer.h
+  renderer.cc
   asserts.h
   asserts.cc
   defines.h
@@ -18,8 +19,10 @@ add_executable(main
   primitives.h
   skelly.h
   descriptors.h
+  descriptors.cc
   files.h
   pipelines.h
+  pipelines.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

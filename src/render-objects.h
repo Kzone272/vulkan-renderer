@@ -4,8 +4,6 @@
 #include <optional>
 
 #include "glm-include.h"
-#include "object.h"
-#include "vulkan-include.h"
 
 struct Light {
   enum class Type {
@@ -40,15 +38,37 @@ struct PostFxData {
   bool b4 = false;
 };
 
-struct Material;
+enum class ModelId {
+  None,
+  Viking,
+  Pony,
+  Cube,
+  Bone,
+  Control,
+  Tetra,
+  Floor,
+};
 
-struct Model {
-  vk::UniqueBuffer vert_buf;
-  vk::UniqueDeviceMemory vert_buf_mem;
-  vk::UniqueBuffer ind_buf;
-  vk::UniqueDeviceMemory ind_buf_mem;
-  uint32_t index_count;
-  Material* material;
+struct ModelInfo {
+  std::string obj_path;
+  std::string texture_path;
+  mat4 model_transform{1};
+};
+
+struct Texture;
+struct MaterialInfo {
+  // TODO: Make this a TextureId
+  Texture* diffuse_texture;
+  std::optional<std::string> diffuse_path;
+  struct UniformBufferObject {
+    vec3 color = {1, 1, 1};
+  } ubo;
+};
+typedef uint32_t MaterialId;
+
+struct RenderObject {
+  ModelId model;
+  mat4 transform;
 };
 
 struct Vertex {
@@ -60,45 +80,6 @@ struct Vertex {
   bool operator==(const Vertex& other) const {
     return pos == other.pos && normal == other.normal && color == other.color &&
            uv == other.uv;
-  }
-
-  static vk::VertexInputBindingDescription getBindingDesc() {
-    return {
-        .binding = 0,
-        .stride = sizeof(Vertex),
-        .inputRate = vk::VertexInputRate::eVertex,
-    };
-  }
-
-  static std::vector<vk::VertexInputAttributeDescription> getAttrDescs() {
-    std::vector<vk::VertexInputAttributeDescription> attrs = {
-        {
-            .location = 0,
-            .binding = 0,
-            .format = vk::Format::eR32G32B32Sfloat,  // vec3
-            .offset = offsetof(Vertex, pos),
-        },
-        {
-            .location = 1,
-            .binding = 0,
-            .format = vk::Format::eR32G32B32Sfloat,  // vec3
-            .offset = offsetof(Vertex, normal),
-        },
-        {
-            .location = 2,
-            .binding = 0,
-            .format = vk::Format::eR32G32B32Sfloat,  // vec3
-            .offset = offsetof(Vertex, color),
-        },
-        {
-            .location = 3,
-            .binding = 0,
-            .format = vk::Format::eR32G32Sfloat,  // vec2
-            .offset = offsetof(Vertex, uv),
-        },
-    };
-
-    return attrs;
   }
 };
 

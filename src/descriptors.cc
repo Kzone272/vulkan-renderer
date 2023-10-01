@@ -1,24 +1,14 @@
 #pragma once
 
+#include "descriptors.h"
+
 #include <memory>
 #include <variant>
 #include <vector>
 
 #include "assert.h"
-#include "render-objects.h"
 #include "strings.h"
 #include "vulkan-include.h"
-
-struct Binding {
-  vk::DescriptorType type;
-  uint32_t count = 1;
-};
-
-struct DescLayout {
-  std::vector<Binding> binds;
-  vk::ShaderStageFlags stages;
-  vk::UniqueDescriptorSetLayout layout;
-};
 
 void createDescLayout(vk::Device& device, DescLayout& layout) {
   std::vector<vk::DescriptorSetLayoutBinding> binds;
@@ -37,10 +27,6 @@ void createDescLayout(vk::Device& device, DescLayout& layout) {
   layout_ci.setBindings(binds);
   layout.layout = device.createDescriptorSetLayoutUnique(layout_ci).value;
 }
-
-typedef std::vector<
-    std::variant<vk::DescriptorImageInfo*, vk::DescriptorBufferInfo*>>
-    DescSetUpdates;
 
 void updateDescSet(
     const vk::Device& device, const vk::DescriptorSet& desc,
