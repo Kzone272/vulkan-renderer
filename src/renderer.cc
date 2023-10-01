@@ -106,6 +106,7 @@ void Renderer::drawFrame(FrameState* frame_state) {
 
 void Renderer::cleanup() {
   std::ignore = device_->waitIdle();
+  ImGui_ImplVulkan_Shutdown();
 }
 
 void Renderer::resizeWindow(uint32_t width, uint32_t height) {
@@ -187,6 +188,10 @@ void Renderer::initImgui() {
   ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
   endSingleTimeCommands(cmd_buf);
   ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
+
+void Renderer::imguiNewFrame() {
+  ImGui_ImplVulkan_NewFrame();
 }
 
 void Renderer::updateFrameData(UniformBuffer& buf) {

@@ -25,7 +25,7 @@
 #include "maths.h"
 #include "object.h"
 #include "primitives.h"
-#include "renderer.h"
+#include "render-interface.h"
 #include "skelly.h"
 #include "time-include.h"
 
@@ -40,7 +40,7 @@ class HelloTriangleApp {
  public:
   void run() {
     initWindow();
-    renderer_ = std::make_unique<Renderer>(window_, width_, height_);
+    renderer_ = RenderInterface::CreateRenderer(window_, width_, height_);
 
     initImgui();
     renderer_->init(&frame_state_);
@@ -536,7 +536,7 @@ class HelloTriangleApp {
   }
 
   void updateImgui() {
-    ImGui_ImplVulkan_NewFrame();
+    renderer_->imguiNewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
@@ -692,7 +692,6 @@ class HelloTriangleApp {
   void cleanup() {
     renderer_->cleanup();
 
-    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 
@@ -743,7 +742,7 @@ class HelloTriangleApp {
 
   InputState input_;
   FrameState frame_state_;
-  std::unique_ptr<Renderer> renderer_;
+  std::unique_ptr<RenderInterface> renderer_;
   Object world_;
   Object grid_;
   Skelly skelly_;

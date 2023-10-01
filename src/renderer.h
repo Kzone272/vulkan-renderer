@@ -1,17 +1,12 @@
 #pragma once
 
-#include <SDL.h>
-#undef main  // SDL needs this on Windows
-#include <SDL_image.h>
-#include <SDL_vulkan.h>
-#include <imgui/backends/imgui_impl_vulkan.h>
-
 #include <memory>
 #include <vector>
 
 #include "descriptors.h"
 #include "frame-state.h"
 #include "pipelines.h"
+#include "render-interface.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
 
@@ -71,7 +66,10 @@ struct Canvas {
   std::vector<Pipe> pipes;
 };
 
-class Renderer {
+struct SDL_Window;
+struct SDL_Surface;
+
+class Renderer : public RenderInterface {
  public:
   Renderer(SDL_Window* window, uint32_t width, uint32_t height) {
     window_ = window;
@@ -79,15 +77,16 @@ class Renderer {
     height_ = height;
   }
 
-  void init(FrameState* frame_state);
-  void drawFrame(FrameState* frame_state);
-  void cleanup();
-  void resizeWindow(uint32_t width, uint32_t height);
-  void useModel(ModelId model_id, const ModelInfo& model_info);
-  MaterialId useMaterial(const MaterialInfo& mat_info);
-  void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id);
+  void init(FrameState* frame_state) override;
+  void drawFrame(FrameState* frame_state) override;
+  void cleanup() override;
+  void resizeWindow(uint32_t width, uint32_t height) override;
+  void useModel(ModelId model_id, const ModelInfo& model_info) override;
+  MaterialId useMaterial(const MaterialInfo& mat_info) override;
+  void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id) override;
   // TODO: Return a TextureId instead.
-  Texture* getDrawingTexture();
+  Texture* getDrawingTexture() override;
+  void imguiNewFrame() override;
 
  private:
   struct QueueFamilyIndices {
