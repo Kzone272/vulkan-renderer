@@ -1,11 +1,5 @@
 #pragma once
 
-#include <SDL.h>
-#undef main  // SDL needs this on Windows
-#include <SDL_image.h>
-#include <SDL_vulkan.h>
-#include <imgui/backends/imgui_impl_vulkan.h>
-
 #include <memory>
 #include <vector>
 
@@ -71,6 +65,9 @@ struct Canvas {
   std::vector<Pipe> pipes;
 };
 
+struct SDL_Window;
+struct SDL_Surface;
+
 class Renderer {
  public:
   Renderer(SDL_Window* window, uint32_t width, uint32_t height) {
@@ -88,6 +85,7 @@ class Renderer {
   void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id);
   // TODO: Return a TextureId instead.
   Texture* getDrawingTexture();
+  void imguiNewFrame();
 
  private:
   struct QueueFamilyIndices {

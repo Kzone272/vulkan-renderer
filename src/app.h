@@ -536,7 +536,7 @@ class HelloTriangleApp {
   }
 
   void updateImgui() {
-    ImGui_ImplVulkan_NewFrame();
+    renderer_->imguiNewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
@@ -692,7 +692,6 @@ class HelloTriangleApp {
   void cleanup() {
     renderer_->cleanup();
 
-    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 
