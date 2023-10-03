@@ -2,7 +2,6 @@ Things I Should Do Soon:
 
 Short-term ideas:
 - Use Canvas for other offscreen passes?
-- Clean up in flight uniform buffers by a lot.
 - Reconsider when we set image and buffer infos
 - Refactor render pass and framebuffer creation
 - Add hand forward offset

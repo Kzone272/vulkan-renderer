@@ -19,22 +19,19 @@ struct Texture {
   vk::UniqueImage image;
   vk::UniqueDeviceMemory image_mem;
   vk::UniqueImageView image_view;
-  vk::DescriptorImageInfo image_info;
+  vk::DescriptorImageInfo info;
 };
 
-// TODO: Rename. UniformData?
-struct UniformBuffer {
+struct Ubo {
   vk::UniqueBuffer buf;
   vk::UniqueDeviceMemory buf_mem;
   void* buf_mapped;
-  // TODO: The desc set should probably be in a higher level object.
-  vk::DescriptorSet desc_set;
-  vk::DescriptorBufferInfo buf_info;
+  vk::DescriptorBufferInfo info;
 };
 
 struct Material {
   Texture* diffuse;
-  UniformBuffer buf;
+  Ubo ubo;
   vk::DescriptorSet desc_set;
 
   constexpr static vk::DeviceSize size =
@@ -50,10 +47,10 @@ struct Model {
   Material* material;
 };
 
+// TODO: This probably shouldn't exist. I think DescLayouts should just move
+// into Pipeline.
 struct Pipe {
-  std::vector<DescLayout> los;
-  // Keyed by DescLayout index, then by frame in flight.
-  std::vector<std::vector<vk::DescriptorSet>> descs;
+  std::vector<DescLayout> desc_los;
   Pipeline pl;
 };
 
@@ -104,8 +101,8 @@ class Renderer {
 
   void initVulkan();
   void initImgui();
-  void updateFrameData(UniformBuffer& buf);
-  void updatePostFxData(UniformBuffer& buf);
+  void updateFrameData(Ubo& ubo);
+  void updatePostFxData(Ubo& ubo);
   void drawFrame();
   void createInstance();
   std::vector<const char*> getRequiredExtensions();
@@ -168,28 +165,29 @@ class Renderer {
   Mesh loadObj(std::string obj_path);
   void stageVertices(const std::vector<Vertex>& vertices, Model& model);
   void stageIndices(const std::vector<uint32_t>& indices, Model& model);
+
   void createInFlightBuffers();
-  UniformBuffer createMappedBuf(vk::DeviceSize size);
+  Ubo createMappedBuf(vk::DeviceSize size);
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
   // from the staging_buf to dst_buf.
   void stageBuffer(
       vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
       vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem);
   void copyBuffer(vk::Buffer src_buf, vk::Buffer dst_buf, vk::DeviceSize size);
-  vk::CommandBuffer beginSingleTimeCommands();
-  void endSingleTimeCommands(vk::CommandBuffer cmd_buf);
   void createBuffer(
       vk::DeviceSize size, vk::BufferUsageFlags usage,
       vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
       vk::UniqueDeviceMemory& buf_mem);
   uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props);
+
+  vk::CommandBuffer beginSingleTimeCommands();
+  void endSingleTimeCommands(vk::CommandBuffer cmd_buf);
+
   void createDescriptorPool();
   void createImguiDescriptorPool();
   void createInFlightDescSets();
-  void updateFrameDesc(UniformBuffer& buf, vk::DescriptorSet desc_set);
-  void updatePostDesc(UniformBuffer& buf, vk::DescriptorSet desc_set);
-  void updatePostDescSets();
-  vk::DescriptorSet createMaterialDescriptorSet(Material& material);
+  void updateResizedDescSets();
+
   void createCommandBuffers();
   void renderCanvas(
       const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas);
@@ -249,13 +247,10 @@ class Renderer {
 
   FrameState* frame_state_ = nullptr;
 
-  // TODO: This struct should probably have vectors, rather than having a vector
-  // of InFlightStates.
   struct InFlightState {
-    UniformBuffer frame;
-    UniformBuffer post_fx;
-  };
-  std::vector<InFlightState> in_flight_;
+    std::vector<Ubo> frame;
+    std::vector<Ubo> post_fx;
+  } in_flight_;
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
   std::vector<std::unique_ptr<Material>> loaded_materials_;
