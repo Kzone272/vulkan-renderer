@@ -146,7 +146,7 @@ void Renderer::useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id) {
 
 // TODO: Return a TextureId instead.
 Texture* Renderer::getDrawingTexture() {
-  return &drawing_.texture;
+  return &drawing_.fbo.colors[0];
 }
 
 void Renderer::initVulkan() {
@@ -846,39 +846,118 @@ void Renderer::createFrameBuffers() {
   }
 }
 
-void Renderer::createCanvas(Canvas& canvas) {
-  vk::Extent2D size = {512, 512};
-  canvas.texture = {
-      .size = size,
-      .format = color_fmt_,
-  };
-  createImage(
-      canvas.texture, vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eColorAttachment |
-          vk::ImageUsageFlagBits::eSampled,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      vk::ImageAspectFlagBits::eColor);
+void Renderer::initFbo(Fbo& fbo) {
+  for (auto& format : fbo.color_fmts) {
+    Texture color{
+        .size = fbo.size,
+        .format = format,
+        .samples = fbo.samples,
+    };
+    auto usage = vk::ImageUsageFlagBits::eColorAttachment |
+                 (fbo.resolve ? vk::ImageUsageFlagBits::eTransientAttachment
+                              : vk::ImageUsageFlagBits::eSampled);
+    createImage(
+        color, vk::ImageTiling::eOptimal, usage,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        vk::ImageAspectFlagBits::eColor);
+    fbo.colors.push_back(std::move(color));
 
-  vk::AttachmentDescription att{
-      .format = color_fmt_,
-      .samples = canvas.texture.samples,
-      .loadOp = vk::AttachmentLoadOp::eClear,
-      .storeOp = vk::AttachmentStoreOp::eStore,
-      .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-      .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-      .initialLayout = vk::ImageLayout::eUndefined,
-      .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+    if (fbo.resolve) {
+      Texture resolve{
+          .size = fbo.size,
+          .format = format,
+          .samples = vk::SampleCountFlagBits::e1,
+      };
+      createImage(
+          resolve, vk::ImageTiling::eOptimal,
+          vk::ImageUsageFlagBits::eColorAttachment |
+              vk::ImageUsageFlagBits::eSampled,
+          vk::MemoryPropertyFlagBits::eDeviceLocal,
+          vk::ImageAspectFlagBits::eColor);
+      fbo.resolves.push_back(std::move(resolve));
+    }
+  }
+
+  if (fbo.depth_test) {
+    fbo.depth = {
+        .size = fbo.size,
+        .format = findDepthFormat(),
+        .samples = fbo.samples,
+    };
+    createImage(
+        fbo.depth, vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        vk::ImageAspectFlagBits::eDepth);
+    transitionImageLayout(
+        *fbo.depth.image, fbo.depth.format, fbo.depth.mip_levels,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthStencilAttachmentOptimal);
+  }
+
+  uint32_t index = 0;
+  std::vector<vk::AttachmentDescription> atts;
+  std::vector<vk::AttachmentReference> color_refs;
+  std::vector<vk::AttachmentReference> resolve_refs;
+  for (uint32_t i = 0; i < fbo.color_fmts.size(); i++) {
+    auto& format = fbo.color_fmts[i];
+    atts.push_back({
+        .format = format,
+        .samples = fbo.samples,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = fbo.resolve ? vk::ImageLayout::eColorAttachmentOptimal
+                                   : vk::ImageLayout::eShaderReadOnlyOptimal,
+    });
+    color_refs.push_back({
+        .attachment = i,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    });
+    if (fbo.resolve) {
+      atts.push_back({
+          .format = format,
+          .samples = vk::SampleCountFlagBits::e1,
+          .loadOp = vk::AttachmentLoadOp::eDontCare,
+          .storeOp = vk::AttachmentStoreOp::eStore,
+          .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+          .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+          .initialLayout = vk::ImageLayout::eUndefined,
+          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      });
+      resolve_refs.push_back({
+          .attachment = i + static_cast<uint32_t>(fbo.color_fmts.size()),
+          .layout = vk::ImageLayout::eColorAttachmentOptimal,
+      });
+    }
+  }
+
+  // This won't be used if fbo.depth_test = false.
+  vk::AttachmentReference depth_ref{
+      .attachment =
+          static_cast<uint32_t>(color_refs.size() + resolve_refs.size()),
+      .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
   };
-  vk::AttachmentReference att_ref{
-      .attachment = 0,
-      .layout = vk::ImageLayout::eColorAttachmentOptimal,
-  };
+  if (fbo.depth_test) {
+    atts.push_back({
+        .format = fbo.depth.format,
+        .samples = fbo.depth.samples,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+    });
+  }
 
   vk::SubpassDescription subpass{
-      .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
-      .colorAttachmentCount = 1,
-      .pColorAttachments = &att_ref,
-  };
+      .pipelineBindPoint = vk::PipelineBindPoint::eGraphics};
+  subpass.setResolveAttachments(resolve_refs);
+  subpass.setColorAttachments(color_refs);
+  subpass.setPDepthStencilAttachment(fbo.depth_test ? &depth_ref : nullptr);
 
   vk::SubpassDependency dep{
       .srcSubpass = VK_SUBPASS_EXTERNAL,
@@ -890,19 +969,39 @@ void Renderer::createCanvas(Canvas& canvas) {
   };
 
   vk::RenderPassCreateInfo rp_ci{};
-  rp_ci.setAttachments(att);
+  rp_ci.setAttachments(atts);
   rp_ci.setSubpasses(subpass);
   rp_ci.setDependencies(dep);
-  canvas.rp = device_->createRenderPassUnique(rp_ci).value;
+  fbo.rp = device_->createRenderPassUnique(rp_ci).value;
 
+  std::vector<vk::ImageView> views;
+  for (auto& texture : fbo.colors) {
+    views.push_back(*texture.image_view);
+  }
+  for (auto& texture : fbo.resolves) {
+    views.push_back(*texture.image_view);
+  }
+  if (fbo.depth_test) {
+    views.push_back(*fbo.depth.image_view);
+  }
   vk::FramebufferCreateInfo fb_ci{
-      .renderPass = *canvas.rp,
-      .width = size.width,
-      .height = size.height,
+      .renderPass = *fbo.rp,
+      .width = fbo.size.width,
+      .height = fbo.size.height,
       .layers = 1,
   };
-  fb_ci.setAttachments(*canvas.texture.image_view);
-  canvas.fb = device_->createFramebufferUnique(fb_ci).value;
+  fb_ci.setAttachments(views);
+  fbo.fb = device_->createFramebufferUnique(fb_ci).value;
+}
+
+void Renderer::createCanvas(Canvas& canvas) {
+  canvas.fbo = {
+      .size = {512, 512},
+      .color_fmts = {color_fmt_},
+      .depth_test = false,
+      .resolve = false,
+  };
+  initFbo(canvas.fbo);
 };
 
 void Renderer::createCanvasPipe(Canvas& canvas) {
@@ -928,9 +1027,9 @@ void Renderer::createCanvasPipe(Canvas& canvas) {
       *device_, {
                     .vert_shader = *fullscreen_vert_,
                     .frag_shader = *circle_frag_,
-                    .render_pass = *canvas.rp,
+                    .render_pass = *canvas.fbo.rp,
                     .desc_layouts = layouts,
-                    .depth_test = false,
+                    .depth_test = canvas.fbo.depth_test,
                 });
   canvas.pipes.push_back(std::move(pipe));
 }
@@ -950,8 +1049,8 @@ void Renderer::createColorResources() {
   color_->samples = msaa_samples_;
   createImage(
       *color_.get(), vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eTransientAttachment |
-          vk::ImageUsageFlagBits::eColorAttachment,
+      vk::ImageUsageFlagBits::eColorAttachment |
+          vk::ImageUsageFlagBits::eTransientAttachment,
       vk::MemoryPropertyFlagBits::eDeviceLocal,
       vk::ImageAspectFlagBits::eColor);
 
@@ -1684,24 +1783,24 @@ void Renderer::renderCanvas(
   vk::Viewport viewport{
       .x = 0.0f,
       .y = 0.0f,
-      .width = static_cast<float>(canvas.texture.size.width),
-      .height = static_cast<float>(canvas.texture.size.height),
+      .width = static_cast<float>(canvas.fbo.size.width),
+      .height = static_cast<float>(canvas.fbo.size.height),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
   vk::Rect2D scissor{
       .offset = {0, 0},
-      .extent = canvas.texture.size,
+      .extent = canvas.fbo.size,
   };
   cmd_buf.setViewport(0, viewport);
   cmd_buf.setScissor(0, scissor);
 
   vk::RenderPassBeginInfo rp_info{
-      .renderPass = *canvas.rp,
-      .framebuffer = *canvas.fb,
+      .renderPass = *canvas.fbo.rp,
+      .framebuffer = *canvas.fbo.fb,
       .renderArea = {
           .offset = {0, 0},
-          .extent = canvas.texture.size,
+          .extent = canvas.fbo.size,
       }};
   vk::ClearValue clear{};
   clear.color = {0, 0, 0, 1};

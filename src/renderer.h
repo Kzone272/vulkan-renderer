@@ -22,6 +22,21 @@ struct Texture {
   vk::DescriptorImageInfo info;
 };
 
+struct Fbo {
+  // Inputs
+  vk::Extent2D size;
+  std::vector<vk::Format> color_fmts;
+  vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
+  bool depth_test = false;
+  bool resolve = false;
+  // Outputs
+  std::vector<Texture> colors;
+  std::vector<Texture> resolves;
+  Texture depth;
+  vk::UniqueRenderPass rp;
+  vk::UniqueFramebuffer fb;
+};
+
 struct Ubo {
   vk::UniqueBuffer buf;
   vk::UniqueDeviceMemory buf_mem;
@@ -56,9 +71,7 @@ struct Pipe {
 
 // An offscreen render target that can be sampled.
 struct Canvas {
-  Texture texture;
-  vk::UniqueRenderPass rp;
-  vk::UniqueFramebuffer fb;
+  Fbo fbo;
   std::vector<Pipe> pipes;
 };
 
@@ -148,6 +161,7 @@ class Renderer {
   void createShaders();
   void createGraphicsPipelines();
 
+  void initFbo(Fbo& fbo);
   void createCanvas(Canvas& canvas);
   void createCanvasPipe(Canvas& canvas);
 
