@@ -34,6 +34,7 @@ struct Fbo {
   std::vector<Texture> resolves;
   Texture depth;
   vk::UniqueRenderPass rp;
+  std::vector<vk::ClearValue> clears;
   vk::UniqueFramebuffer fb;
 };
 
@@ -146,14 +147,13 @@ class Renderer {
   void createCommandPool();
   void createCommandBuffers();
 
-  void createColorResources();
-  void createDepthResources();
   vk::Format findDepthFormat();
   bool hasStencilComponent(vk::Format format);
   vk::Format findSupportedFormat(
       const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
       vk::FormatFeatureFlags features);
 
+  void createFbos();
   void createRenderPasses();
   void createFrameBuffers();
   void createDescriptorSetLayouts();
@@ -240,7 +240,7 @@ class Renderer {
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
-  vk::UniqueRenderPass scene_rp_;
+  Fbo scene_fbo_;
   vk::UniqueRenderPass post_rp_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
@@ -251,7 +251,6 @@ class Renderer {
   vk::UniqueShaderModule circle_frag_;
   Pipeline scene_pl_;
   Pipeline post_pl_;
-  vk::UniqueFramebuffer scene_fb_;
   std::vector<vk::UniqueFramebuffer> swapchain_fbs_;
   vk::UniqueCommandPool cmd_pool_;
   std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
@@ -259,9 +258,6 @@ class Renderer {
   std::vector<vk::UniqueSemaphore> render_sems_;
   std::vector<vk::UniqueFence> in_flight_fences_;
   vk::UniqueSampler texture_sampler_;
-  std::unique_ptr<Texture> color_;
-  std::unique_ptr<Texture> depth_;
-  std::unique_ptr<Texture> scene_tx_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 

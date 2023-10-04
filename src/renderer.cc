@@ -161,8 +161,7 @@ void Renderer::initVulkan() {
   createCommandBuffers();
   createSwapchain();
   createTextureSampler();
-  createColorResources();
-  createDepthResources();
+  createFbos();
   createRenderPasses();
   createFrameBuffers();
   createDescriptorSetLayouts();
@@ -659,105 +658,39 @@ vk::UniqueImageView Renderer::createImageView(
 }
 
 void Renderer::createRenderPasses() {
-  vk::AttachmentDescription color_att{
-      .format = color_fmt_,
-      .samples = msaa_samples_,
-      .loadOp = vk::AttachmentLoadOp::eClear,
-      .storeOp = vk::AttachmentStoreOp::eStore,
-      .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-      .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-      .initialLayout = vk::ImageLayout::eUndefined,
-      .finalLayout = vk::ImageLayout::eColorAttachmentOptimal,
-  };
-  vk::AttachmentReference color_att_ref{
-      .attachment = 0,
-      .layout = vk::ImageLayout::eColorAttachmentOptimal,
-  };
-
-  vk::AttachmentDescription depth_att{
-      .format = depth_->format,
-      .samples = msaa_samples_,
-      .loadOp = vk::AttachmentLoadOp::eClear,
-      .storeOp = vk::AttachmentStoreOp::eDontCare,
-      .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-      .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-      .initialLayout = vk::ImageLayout::eUndefined,
-      .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-  };
-  vk::AttachmentReference depth_att_ref{
-      .attachment = 1,
-      .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-  };
-
-  vk::AttachmentDescription scene_resolve_att{
-      .format = color_fmt_,
+  vk::AttachmentDescription swap_att{
+      .format = swapchain_format_,
       .samples = vk::SampleCountFlagBits::e1,
       .loadOp = vk::AttachmentLoadOp::eDontCare,
       .storeOp = vk::AttachmentStoreOp::eStore,
       .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
       .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
       .initialLayout = vk::ImageLayout::eUndefined,
-      .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      .finalLayout = vk::ImageLayout::ePresentSrcKHR,
   };
-  vk::AttachmentReference scene_resolve_att_ref{
-      .attachment = 2,
-      .layout = vk::ImageLayout::eColorAttachmentOptimal,
-  };
-
-  vk::SubpassDescription subpass{
-      .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
-      .colorAttachmentCount = 1,
-      .pColorAttachments = &color_att_ref,
-      .pResolveAttachments = &scene_resolve_att_ref,
-      .pDepthStencilAttachment = &depth_att_ref,
-  };
-
-  // Writing to the subpass color attachment depends on the swapchain
-  // finishing its read of the color attachment.
-  // We also need to read and write to the depth buffer.
-  vk::SubpassDependency dep{
-      .srcSubpass = VK_SUBPASS_EXTERNAL,
-      .dstSubpass = 0,
-      .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
-                      vk::PipelineStageFlagBits::eEarlyFragmentTests,
-      .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
-                      vk::PipelineStageFlagBits::eEarlyFragmentTests,
-      .srcAccessMask = {},
-      .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite |
-                       vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-
-  };
-
-  std::vector<vk::AttachmentDescription> atts = {
-      color_att, depth_att, scene_resolve_att};
-  vk::RenderPassCreateInfo rp_ci{};
-  rp_ci.setAttachments(atts);
-  rp_ci.setSubpasses(subpass);
-  rp_ci.setDependencies(dep);
-  scene_rp_ = device_->createRenderPassUnique(rp_ci).value;
-
-  vk::AttachmentDescription swap_att = scene_resolve_att;
-  swap_att.format = swapchain_format_;
-  swap_att.finalLayout = vk::ImageLayout::ePresentSrcKHR;
-  rp_ci.setAttachments(swap_att);
   vk::AttachmentReference swap_att_ref{
       .attachment = 0,
       .layout = vk::ImageLayout::eColorAttachmentOptimal,
   };
+
   vk::SubpassDescription post_subpass{
       .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
   };
   post_subpass.setColorAttachments(swap_att_ref);
-  rp_ci.setSubpasses(post_subpass);
+
+  // Wait for swapchain image to be acquired before writing to it.
   vk::SubpassDependency post_dep{
       .srcSubpass = VK_SUBPASS_EXTERNAL,
       .dstSubpass = 0,
       .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      .dstStageMask = vk::PipelineStageFlagBits::eFragmentShader,
-      .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
-      .dstAccessMask = vk::AccessFlagBits::eShaderRead,
-
+      .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+      .srcAccessMask = {},
+      .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
   };
+
+  vk::RenderPassCreateInfo rp_ci{};
+  rp_ci.setAttachments(swap_att);
+  rp_ci.setSubpasses(post_subpass);
   rp_ci.setDependencies(post_dep);
   post_rp_ = device_->createRenderPassUnique(rp_ci).value;
 }
@@ -792,13 +725,13 @@ void Renderer::createGraphicsPipelines() {
       *device_, {
                     .vert_shader = *scene_vert_,
                     .frag_shader = *scene_frag_,
-                    .render_pass = *scene_rp_,
+                    .render_pass = *scene_fbo_.rp,
                     .desc_layouts = {*frame_.layout, *material_.layout},
                     .push_ranges = {scene_push},
                     .vert_in = vertex_in,
                     .cull_mode = vk::CullModeFlagBits::eNone,
-                    .samples = msaa_samples_,
-                    .depth_test = true,
+                    .samples = scene_fbo_.samples,
+                    .depth_test = scene_fbo_.depth_test,
                 });
 
   // Post processing pipeline
@@ -825,23 +758,17 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
 }
 
 void Renderer::createFrameBuffers() {
-  std::vector<vk::ImageView> atts = {
-      *color_->image_view, *depth_->image_view, *scene_tx_->image_view};
-
   vk::FramebufferCreateInfo fb_ci{
-      .renderPass = *scene_rp_,
+      .renderPass = *post_rp_,
       .width = swapchain_extent_.width,
       .height = swapchain_extent_.height,
       .layers = 1,
   };
-  fb_ci.setAttachments(atts);
-  scene_fb_ = device_->createFramebufferUnique(fb_ci).value;
 
   swapchain_fbs_.resize(swapchain_views_.size());
   for (size_t i = 0; i < swapchain_views_.size(); i++) {
-    atts = {*swapchain_views_[i]};
+    auto atts = {*swapchain_views_[i]};
     fb_ci.setAttachments(atts);
-    fb_ci.renderPass = *post_rp_;
     swapchain_fbs_[i] = device_->createFramebufferUnique(fb_ci).value;
   }
 }
@@ -889,18 +816,19 @@ void Renderer::initFbo(Fbo& fbo) {
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth);
-    transitionImageLayout(
-        *fbo.depth.image, fbo.depth.format, fbo.depth.mip_levels,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eDepthStencilAttachmentOptimal);
   }
 
-  uint32_t index = 0;
+  vk::ClearValue color_clear{{0, 0, 0, 1}};
+  vk::ClearValue depth_clear{{1.f, 0}};
+
   std::vector<vk::AttachmentDescription> atts;
   std::vector<vk::AttachmentReference> color_refs;
   std::vector<vk::AttachmentReference> resolve_refs;
-  for (uint32_t i = 0; i < fbo.color_fmts.size(); i++) {
-    auto& format = fbo.color_fmts[i];
+  for (auto& format : fbo.color_fmts) {
+    color_refs.push_back({
+        .attachment = static_cast<uint32_t>(atts.size()),
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    });
     atts.push_back({
         .format = format,
         .samples = fbo.samples,
@@ -912,11 +840,15 @@ void Renderer::initFbo(Fbo& fbo) {
         .finalLayout = fbo.resolve ? vk::ImageLayout::eColorAttachmentOptimal
                                    : vk::ImageLayout::eShaderReadOnlyOptimal,
     });
-    color_refs.push_back({
-        .attachment = i,
-        .layout = vk::ImageLayout::eColorAttachmentOptimal,
-    });
-    if (fbo.resolve) {
+    fbo.clears.push_back(color_clear);
+  }
+
+  if (fbo.resolve) {
+    for (auto& format : fbo.color_fmts) {
+      resolve_refs.push_back({
+          .attachment = static_cast<uint32_t>(atts.size()),
+          .layout = vk::ImageLayout::eColorAttachmentOptimal,
+      });
       atts.push_back({
           .format = format,
           .samples = vk::SampleCountFlagBits::e1,
@@ -927,17 +859,14 @@ void Renderer::initFbo(Fbo& fbo) {
           .initialLayout = vk::ImageLayout::eUndefined,
           .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
       });
-      resolve_refs.push_back({
-          .attachment = i + static_cast<uint32_t>(fbo.color_fmts.size()),
-          .layout = vk::ImageLayout::eColorAttachmentOptimal,
-      });
+      // Clear not used for resolves.
+      fbo.clears.push_back({});
     }
   }
 
   // This won't be used if fbo.depth_test = false.
   vk::AttachmentReference depth_ref{
-      .attachment =
-          static_cast<uint32_t>(color_refs.size() + resolve_refs.size()),
+      .attachment = static_cast<uint32_t>(atts.size()),
       .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
   };
   if (fbo.depth_test) {
@@ -951,6 +880,7 @@ void Renderer::initFbo(Fbo& fbo) {
         .initialLayout = vk::ImageLayout::eUndefined,
         .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
     });
+    fbo.clears.push_back(depth_clear);
   }
 
   vk::SubpassDescription subpass{
@@ -959,19 +889,32 @@ void Renderer::initFbo(Fbo& fbo) {
   subpass.setColorAttachments(color_refs);
   subpass.setPDepthStencilAttachment(fbo.depth_test ? &depth_ref : nullptr);
 
-  vk::SubpassDependency dep{
-      .srcSubpass = VK_SUBPASS_EXTERNAL,
-      .dstSubpass = 0,
+  std::vector<vk::SubpassDependency> deps;
+  if (fbo.depth_test) {
+    // Previous depth tests should finish before we clear the depth buffer.
+    deps.push_back({
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .dstStageMask = vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        .srcAccessMask = {},
+        .dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+    });
+  }
+  // This render pass's write should finish before it's read from.
+  deps.push_back({
+      .srcSubpass = 0,
+      .dstSubpass = VK_SUBPASS_EXTERNAL,
       .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      .srcAccessMask = {},
-      .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
-  };
+      .dstStageMask = vk::PipelineStageFlagBits::eFragmentShader,
+      .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+      .dstAccessMask = vk::AccessFlagBits::eShaderRead,
+  });
 
   vk::RenderPassCreateInfo rp_ci{};
   rp_ci.setAttachments(atts);
   rp_ci.setSubpasses(subpass);
-  rp_ci.setDependencies(dep);
+  rp_ci.setDependencies(deps);
   fbo.rp = device_->createRenderPassUnique(rp_ci).value;
 
   std::vector<vk::ImageView> views;
@@ -1040,45 +983,6 @@ void Renderer::createCommandPool() {
       .queueFamilyIndex = q_indices_.gfx_family,
   };
   cmd_pool_ = device_->createCommandPoolUnique(ci).value;
-}
-
-void Renderer::createColorResources() {
-  color_ = std::make_unique<Texture>();
-  color_->size = swapchain_extent_;
-  color_->format = color_fmt_;
-  color_->samples = msaa_samples_;
-  createImage(
-      *color_.get(), vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eColorAttachment |
-          vk::ImageUsageFlagBits::eTransientAttachment,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      vk::ImageAspectFlagBits::eColor);
-
-  scene_tx_ = std::make_unique<Texture>();
-  scene_tx_->size = swapchain_extent_;
-  scene_tx_->format = color_fmt_;
-  createImage(
-      *scene_tx_.get(), vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eColorAttachment |
-          vk::ImageUsageFlagBits::eSampled,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      vk::ImageAspectFlagBits::eColor);
-}
-
-void Renderer::createDepthResources() {
-  depth_ = std::make_unique<Texture>();
-  depth_->size = swapchain_extent_;
-  depth_->format = findDepthFormat();
-  depth_->samples = msaa_samples_;
-  createImage(
-      *depth_.get(), vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eDepthStencilAttachment,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      vk::ImageAspectFlagBits::eDepth);
-  transitionImageLayout(
-      *depth_->image, depth_->format, depth_->mip_levels,
-      vk::ImageLayout::eUndefined,
-      vk::ImageLayout::eDepthStencilAttachmentOptimal);
 }
 
 vk::Format Renderer::findDepthFormat() {
@@ -1431,6 +1335,17 @@ void Renderer::createTextureSampler() {
   texture_sampler_ = device_->createSamplerUnique(ci).value;
 }
 
+void Renderer::createFbos() {
+  scene_fbo_ = {
+      .size = swapchain_extent_,
+      .color_fmts = {color_fmt_},
+      .samples = msaa_samples_,
+      .depth_test = true,
+      .resolve = true,
+  };
+  initFbo(scene_fbo_);
+}
+
 std::unique_ptr<Model> Renderer::loadModel(const ModelInfo& model_info) {
   auto model = std::make_unique<Model>();
 
@@ -1757,14 +1672,14 @@ void Renderer::createInFlightDescSets() {
   std::vector<vk::WriteDescriptorSet> writes;
   frame_.updateUboBind(0, uboInfos(in_flight_.frame), writes);
   post_.updateUboBind(0, uboInfos(in_flight_.post_fx), writes);
-  post_.updateSamplerBind(1, &scene_tx_->info, writes);
+  post_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
 
 void Renderer::updateResizedDescSets() {
   std::vector<vk::WriteDescriptorSet> writes;
-  post_.updateSamplerBind(1, &scene_tx_->info, writes);
+  post_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
@@ -1802,9 +1717,7 @@ void Renderer::renderCanvas(
           .offset = {0, 0},
           .extent = canvas.fbo.size,
       }};
-  vk::ClearValue clear{};
-  clear.color = {0, 0, 0, 1};
-  rp_info.setClearValues(clear);
+  rp_info.setClearValues(canvas.fbo.clears);
   cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
 
   for (auto& pipe : canvas.pipes) {
@@ -1831,18 +1744,13 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
   renderCanvas(cmd_buf, frame, drawing_);
 
   vk::RenderPassBeginInfo rp_info{
-      .renderPass = *scene_rp_,
-      .framebuffer = *scene_fb_,
+      .renderPass = *scene_fbo_.rp,
+      .framebuffer = *scene_fbo_.fb,
       .renderArea = {
           .offset = {0, 0},
           .extent = swapchain_extent_,
       }};
-  // float val = anim_.clear_val;
-  float val = 0.f;
-  std::array<vk::ClearValue, 2> clear_values{};
-  clear_values[0].color = {val, val, val, 1.0f};
-  clear_values[1].depthStencil = {1.f, 0};
-  rp_info.setClearValues(clear_values);
+  rp_info.setClearValues(scene_fbo_.clears);
 
   cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
@@ -1943,8 +1851,7 @@ void Renderer::recreateSwapchain() {
 
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
-  createColorResources();
-  createDepthResources();
+  createFbos();
   createFrameBuffers();
   updateResizedDescSets();
 
@@ -1952,10 +1859,6 @@ void Renderer::recreateSwapchain() {
 }
 
 void Renderer::cleanupSwapchain() {
-  depth_.reset();
-  color_.reset();
-  scene_tx_.reset();
-
   swapchain_fbs_.clear();
   swapchain_views_.clear();
   swapchain_.reset();
