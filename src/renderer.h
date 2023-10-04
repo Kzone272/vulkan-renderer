@@ -123,18 +123,16 @@ class Renderer {
       const std::vector<vk::PresentModeKHR>& present_modes);
   vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& caps);
   void createSwapchain();
+
+  void createImage(
+      Texture& texture, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
+      vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect);
   vk::UniqueImageView createImageView(
       vk::Image img, vk::Format format, uint32_t mip_levels,
       vk::ImageAspectFlags aspect_flags);
-  void createRenderPasses();
-  void createDescriptorSetLayouts();
-  void createShaders();
-  void createGraphicsPipelines();
-  vk::UniqueShaderModule createShaderModule(std::string filename);
-  void createFrameBuffers();
-  void createCanvas(Canvas& canvas);
-  void createCanvasPipe(Canvas& canvas);
   void createCommandPool();
+  void createCommandBuffers();
+
   void createColorResources();
   void createDepthResources();
   vk::Format findDepthFormat();
@@ -142,12 +140,20 @@ class Renderer {
   vk::Format findSupportedFormat(
       const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
       vk::FormatFeatureFlags features);
+
+  void createRenderPasses();
+  void createFrameBuffers();
+  void createDescriptorSetLayouts();
+  vk::UniqueShaderModule createShaderModule(std::string filename);
+  void createShaders();
+  void createGraphicsPipelines();
+
+  void createCanvas(Canvas& canvas);
+  void createCanvasPipe(Canvas& canvas);
+
   void initSdlImage();
   SDL_Surface* loadImage(std::string texture_path);
   Texture* createTexture(void* texture_data, uint32_t width, uint32_t height);
-  void createImage(
-      Texture& texture, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-      vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect);
   void transitionImageLayout(
       vk::Image img, vk::Format format, uint32_t mip_levels,
       vk::ImageLayout old_layout, vk::ImageLayout new_layout);
@@ -157,6 +163,7 @@ class Renderer {
       vk::Image img, int32_t width, int32_t height, vk::Format format,
       uint32_t mip_levels);
   void createTextureSampler();
+
   std::unique_ptr<Model> loadModel(const ModelInfo& model_info);
   Material* loadMaterial(const MaterialInfo& mat_info);
   Texture* loadTexture(std::string path);
@@ -188,7 +195,6 @@ class Renderer {
   void createInFlightDescSets();
   void updateResizedDescSets();
 
-  void createCommandBuffers();
   void renderCanvas(
       const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas);
   void recordCommandBuffer(int frame, uint32_t img_ind);
