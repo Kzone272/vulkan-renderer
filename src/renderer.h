@@ -208,6 +208,7 @@ class Renderer {
   void createInFlightDescSets();
   void updateResizedDescSets();
 
+  void beginRp(const vk::CommandBuffer& cmd_buf, const Fbo& fbo, int fb_ind);
   void renderCanvas(
       const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas);
   void recordCommandBuffer(int frame, uint32_t img_ind);

@@ -1685,32 +1685,37 @@ void Renderer::createCommandBuffers() {
   cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
 }
 
-void Renderer::renderCanvas(
-    const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas) {
+void Renderer::beginRp(
+    const vk::CommandBuffer& cmd_buf, const Fbo& fbo, int fb_ind) {
   vk::Viewport viewport{
       .x = 0.0f,
       .y = 0.0f,
-      .width = static_cast<float>(canvas.fbo.size.width),
-      .height = static_cast<float>(canvas.fbo.size.height),
+      .width = static_cast<float>(fbo.size.width),
+      .height = static_cast<float>(fbo.size.height),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
   vk::Rect2D scissor{
       .offset = {0, 0},
-      .extent = canvas.fbo.size,
+      .extent = fbo.size,
   };
   cmd_buf.setViewport(0, viewport);
   cmd_buf.setScissor(0, scissor);
 
   vk::RenderPassBeginInfo rp_info{
-      .renderPass = *canvas.fbo.rp,
-      .framebuffer = *canvas.fbo.fbs[0],
+      .renderPass = *fbo.rp,
+      .framebuffer = *fbo.fbs[fb_ind],
       .renderArea = {
           .offset = {0, 0},
-          .extent = canvas.fbo.size,
+          .extent = fbo.size,
       }};
-  rp_info.setClearValues(canvas.fbo.clears);
+  rp_info.setClearValues(fbo.clears);
   cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
+}
+
+void Renderer::renderCanvas(
+    const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas) {
+  beginRp(cmd_buf, canvas.fbo, 0);
 
   for (auto& pipe : canvas.pipes) {
     cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipe.pl.pipeline);
@@ -1735,34 +1740,9 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
 
   renderCanvas(cmd_buf, frame, drawing_);
 
-  vk::RenderPassBeginInfo rp_info{
-      .renderPass = *scene_fbo_.rp,
-      .framebuffer = *scene_fbo_.fbs[0],
-      .renderArea = {
-          .offset = {0, 0},
-          .extent = swapchain_extent_,
-      }};
-  rp_info.setClearValues(scene_fbo_.clears);
+  beginRp(cmd_buf, scene_fbo_, 0);
 
-  cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
-
-  vk::Viewport viewport{
-      .x = 0.0f,
-      .y = 0.0f,
-      .width = static_cast<float>(swapchain_extent_.width),
-      .height = static_cast<float>(swapchain_extent_.height),
-      .minDepth = 0.0f,
-      .maxDepth = 1.0f,
-  };
-  cmd_buf.setViewport(0, viewport);
-
-  vk::Rect2D scissor{
-      .offset = {0, 0},
-      .extent = swapchain_extent_,
-  };
-  cmd_buf.setScissor(0, scissor);
-
   cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0,
       global_dl_.sets[frame], nullptr);
@@ -1802,14 +1782,9 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
 
   cmd_buf.endRenderPass();
 
-  // Post processing render pass.
-  rp_info.renderPass = *post_fbo_.rp,
-  rp_info.framebuffer = *post_fbo_.fbs[img_ind],
-  cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
-  cmd_buf.setViewport(0, viewport);
-  cmd_buf.setScissor(0, scissor);
+  beginRp(cmd_buf, post_fbo_, img_ind);
 
+  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
   cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
       post_dl_.sets[frame], nullptr);

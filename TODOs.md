@@ -1,9 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Use Canvas for other offscreen passes?
+- Fix memory access rendering bug when maximizing window
+  - May have crept in when using Fbo for swaps?
 - Reconsider when we set image and buffer infos
-- Refactor render pass and framebuffer creation
 - Add hand forward offset
 - Adjust position of in-swing step if velocity changes significantly
 - Make prettier
