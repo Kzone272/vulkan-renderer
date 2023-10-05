@@ -972,6 +972,7 @@ void Renderer::createCanvasPipe(Canvas& canvas) {
                     .frag_shader = *circle_frag_,
                     .render_pass = *canvas.fbo.rp,
                     .desc_layouts = layouts,
+                    .samples = canvas.fbo.samples,
                     .depth_test = canvas.fbo.depth_test,
                 });
   canvas.pipes.push_back(std::move(pipe));
