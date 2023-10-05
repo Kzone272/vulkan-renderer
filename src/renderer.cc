@@ -162,8 +162,6 @@ void Renderer::initVulkan() {
   createSwapchain();
   createTextureSampler();
   createFbos();
-  createRenderPasses();
-  createFrameBuffers();
   createDescriptorSetLayouts();
   createShaders();
   createGraphicsPipelines();
@@ -189,7 +187,7 @@ void Renderer::initImgui() {
       .ImageCount = MAX_FRAMES_IN_FLIGHT,
       .MSAASamples = (VkSampleCountFlagBits)vk::SampleCountFlagBits::e1,
   };
-  ImGui_ImplVulkan_Init(&init_info, *post_rp_);
+  ImGui_ImplVulkan_Init(&init_info, *post_fbo_.rp);
 
   auto cmd_buf = beginSingleTimeCommands();
   ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
@@ -655,44 +653,6 @@ vk::UniqueImageView Renderer::createImageView(
   return device_->createImageViewUnique(ci).value;
 }
 
-void Renderer::createRenderPasses() {
-  vk::AttachmentDescription swap_att{
-      .format = swapchain_format_,
-      .samples = vk::SampleCountFlagBits::e1,
-      .loadOp = vk::AttachmentLoadOp::eDontCare,
-      .storeOp = vk::AttachmentStoreOp::eStore,
-      .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-      .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-      .initialLayout = vk::ImageLayout::eUndefined,
-      .finalLayout = vk::ImageLayout::ePresentSrcKHR,
-  };
-  vk::AttachmentReference swap_att_ref{
-      .attachment = 0,
-      .layout = vk::ImageLayout::eColorAttachmentOptimal,
-  };
-
-  vk::SubpassDescription post_subpass{
-      .pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
-  };
-  post_subpass.setColorAttachments(swap_att_ref);
-
-  // Wait for swapchain image to be acquired before writing to it.
-  vk::SubpassDependency post_dep{
-      .srcSubpass = VK_SUBPASS_EXTERNAL,
-      .dstSubpass = 0,
-      .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      .srcAccessMask = {},
-      .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
-  };
-
-  vk::RenderPassCreateInfo rp_ci{};
-  rp_ci.setAttachments(swap_att);
-  rp_ci.setSubpasses(post_subpass);
-  rp_ci.setDependencies(post_dep);
-  post_rp_ = device_->createRenderPassUnique(rp_ci).value;
-}
-
 void Renderer::createDescriptorSetLayouts() {
   global_dl_.init(*device_);
   post_dl_.init(*device_);
@@ -737,7 +697,7 @@ void Renderer::createGraphicsPipelines() {
       *device_, {
                     .vert_shader = *fullscreen_vert_,
                     .frag_shader = *post_frag_,
-                    .render_pass = *post_rp_,
+                    .render_pass = *post_fbo_.rp,
                     .desc_layouts = {*post_dl_.layout},
                     .vert_in = {},
                     .cull_mode = vk::CullModeFlagBits::eBack,
@@ -753,22 +713,6 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
       .pCode = reinterpret_cast<const uint32_t*>(code.data()),
   };
   return device_->createShaderModuleUnique(ci).value;
-}
-
-void Renderer::createFrameBuffers() {
-  vk::FramebufferCreateInfo fb_ci{
-      .renderPass = *post_rp_,
-      .width = swapchain_extent_.width,
-      .height = swapchain_extent_.height,
-      .layers = 1,
-  };
-
-  swapchain_fbs_.resize(swapchain_views_.size());
-  for (size_t i = 0; i < swapchain_views_.size(); i++) {
-    auto atts = {*swapchain_views_[i]};
-    fb_ci.setAttachments(atts);
-    swapchain_fbs_[i] = device_->createFramebufferUnique(fb_ci).value;
-  }
 }
 
 void Renderer::initFbo(Fbo& fbo) {
@@ -881,6 +825,24 @@ void Renderer::initFbo(Fbo& fbo) {
     fbo.clears.push_back(depth_clear);
   }
 
+  if (fbo.swap) {
+    color_refs.push_back({
+        .attachment = 0,
+        .layout = vk::ImageLayout::eColorAttachmentOptimal,
+    });
+    atts.push_back({
+        .format = swapchain_format_,
+        .samples = vk::SampleCountFlagBits::e1,
+        .loadOp = vk::AttachmentLoadOp::eDontCare,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::ePresentSrcKHR,
+    });
+    fbo.clears.push_back({});
+  }
+
   vk::SubpassDescription subpass{
       .pipelineBindPoint = vk::PipelineBindPoint::eGraphics};
   subpass.setResolveAttachments(resolve_refs);
@@ -888,6 +850,15 @@ void Renderer::initFbo(Fbo& fbo) {
   subpass.setPDepthStencilAttachment(fbo.depth_test ? &depth_ref : nullptr);
 
   std::vector<vk::SubpassDependency> deps;
+  // This render pass's write should finish before it's read from.
+  deps.push_back({
+      .srcSubpass = 0,
+      .dstSubpass = VK_SUBPASS_EXTERNAL,
+      .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+      .dstStageMask = vk::PipelineStageFlagBits::eFragmentShader,
+      .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+      .dstAccessMask = vk::AccessFlagBits::eShaderRead,
+  });
   if (fbo.depth_test) {
     // Previous depth tests should finish before we clear the depth buffer.
     deps.push_back({
@@ -899,15 +870,17 @@ void Renderer::initFbo(Fbo& fbo) {
         .dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite,
     });
   }
-  // This render pass's write should finish before it's read from.
-  deps.push_back({
-      .srcSubpass = 0,
-      .dstSubpass = VK_SUBPASS_EXTERNAL,
-      .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      .dstStageMask = vk::PipelineStageFlagBits::eFragmentShader,
-      .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
-      .dstAccessMask = vk::AccessFlagBits::eShaderRead,
-  });
+  if (fbo.swap) {
+    // Wait for swapchain image to be acquired before writing to it.
+    deps.push_back({
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        .dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        .srcAccessMask = {},
+        .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+    });
+  }
 
   vk::RenderPassCreateInfo rp_ci{};
   rp_ci.setAttachments(atts);
@@ -915,24 +888,32 @@ void Renderer::initFbo(Fbo& fbo) {
   rp_ci.setDependencies(deps);
   fbo.rp = device_->createRenderPassUnique(rp_ci).value;
 
-  std::vector<vk::ImageView> views;
-  for (auto& texture : fbo.colors) {
-    views.push_back(*texture.image_view);
-  }
-  for (auto& texture : fbo.resolves) {
-    views.push_back(*texture.image_view);
-  }
-  if (fbo.depth_test) {
-    views.push_back(*fbo.depth.image_view);
-  }
   vk::FramebufferCreateInfo fb_ci{
       .renderPass = *fbo.rp,
       .width = fbo.size.width,
       .height = fbo.size.height,
       .layers = 1,
   };
-  fb_ci.setAttachments(views);
-  fbo.fb = device_->createFramebufferUnique(fb_ci).value;
+  if (fbo.swap) {
+    // Create a
+    for (auto& view : fbo.swap_views) {
+      fb_ci.setAttachments(view);
+      fbo.fbs.push_back(device_->createFramebufferUnique(fb_ci).value);
+    }
+  } else {
+    std::vector<vk::ImageView> views;
+    for (auto& texture : fbo.colors) {
+      views.push_back(*texture.image_view);
+    }
+    for (auto& texture : fbo.resolves) {
+      views.push_back(*texture.image_view);
+    }
+    if (fbo.depth_test) {
+      views.push_back(*fbo.depth.image_view);
+    }
+    fb_ci.setAttachments(views);
+    fbo.fbs.push_back(device_->createFramebufferUnique(fb_ci).value);
+  }
 }
 
 void Renderer::createCanvas(Canvas& canvas) {
@@ -1343,6 +1324,17 @@ void Renderer::createFbos() {
       .resolve = true,
   };
   initFbo(scene_fbo_);
+
+  std::vector<vk::ImageView> swap_views;
+  for (auto& view : swapchain_views_) {
+    swap_views.push_back(*view);
+  }
+  post_fbo_ = {
+      .size = swapchain_extent_,
+      .swap = true,
+      .swap_views = swap_views,
+  };
+  initFbo(post_fbo_);
 }
 
 std::unique_ptr<Model> Renderer::loadModel(const ModelInfo& model_info) {
@@ -1712,7 +1704,7 @@ void Renderer::renderCanvas(
 
   vk::RenderPassBeginInfo rp_info{
       .renderPass = *canvas.fbo.rp,
-      .framebuffer = *canvas.fbo.fb,
+      .framebuffer = *canvas.fbo.fbs[0],
       .renderArea = {
           .offset = {0, 0},
           .extent = canvas.fbo.size,
@@ -1745,7 +1737,7 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
 
   vk::RenderPassBeginInfo rp_info{
       .renderPass = *scene_fbo_.rp,
-      .framebuffer = *scene_fbo_.fb,
+      .framebuffer = *scene_fbo_.fbs[0],
       .renderArea = {
           .offset = {0, 0},
           .extent = swapchain_extent_,
@@ -1811,8 +1803,8 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
   cmd_buf.endRenderPass();
 
   // Post processing render pass.
-  rp_info.renderPass = *post_rp_,
-  rp_info.framebuffer = *swapchain_fbs_[img_ind],
+  rp_info.renderPass = *post_fbo_.rp,
+  rp_info.framebuffer = *post_fbo_.fbs[img_ind],
   cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
   cmd_buf.setViewport(0, viewport);
@@ -1852,14 +1844,12 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
   createFbos();
-  createFrameBuffers();
   updateResizedDescSets();
 
   window_resized_ = false;
 }
 
 void Renderer::cleanupSwapchain() {
-  swapchain_fbs_.clear();
   swapchain_views_.clear();
   swapchain_.reset();
 }

@@ -29,13 +29,15 @@ struct Fbo {
   vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
   bool depth_test = false;
   bool resolve = false;
+  bool swap = false;
+  std::vector<vk::ImageView> swap_views;
   // Outputs
   std::vector<Texture> colors;
   std::vector<Texture> resolves;
   Texture depth;
   vk::UniqueRenderPass rp;
   std::vector<vk::ClearValue> clears;
-  vk::UniqueFramebuffer fb;
+  std::vector<vk::UniqueFramebuffer> fbs;
 };
 
 struct Ubo {
@@ -153,8 +155,6 @@ class Renderer {
       vk::FormatFeatureFlags features);
 
   void createFbos();
-  void createRenderPasses();
-  void createFrameBuffers();
   void createDescriptorSetLayouts();
   vk::UniqueShaderModule createShaderModule(std::string filename);
   void createShaders();
@@ -240,7 +240,7 @@ class Renderer {
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
   Fbo scene_fbo_;
-  vk::UniqueRenderPass post_rp_;
+  Fbo post_fbo_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
   vk::UniqueShaderModule scene_vert_;
@@ -250,7 +250,6 @@ class Renderer {
   vk::UniqueShaderModule circle_frag_;
   Pipeline scene_pl_;
   Pipeline post_pl_;
-  std::vector<vk::UniqueFramebuffer> swapchain_fbs_;
   vk::UniqueCommandPool cmd_pool_;
   std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
   std::vector<vk::UniqueSemaphore> img_sems_;
