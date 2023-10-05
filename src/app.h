@@ -550,17 +550,17 @@ class HelloTriangleApp {
 
     ImGui::BeginTabBar("Misc Tabs");
     if (ImGui::BeginTabItem("Post Fx")) {
-      ImGui::Checkbox("b1", &frame_state_.post_fx.b1);
+      ImGui::Checkbox("b1", &frame_state_.post.b1);
       ImGui::SameLine();
-      ImGui::Checkbox("b2", &frame_state_.post_fx.b2);
+      ImGui::Checkbox("b2", &frame_state_.post.b2);
       ImGui::SameLine();
-      ImGui::Checkbox("b3", &frame_state_.post_fx.b3);
+      ImGui::Checkbox("b3", &frame_state_.post.b3);
       ImGui::SameLine();
-      ImGui::Checkbox("b4", &frame_state_.post_fx.b4);
-      ImGui::SliderFloat("v1", &frame_state_.post_fx.v1, 0, 1);
-      ImGui::SliderFloat("v2", &frame_state_.post_fx.v2, 0, 1);
-      ImGui::SliderFloat("v3", &frame_state_.post_fx.v3, 0, 10);
-      ImGui::SliderFloat("v4", &frame_state_.post_fx.v4, 0, 10);
+      ImGui::Checkbox("b4", &frame_state_.post.b4);
+      ImGui::SliderFloat("v1", &frame_state_.post.v1, 0, 1);
+      ImGui::SliderFloat("v2", &frame_state_.post.v2, 0, 1);
+      ImGui::SliderFloat("v3", &frame_state_.post.v3, 0, 10);
+      ImGui::SliderFloat("v4", &frame_state_.post.v4, 0, 10);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Camera")) {

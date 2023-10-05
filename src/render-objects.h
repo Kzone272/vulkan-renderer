@@ -17,7 +17,7 @@ struct Light {
   float falloff = 0;
 };
 
-struct FrameData {
+struct GlobalData {
   alignas(16) mat4 proj_view;
   alignas(16) Light lights[8];
 };
@@ -26,8 +26,8 @@ struct PushData {
   mat4 model;
 };
 
-// Uniform buffer data for post processing stage
-struct PostFxData {
+// General data than can be tied to ImGui controls.
+struct DebugData {
   float v1 = 0;
   float v2 = 0.5;
   float v3 = 0;

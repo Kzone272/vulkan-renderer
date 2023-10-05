@@ -201,8 +201,8 @@ void Renderer::imguiNewFrame() {
   ImGui_ImplVulkan_NewFrame();
 }
 
-void Renderer::updateFrameData(Ubo& ubo) {
-  FrameData data;
+void Renderer::updateUboData(int frame) {
+  GlobalData data;
   data.proj_view = frame_state_->proj * frame_state_->view;
 
   const size_t max_lights = std::size(data.lights);
@@ -215,12 +215,11 @@ void Renderer::updateFrameData(Ubo& ubo) {
       data.lights[i] = frame_state_->lights[i];
     }
   }
+  auto& global_ubo = in_flight_.global[frame];
+  memcpy(global_ubo.buf_mapped, &data, global_ubo.info.range);
 
-  memcpy(ubo.buf_mapped, &data, ubo.info.range);
-}
-
-void Renderer::updatePostFxData(Ubo& ubo) {
-  memcpy(ubo.buf_mapped, &frame_state_->post_fx, ubo.info.range);
+  auto& post_ubo = in_flight_.post[frame];
+  memcpy(post_ubo.buf_mapped, &frame_state_->post, post_ubo.info.range);
 }
 
 void Renderer::drawFrame() {
@@ -247,8 +246,7 @@ void Renderer::drawFrame() {
   // Only reset the fence if we're submitting work.
   device_->resetFences(*in_flight_fences_[frame]);
 
-  updateFrameData(in_flight_.frame[frame]);
-  updatePostFxData(in_flight_.post_fx[frame]);
+  updateUboData(frame);
 
   cmd_bufs_[frame]->reset();
   recordCommandBuffer(frame, img_ind);
@@ -696,9 +694,9 @@ void Renderer::createRenderPasses() {
 }
 
 void Renderer::createDescriptorSetLayouts() {
-  frame_.init(*device_);
-  post_.init(*device_);
-  material_.init(*device_);
+  global_dl_.init(*device_);
+  post_dl_.init(*device_);
+  material_dl_.init(*device_);
 }
 
 void Renderer::createShaders() {
@@ -726,7 +724,7 @@ void Renderer::createGraphicsPipelines() {
                     .vert_shader = *scene_vert_,
                     .frag_shader = *scene_frag_,
                     .render_pass = *scene_fbo_.rp,
-                    .desc_layouts = {*frame_.layout, *material_.layout},
+                    .desc_layouts = {*global_dl_.layout, *material_dl_.layout},
                     .push_ranges = {scene_push},
                     .vert_in = vertex_in,
                     .cull_mode = vk::CullModeFlagBits::eNone,
@@ -740,7 +738,7 @@ void Renderer::createGraphicsPipelines() {
                     .vert_shader = *fullscreen_vert_,
                     .frag_shader = *post_frag_,
                     .render_pass = *post_rp_,
-                    .desc_layouts = {*post_.layout},
+                    .desc_layouts = {*post_dl_.layout},
                     .vert_in = {},
                     .cull_mode = vk::CullModeFlagBits::eBack,
                     .samples = vk::SampleCountFlagBits::e1,
@@ -960,7 +958,7 @@ void Renderer::createCanvasPipe(Canvas& canvas) {
     desc_lo.init(*device_);
     desc_lo.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
     // TODO: Generalize
-    desc_lo.updateUboBind(0, uboInfos(in_flight_.post_fx), writes);
+    desc_lo.updateUboBind(0, uboInfos(in_flight_.post), writes);
 
     layouts.push_back(*desc_lo.layout);
   }
@@ -1387,10 +1385,11 @@ Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
       .range = Material::size,
   };
 
-  material->desc_set = allocDescSet(*device_, *desc_pool_, *material_.layout);
+  material->desc_set =
+      allocDescSet(*device_, *desc_pool_, *material_dl_.layout);
   std::vector<vk::WriteDescriptorSet> writes;
   updateDescSet(
-      material->desc_set, material_,
+      material->desc_set, material_dl_,
       {&material->diffuse->info, &material->ubo.info}, writes);
   device_->updateDescriptorSets(writes, nullptr);
 
@@ -1493,12 +1492,12 @@ void Renderer::stageIndices(
 }
 
 void Renderer::createInFlightBuffers() {
-  vk::DeviceSize frame_data_size = sizeof(FrameData);
-  vk::DeviceSize post_fx_size = sizeof(PostFxData);
+  vk::DeviceSize global_size = sizeof(GlobalData);
+  vk::DeviceSize post_size = sizeof(DebugData);
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    in_flight_.frame.push_back(createMappedBuf(frame_data_size));
-    in_flight_.post_fx.push_back(createMappedBuf(post_fx_size));
+    in_flight_.global.push_back(createMappedBuf(global_size));
+    in_flight_.post.push_back(createMappedBuf(post_size));
   }
 }
 
@@ -1667,20 +1666,20 @@ void Renderer::createImguiDescriptorPool() {
 }
 
 void Renderer::createInFlightDescSets() {
-  frame_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
-  post_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+  global_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+  post_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
 
   std::vector<vk::WriteDescriptorSet> writes;
-  frame_.updateUboBind(0, uboInfos(in_flight_.frame), writes);
-  post_.updateUboBind(0, uboInfos(in_flight_.post_fx), writes);
-  post_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
+  global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
+  post_dl_.updateUboBind(0, uboInfos(in_flight_.post), writes);
+  post_dl_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
 
 void Renderer::updateResizedDescSets() {
   std::vector<vk::WriteDescriptorSet> writes;
-  post_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
+  post_dl_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
@@ -1774,7 +1773,7 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
 
   cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0,
-      frame_.sets[frame], nullptr);
+      global_dl_.sets[frame], nullptr);
 
   // TODO: Sort by material, then by model.
   std::sort(
@@ -1820,8 +1819,8 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
   cmd_buf.setScissor(0, scissor);
 
   cmd_buf.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0, post_.sets[frame],
-      nullptr);
+      vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
+      post_dl_.sets[frame], nullptr);
 
   cmd_buf.draw(3, 1, 0, 0);
 

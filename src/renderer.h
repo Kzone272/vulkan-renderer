@@ -115,8 +115,7 @@ class Renderer {
 
   void initVulkan();
   void initImgui();
-  void updateFrameData(Ubo& ubo);
-  void updatePostFxData(Ubo& ubo);
+  void updateUboData(int frame);
   void drawFrame();
   void createInstance();
   std::vector<const char*> getRequiredExtensions();
@@ -264,8 +263,8 @@ class Renderer {
   FrameState* frame_state_ = nullptr;
 
   struct InFlightState {
-    std::vector<Ubo> frame;
-    std::vector<Ubo> post_fx;
+    std::vector<Ubo> global;
+    std::vector<Ubo> post;
   } in_flight_;
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
@@ -274,20 +273,20 @@ class Renderer {
   std::map<uint32_t, Texture*> color_textures_;
 
   // Bound per frame.
-  DescLayout frame_{
+  DescLayout global_dl_{
       .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
       .stages =
           vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
   };
   // Bound per material
-  DescLayout material_{
+  DescLayout material_dl_{
       .binds =
           {{.type = vk::DescriptorType::eCombinedImageSampler},
            {.type = vk::DescriptorType::eUniformBuffer}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
   // Bound in post processing step.
-  DescLayout post_{
+  DescLayout post_dl_{
       .binds =
           {{.type = vk::DescriptorType::eUniformBuffer},
            {.type = vk::DescriptorType::eCombinedImageSampler}},

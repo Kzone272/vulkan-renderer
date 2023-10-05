@@ -18,5 +18,5 @@ struct FrameState {
   mat4 model;
   mat4 view;
   mat4 proj;
-  PostFxData post_fx;
+  DebugData post;
 };
