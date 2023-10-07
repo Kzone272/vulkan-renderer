@@ -680,30 +680,26 @@ void Renderer::createGraphicsPipelines() {
   vertex_in.setVertexBindingDescriptions(vert_binding);
   vertex_in.setVertexAttributeDescriptions(vert_attrs);
   scene_pl_ = createPipeline(
-      *device_, {
-                    .vert_shader = *scene_vert_,
-                    .frag_shader = *scene_frag_,
-                    .render_pass = *scene_fbo_.rp,
-                    .desc_layouts = {*global_dl_.layout, *material_dl_.layout},
-                    .push_ranges = {scene_push},
-                    .vert_in = vertex_in,
-                    .cull_mode = vk::CullModeFlagBits::eNone,
-                    .samples = scene_fbo_.samples,
-                    .depth_test = scene_fbo_.depth_test,
-                });
+      *device_, scene_fbo_,
+      {
+          .vert_shader = *scene_vert_,
+          .frag_shader = *scene_frag_,
+          .desc_layouts = {*global_dl_.layout, *material_dl_.layout},
+          .push_ranges = {scene_push},
+          .vert_in = vertex_in,
+          .cull_mode = vk::CullModeFlagBits::eNone,
+      });
 
   // Post processing pipeline
   post_pl_ = createPipeline(
-      *device_, {
-                    .vert_shader = *fullscreen_vert_,
-                    .frag_shader = *post_frag_,
-                    .render_pass = *post_fbo_.rp,
-                    .desc_layouts = {*post_dl_.layout},
-                    .vert_in = {},
-                    .cull_mode = vk::CullModeFlagBits::eBack,
-                    .samples = vk::SampleCountFlagBits::e1,
-                    .depth_test = false,
-                });
+      *device_, post_fbo_,
+      {
+          .vert_shader = *fullscreen_vert_,
+          .frag_shader = *post_frag_,
+          .desc_layouts = {*post_dl_.layout},
+          .vert_in = {},
+          .cull_mode = vk::CullModeFlagBits::eBack,
+      });
 }
 
 vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
@@ -946,14 +942,12 @@ void Renderer::createCanvasPipe(Canvas& canvas) {
   device_->updateDescriptorSets(writes, nullptr);
 
   pipe.pl = createPipeline(
-      *device_, {
-                    .vert_shader = *fullscreen_vert_,
-                    .frag_shader = *circle_frag_,
-                    .render_pass = *canvas.fbo.rp,
-                    .desc_layouts = layouts,
-                    .samples = canvas.fbo.samples,
-                    .depth_test = canvas.fbo.depth_test,
-                });
+      *device_, canvas.fbo,
+      {
+          .vert_shader = *fullscreen_vert_,
+          .frag_shader = *circle_frag_,
+          .desc_layouts = layouts,
+      });
   canvas.pipes.push_back(std::move(pipe));
 }
 
@@ -1318,7 +1312,7 @@ void Renderer::createTextureSampler() {
 void Renderer::createFbos() {
   scene_fbo_ = {
       .size = swapchain_extent_,
-      .color_fmts = {color_fmt_},
+      .color_fmts = {color_fmt_, vk::Format::eR32G32B32A32Sfloat},
       .samples = msaa_samples_,
       .depth_test = true,
       .resolve = true,
@@ -1610,9 +1604,9 @@ uint32_t Renderer::findMemoryType(
 }
 
 void Renderer::createDescriptorPool() {
-  // Arbitrary. 10 textures seems fine for now.
-  const uint32_t kMaxSamplers = 10;
-  const uint32_t kMaxUbos = 20;
+  // Arbitrary. 100 seems fine for now.
+  const uint32_t kMaxSamplers = 100;
+  const uint32_t kMaxUbos = 100;
 
   std::vector<vk::DescriptorPoolSize> pool_sizes{
       {.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = kMaxUbos},
@@ -1665,6 +1659,7 @@ void Renderer::createInFlightDescSets() {
   global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
   post_dl_.updateUboBind(0, uboInfos(in_flight_.post), writes);
   post_dl_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
+  post_dl_.updateSamplerBind(2, &scene_fbo_.resolves[1].info, writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
@@ -1672,6 +1667,7 @@ void Renderer::createInFlightDescSets() {
 void Renderer::updateResizedDescSets() {
   std::vector<vk::WriteDescriptorSet> writes;
   post_dl_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
+  post_dl_.updateSamplerBind(2, &scene_fbo_.resolves[1].info, writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }

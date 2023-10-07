@@ -26,16 +26,26 @@ struct PushData {
   mat4 model;
 };
 
+union BoolsInt {
+  struct {
+    bool b1 = false;
+    bool b2 = false;
+    bool b3 = false;
+    bool b4 = false;
+  } b;
+  uint32_t i = 0;
+};
+
 // General data than can be tied to ImGui controls.
 struct DebugData {
-  float v1 = 0;
-  float v2 = 0.5;
-  float v3 = 0;
-  float v4 = 0;
-  bool b1 = false;
-  bool b2 = false;
-  bool b3 = false;
-  bool b4 = false;
+  float f1 = 0;
+  float f2 = 0.5;
+  float f3 = 0;
+  float f4 = 0;
+  BoolsInt i1 = {};
+  BoolsInt i2 = {};
+  BoolsInt i3 = {};
+  BoolsInt i4 = {};
 };
 
 enum class ModelId {

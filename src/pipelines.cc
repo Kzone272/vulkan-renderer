@@ -2,7 +2,11 @@
 
 #include "pipelines.h"
 
-Pipeline createPipeline(vk::Device device, const PipelineInfo& pli) {
+// TODO: Probably should avoid this include by moving structs around.
+#include "renderer.h"
+
+Pipeline createPipeline(
+    vk::Device device, const Fbo& fbo, const PipelineInfo& pli) {
   vk::PipelineShaderStageCreateInfo vert_ci{
       .stage = vk::ShaderStageFlagBits::eVertex,
       .module = pli.vert_shader,
@@ -44,7 +48,7 @@ Pipeline createPipeline(vk::Device device, const PipelineInfo& pli) {
   };
 
   vk::PipelineMultisampleStateCreateInfo multisampling{
-      .rasterizationSamples = pli.samples,
+      .rasterizationSamples = fbo.samples,
       .sampleShadingEnable = VK_FALSE,
   };
 
@@ -60,10 +64,19 @@ Pipeline createPipeline(vk::Device device, const PipelineInfo& pli) {
           vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
           vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
   };
+  vk::PipelineColorBlendAttachmentState no_blend_att{
+      .blendEnable = VK_FALSE,
+      .colorWriteMask =
+          vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+          vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+  };
 
   vk::PipelineColorBlendStateCreateInfo color_blending{
       .logicOpEnable = VK_FALSE};
-  color_blending.setAttachments(color_blend_att);
+  std::vector<vk::PipelineColorBlendAttachmentState> blend_atts(
+      fbo.swap ? 1 : fbo.color_fmts.size(),
+      pli.enable_blending ? color_blend_att : no_blend_att);
+  color_blending.setAttachments(blend_atts);
 
   vk::PipelineDepthStencilStateCreateInfo depth_ci{
       .depthTestEnable = VK_TRUE,
@@ -85,11 +98,11 @@ Pipeline createPipeline(vk::Device device, const PipelineInfo& pli) {
       .pViewportState = &viewport_state,
       .pRasterizationState = &rasterizer,
       .pMultisampleState = &multisampling,
-      .pDepthStencilState = pli.depth_test ? &depth_ci : nullptr,
+      .pDepthStencilState = fbo.depth_test ? &depth_ci : nullptr,
       .pColorBlendState = &color_blending,
       .pDynamicState = &dyn_state,
       .layout = *pl.layout,
-      .renderPass = pli.render_pass,
+      .renderPass = *fbo.rp,
       .subpass = 0,
   };
   pipeline_ci.setStages(shader_stages);

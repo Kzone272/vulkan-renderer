@@ -289,6 +289,7 @@ class Renderer {
   DescLayout post_dl_{
       .binds =
           {{.type = vk::DescriptorType::eUniformBuffer},
+           {.type = vk::DescriptorType::eCombinedImageSampler},
            {.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };

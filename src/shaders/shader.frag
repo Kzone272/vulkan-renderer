@@ -25,6 +25,7 @@ layout(location = 2) in vec2 fragUv;
 layout(location = 3) in vec3 fragPos;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormalDepth;
 
 
 // TODO: Put this in some shared place?
@@ -50,6 +51,10 @@ void main() {
       * vec4(material.color, 1.0);
 
   vec3 norm = normalize(fragNormal);
+  // I think this math gets z back into a linear space. It at least puts most of
+  // the values in [0,1], making it possible to visualize.
+  float z = gl_FragCoord.z / gl_FragCoord.w / 1000;
+  outNormalDepth = vec4(norm, z);
 
   vec3 lambert = vec3(0);
   for (int i = 0; i < ubo.lights.length(); i++) {

@@ -1,6 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
+- Create edge detection filter
+- Add gooch shading. As Material in scene pass? Maybe entire shader?
+- Draw some voronoi diagrams on canvas Fbo
 - Fix memory access rendering bug when maximizing window
   - May have crept in when using Fbo for swaps?
 - Reconsider when we set image and buffer infos
@@ -13,7 +16,8 @@ Short-term ideas:
 - Use obj materials info to allow multiple materials per "model"
 - Catmull rom splines
 
-Medium-term ideas: 
+Medium-term ideas:
+- Fix Mac build
 - Try doing PBR rendering
 - Setup a compute shader
 

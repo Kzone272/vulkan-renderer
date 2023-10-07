@@ -2,16 +2,17 @@
 
 layout(location = 0) in vec2 fragUv;
 
-layout(set = 0, binding = 0) uniform PostFxData {
-  float v1, v2, v3, v4;
-  bool b1, b2, b3, b4;
-} post;
+// TODO: Move this into shared glsl code.
+layout(set = 0, binding = 0) uniform DebugData {
+  float f1, f2, f3, f4;
+  int i1, i2, i3, i4;
+} debug;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
   vec3 col = vec3(0);
-  if (length(fragUv - vec2(0.5)) < post.v2) {
+  if (length(fragUv - vec2(0.5)) < debug.f2) {
     col = vec3(1,0,0);
   }
 
