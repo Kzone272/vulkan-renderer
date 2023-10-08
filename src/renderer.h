@@ -27,13 +27,14 @@ struct Fbo {
   vk::Extent2D size;
   std::vector<vk::Format> color_fmts;
   vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
-  bool depth_test = false;
   bool resolve = false;
+  bool depth_test = false;
   bool swap = false;
   std::vector<vk::ImageView> swap_views;
   // Outputs
   std::vector<Texture> colors;
   std::vector<Texture> resolves;
+  std::vector<vk::DescriptorImageInfo> outputs;
   Texture depth;
   vk::UniqueRenderPass rp;
   std::vector<vk::ClearValue> clears;
@@ -242,6 +243,7 @@ class Renderer {
   std::vector<vk::UniqueImageView> swapchain_views_;
   Fbo scene_fbo_;
   Fbo post_fbo_;
+  Fbo swap_fbo_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
   vk::UniqueShaderModule scene_vert_;
@@ -249,8 +251,10 @@ class Renderer {
   vk::UniqueShaderModule fullscreen_vert_;
   vk::UniqueShaderModule post_frag_;
   vk::UniqueShaderModule circle_frag_;
+  vk::UniqueShaderModule sample_frag_;
   Pipeline scene_pl_;
   Pipeline post_pl_;
+  Pipeline swap_pl_;
   vk::UniqueCommandPool cmd_pool_;
   std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
   std::vector<vk::UniqueSemaphore> img_sems_;
@@ -291,6 +295,11 @@ class Renderer {
           {{.type = vk::DescriptorType::eUniformBuffer},
            {.type = vk::DescriptorType::eCombinedImageSampler},
            {.type = vk::DescriptorType::eCombinedImageSampler}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+  // Bound in swap render pass
+  DescLayout swap_dl_{
+      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 

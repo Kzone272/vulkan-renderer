@@ -562,8 +562,8 @@ class HelloTriangleApp {
       ImGui::Checkbox("i4.b4", &frame_state_.post.i4.b.b4);
       ImGui::SliderFloat("v1", &frame_state_.post.f1, 0, 1);
       ImGui::SliderFloat("v2", &frame_state_.post.f2, 0, 1);
-      ImGui::SliderFloat("v3", &frame_state_.post.f3, 0, 10);
-      ImGui::SliderFloat("v4", &frame_state_.post.f4, 0, 10);
+      ImGui::SliderFloat("v3", &frame_state_.post.f3, 0, .2);
+      ImGui::SliderFloat("v4", &frame_state_.post.f4, 0, 1);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Camera")) {
@@ -613,7 +613,7 @@ class HelloTriangleApp {
     if (ImGui::BeginTabItem("Movement")) {
       if (ImGui::Combo(
               "Movement Presets", &move_preset_,
-              "Normal\0Tightrope\0Preppy\0Snow\0Feminine\0Crouch")) {
+              "Normal\0Tightrope\0Preppy\0Snow\0Feminine\0Crouch\0Flanders")) {
         if (move_preset_ == 0) {
           moveDefault(move);
         } else if (move_preset_ == 1) {
@@ -626,6 +626,8 @@ class HelloTriangleApp {
           moveFeminine(move);
         } else if (move_preset_ == 5) {
           moveCrouch(move);
+        } else if (move_preset_ == 6) {
+          moveFlanders(move);
         }
         skelly_.makeBones();
       }

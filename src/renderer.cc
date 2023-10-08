@@ -185,9 +185,9 @@ void Renderer::initImgui() {
       .DescriptorPool = *imgui_desc_pool_,
       .MinImageCount = MAX_FRAMES_IN_FLIGHT,
       .ImageCount = MAX_FRAMES_IN_FLIGHT,
-      .MSAASamples = (VkSampleCountFlagBits)vk::SampleCountFlagBits::e1,
+      .MSAASamples = (VkSampleCountFlagBits)swap_fbo_.samples,
   };
-  ImGui_ImplVulkan_Init(&init_info, *post_fbo_.rp);
+  ImGui_ImplVulkan_Init(&init_info, *swap_fbo_.rp);
 
   auto cmd_buf = beginSingleTimeCommands();
   ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
@@ -657,6 +657,7 @@ void Renderer::createDescriptorSetLayouts() {
   global_dl_.init(*device_);
   post_dl_.init(*device_);
   material_dl_.init(*device_);
+  swap_dl_.init(*device_);
 }
 
 void Renderer::createShaders() {
@@ -665,6 +666,7 @@ void Renderer::createShaders() {
   fullscreen_vert_ = createShaderModule("shaders/fullscreen.vert.spv");
   post_frag_ = createShaderModule("shaders/post.frag.spv");
   circle_frag_ = createShaderModule("shaders/circle.frag.spv");
+  sample_frag_ = createShaderModule("shaders/sample.frag.spv");
 }
 
 void Renderer::createGraphicsPipelines() {
@@ -700,6 +702,16 @@ void Renderer::createGraphicsPipelines() {
           .vert_in = {},
           .cull_mode = vk::CullModeFlagBits::eBack,
       });
+
+  swap_pl_ = createPipeline(
+      *device_, swap_fbo_,
+      {
+          .vert_shader = *fullscreen_vert_,
+          .frag_shader = *sample_frag_,
+          .desc_layouts = {*swap_dl_.layout},
+          .vert_in = {},
+          .cull_mode = vk::CullModeFlagBits::eBack,
+      });
 }
 
 vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
@@ -725,9 +737,12 @@ void Renderer::initFbo(Fbo& fbo) {
         color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor);
+    if (!fbo.resolve) {
+      fbo.outputs.push_back(color.info);
+    }
     fbo.colors.push_back(std::move(color));
 
-    if (fbo.resolve) {
+    if (fbo.resolve && !fbo.swap) {
       Texture resolve{
           .size = fbo.size,
           .format = format,
@@ -739,6 +754,7 @@ void Renderer::initFbo(Fbo& fbo) {
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
           vk::ImageAspectFlagBits::eColor);
+      fbo.outputs.push_back(resolve.info);
       fbo.resolves.push_back(std::move(resolve));
     }
   }
@@ -783,20 +799,22 @@ void Renderer::initFbo(Fbo& fbo) {
 
   if (fbo.resolve) {
     for (auto& format : fbo.color_fmts) {
-      resolve_refs.push_back({
-          .attachment = static_cast<uint32_t>(atts.size()),
-          .layout = vk::ImageLayout::eColorAttachmentOptimal,
-      });
-      atts.push_back({
-          .format = format,
-          .samples = vk::SampleCountFlagBits::e1,
-          .loadOp = vk::AttachmentLoadOp::eDontCare,
-          .storeOp = vk::AttachmentStoreOp::eStore,
-          .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-          .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-          .initialLayout = vk::ImageLayout::eUndefined,
-          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-      });
+      if (!fbo.swap) {
+        resolve_refs.push_back({
+            .attachment = static_cast<uint32_t>(atts.size()),
+            .layout = vk::ImageLayout::eColorAttachmentOptimal,
+        });
+        atts.push_back({
+            .format = format,
+            .samples = vk::SampleCountFlagBits::e1,
+            .loadOp = vk::AttachmentLoadOp::eDontCare,
+            .storeOp = vk::AttachmentStoreOp::eStore,
+            .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+            .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+            .initialLayout = vk::ImageLayout::eUndefined,
+            .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+        });
+      }
       // Clear not used for resolves.
       fbo.clears.push_back({});
     }
@@ -822,10 +840,15 @@ void Renderer::initFbo(Fbo& fbo) {
   }
 
   if (fbo.swap) {
-    color_refs.push_back({
-        .attachment = 0,
+    vk::AttachmentReference ref{
+        .attachment = static_cast<uint32_t>(atts.size()),
         .layout = vk::ImageLayout::eColorAttachmentOptimal,
-    });
+    };
+    if (fbo.resolve) {
+      resolve_refs.push_back(ref);
+    } else {
+      color_refs.push_back(ref);
+    }
     atts.push_back({
         .format = swapchain_format_,
         .samples = vk::SampleCountFlagBits::e1,
@@ -890,23 +913,24 @@ void Renderer::initFbo(Fbo& fbo) {
       .height = fbo.size.height,
       .layers = 1,
   };
+  std::vector<vk::ImageView> views;
+  for (auto& texture : fbo.colors) {
+    views.push_back(*texture.image_view);
+  }
+  for (auto& texture : fbo.resolves) {
+    views.push_back(*texture.image_view);
+  }
+  if (fbo.depth_test) {
+    views.push_back(*fbo.depth.image_view);
+  }
   if (fbo.swap) {
-    // Create a
+    views.push_back({});
     for (auto& view : fbo.swap_views) {
-      fb_ci.setAttachments(view);
+      views.back() = view;
+      fb_ci.setAttachments(views);
       fbo.fbs.push_back(device_->createFramebufferUnique(fb_ci).value);
     }
   } else {
-    std::vector<vk::ImageView> views;
-    for (auto& texture : fbo.colors) {
-      views.push_back(*texture.image_view);
-    }
-    for (auto& texture : fbo.resolves) {
-      views.push_back(*texture.image_view);
-    }
-    if (fbo.depth_test) {
-      views.push_back(*fbo.depth.image_view);
-    }
     fb_ci.setAttachments(views);
     fbo.fbs.push_back(device_->createFramebufferUnique(fb_ci).value);
   }
@@ -916,8 +940,6 @@ void Renderer::createCanvas(Canvas& canvas) {
   canvas.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
-      .depth_test = false,
-      .resolve = false,
   };
   initFbo(canvas.fbo);
 };
@@ -1313,9 +1335,10 @@ void Renderer::createFbos() {
   scene_fbo_ = {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_, vk::Format::eR32G32B32A32Sfloat},
-      .samples = msaa_samples_,
+      // Disable msaa for now because it makes outline filter worse
+      // .samples = msaa_samples_,
+      // .resolve = true,
       .depth_test = true,
-      .resolve = true,
   };
   initFbo(scene_fbo_);
 
@@ -1325,10 +1348,19 @@ void Renderer::createFbos() {
   }
   post_fbo_ = {
       .size = swapchain_extent_,
+      .color_fmts = {color_fmt_},
+      .samples = vk::SampleCountFlagBits::e1,
+      .resolve = false,
+      // .swap = true,
+      // .swap_views = swap_views,
+  };
+  initFbo(post_fbo_);
+  swap_fbo_ = {
+      .size = swapchain_extent_,
       .swap = true,
       .swap_views = swap_views,
   };
-  initFbo(post_fbo_);
+  initFbo(swap_fbo_);
 }
 
 std::unique_ptr<Model> Renderer::loadModel(const ModelInfo& model_info) {
@@ -1654,20 +1686,23 @@ void Renderer::createImguiDescriptorPool() {
 void Renderer::createInFlightDescSets() {
   global_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
   post_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+  swap_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
 
   std::vector<vk::WriteDescriptorSet> writes;
   global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
   post_dl_.updateUboBind(0, uboInfos(in_flight_.post), writes);
-  post_dl_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
-  post_dl_.updateSamplerBind(2, &scene_fbo_.resolves[1].info, writes);
+  post_dl_.updateSamplerBind(1, &scene_fbo_.outputs[0], writes);
+  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[1], writes);
+  swap_dl_.updateSamplerBind(0, &post_fbo_.outputs[0], writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
 
 void Renderer::updateResizedDescSets() {
   std::vector<vk::WriteDescriptorSet> writes;
-  post_dl_.updateSamplerBind(1, &scene_fbo_.resolves[0].info, writes);
-  post_dl_.updateSamplerBind(2, &scene_fbo_.resolves[1].info, writes);
+  post_dl_.updateSamplerBind(1, &scene_fbo_.outputs[0], writes);
+  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[1], writes);
+  swap_dl_.updateSamplerBind(0, &post_fbo_.outputs[0], writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
@@ -1778,12 +1813,23 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
 
   cmd_buf.endRenderPass();
 
-  beginRp(cmd_buf, post_fbo_, img_ind);
+  beginRp(cmd_buf, post_fbo_, 0);
 
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
   cmd_buf.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
       post_dl_.sets[frame], nullptr);
+
+  cmd_buf.draw(3, 1, 0, 0);
+
+  cmd_buf.endRenderPass();
+
+  beginRp(cmd_buf, swap_fbo_, img_ind);
+
+  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_pl_.pipeline);
+  cmd_buf.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *swap_pl_.layout, 0,
+      swap_dl_.sets[frame], nullptr);
 
   cmd_buf.draw(3, 1, 0, 0);
 

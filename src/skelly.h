@@ -834,6 +834,15 @@ void moveCrouch(MoveOptions& move) {
   move.hand_height_pct = 0.5;
   move.hands_forward = 15;
 }
+void moveFlanders(MoveOptions& move) {
+  move = MoveOptions{};
+  move.max_speed = 165;
+  move.bounce = 4;
+  move.hip_sway = 23;
+  move.hip_spin = 4.5;
+  move.hand_height_pct = 0.53;
+  move.hands_forward = 0;
+}
 
 // Some presets for different skeleton sizes
 void sizeDefault(SkellySizes& sizes) {

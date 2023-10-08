@@ -40,8 +40,8 @@ union BoolsInt {
 struct DebugData {
   float f1 = 0;
   float f2 = 0.5;
-  float f3 = 0;
-  float f4 = 0;
+  float f3 = 0.015;
+  float f4 = 0.25;
   BoolsInt i1 = {};
   BoolsInt i2 = {};
   BoolsInt i3 = {};
