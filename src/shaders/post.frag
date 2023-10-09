@@ -48,19 +48,23 @@ void main() {
 
   float depth_thresh = debug.f3;
 
-  // TODO: Modify this code for SDF edges.
-  vec2 nUvs[8] = {
-    vec2(0, pixel.y),
-    vec2(0, -pixel.y),
-    vec2(-pixel.x, 0),
-    vec2(pixel.x, 0),
-    vec2(pixel.x, pixel.y),
-    vec2(-pixel.x, pixel.y),
-    vec2(pixel.x, -pixel.y),
-    vec2(-pixel.x, -pixel.y),
-  };
+  const int grid = 3; // Larger grid allows for wider outlines, but it's slower
+  const int num = grid * grid - 1;
+  int cent = grid / 2;
+  int ind = 0;
+  vec2 nUvs[num];
+  for (int i = 0; i < grid; i++) {
+    for (int j = 0; j < grid; j++) {
+      if (i == cent && j == cent) {
+        continue;
+      }
+      nUvs[ind] = vec2(pixel.x * (i - cent), pixel.y * (j - cent));
+      ind++;
+    }
+  }
+
   if (draw_edges) {
-    bool edge = false;
+    float edge_d = grid / 2.f + 1;
     for (int i = 0; i < nUvs.length(); i++) {
       vec4 samp = texture(normDepthSampler, fragUv + nUvs[i]);
       vec4 samp_cpos = vec4(ndc.xy + 2 * nUvs[i], samp.w, 1);
@@ -70,14 +74,17 @@ void main() {
       float plane_d = abs(dot(norm, samp_wpos.xyz - wpos.xyz));
 
       if (cosang < cos(debug.f4) || plane_d > depth_thresh) {
-        edge = true;
-        break;
+        edge_d = min(edge_d, length(nUvs[i] * size));
       }
     }
 
-    if (edge) {
-      color = vec3(0);
-    }
+    float dist = debug.f1 - edge_d;
+    vec2 ddist = vec2(dFdx(dist), dFdy(dist));
+    float pxdist = dist / length(ddist);
+    float alpha = clamp(0.5 - pxdist, 0, 1);
+    
+    vec3 edgecol = vec3(0);
+    color = mix(edgecol, color, alpha);
   }
 
   outColor = vec4(color, 1.0);

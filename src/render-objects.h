@@ -39,7 +39,7 @@ union BoolsInt {
 
 // General data than can be tied to ImGui controls.
 struct DebugData {
-  float f1 = 2;
+  float f1 = 1.5;
   float f2 = 0.5;
   float f3 = 0.01;
   float f4 = 0.5;
