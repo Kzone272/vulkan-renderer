@@ -54,7 +54,7 @@ void main() {
   vec3 wnorm = normalize(fragNormal);
   vec4 vpos = global.view * vec4(fragPos, 1);
   vec4 vnorm = global.view * vec4(wnorm, 0);
-  float z = vpos.z;
+  float z = gl_FragCoord.z;
   outNormalDepth = vec4(vnorm.xyz, z);
 
   vec3 lambert = vec3(0);

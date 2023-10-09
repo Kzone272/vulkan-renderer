@@ -1,6 +1,7 @@
 #version 450
 
 layout(location = 0) in vec2 fragUv;
+layout(origin_upper_left) in vec4 gl_FragCoord;
 
 // TODO: Move this into shared glsl code.
 layout(set = 0, binding = 0) uniform Global {
@@ -27,85 +28,54 @@ void main() {
 
   vec4 scene = texture(sceneSampler, fragUv);
   vec4 normDepth = texture(normDepthSampler, fragUv);
+  vec3 norm = normDepth.xyz;
   float z = normDepth.w;
-  
-  vec4 vnorm = vec4(normDepth.xyz, 0);
-  vec4 cvec = vec4(gl_FragCoord.xz, 1, 0);
-  vec4 vvec = inverse(global.proj) * cvec;
-  vec3 eye = normalize(-vvec.xyz);
 
+  mat4 ctow = inverse(global.proj * global.view);
+  vec4 ndc = vec4((gl_FragCoord.xy / size - 0.5) * 2, z, 1);
+  vec4 wpos = ctow * ndc;
   
   vec3 color = scene.rgb;
   if (desat) {
     float grey = dot(scene.rgb, vec3(.21, .72, .07));
     color = mix(vec3(grey), scene.rgb, debug.f1);
   } else if (debug.i1 == 1) {
-    color = normDepth.rgb;
+    color = norm;
   } else if (debug.i1 == 2) {
     color = vec3(z);
   }
+
+
+  float depth_thresh = debug.f3;
+
   // TODO: Modify this code for SDF edges.
-  // vec4 neigh[8];
-  // if (draw_edges) {
-  //   neigh[0] = texture(normDepthSampler, fragUv + (0, pixel.y));
-  //   neigh[1] = texture(normDepthSampler, fragUv + (0, -pixel.y));
-  //   neigh[2] = texture(normDepthSampler, fragUv + (-pixel.x, 0));
-  //   neigh[3] = texture(normDepthSampler, fragUv + (pixel.x, 0));
-  //   neigh[4] = texture(normDepthSampler, fragUv + (pixel.x, pixel.y));
-  //   neigh[5] = texture(normDepthSampler, fragUv + (-pixel.x, pixel.y));
-  //   neigh[6] = texture(normDepthSampler, fragUv + (pixel.x, -pixel.y));
-  //   neigh[7] = texture(normDepthSampler, fragUv + (-pixel.x, -pixel.y));
-  // }
-
-  // if (draw_edges) {
-  //   bool edge = false;
-  //   for (int i = 0; i < neigh.length(); i++) {
-  //     float cosang = abs(dot(normDepth.xyz, neigh[i].xyz));
-  //     float diff = abs(neigh[i].w - z);
-
-  //     if (cosang < cos(debug.f4) || diff > depth_thresh) {
-  //       edge = true;
-  //       break;
-  //     }
-  //   }
-
-  //   if (edge) {
-  //     color = vec3(0);
-  //   }
-  // }
-
-
-  float fresnel = 1 - dot(eye, vnorm.xyz);
-  float depth_scale = 0.6;
-  float fresnel_fact = 1 +
-      clamp((fresnel - depth_scale) / (1 - depth_scale), 0, 1);
-
-  float depth_thresh = debug.f3 * fresnel_fact;
-  
+  vec2 nUvs[8] = {
+    vec2(0, pixel.y),
+    vec2(0, -pixel.y),
+    vec2(-pixel.x, 0),
+    vec2(pixel.x, 0),
+    vec2(pixel.x, pixel.y),
+    vec2(-pixel.x, pixel.y),
+    vec2(pixel.x, -pixel.y),
+    vec2(-pixel.x, -pixel.y),
+  };
   if (draw_edges) {
-    float halfFloor = floor(debug.f1 * 0.5);
-    float halfCeil = ceil(debug.f1 * 0.5);
+    bool edge = false;
+    for (int i = 0; i < nUvs.length(); i++) {
+      vec4 samp = texture(normDepthSampler, fragUv + nUvs[i]);
+      vec4 samp_cpos = vec4(ndc.xy + 2 * nUvs[i], samp.w, 1);
+      vec4 samp_wpos = ctow * samp_cpos;
 
-    vec2 dlUv = fragUv - pixel * halfFloor;
-    vec2 urUv = fragUv + pixel * halfCeil;  
-    vec2 drUv = fragUv + vec2(pixel.x * halfCeil, -pixel.y * halfFloor);
-    vec2 ulUv = fragUv + vec2(-pixel.x * halfFloor, pixel.y * halfCeil);
+      float cosang = abs(dot(norm, samp.xyz));
+      float plane_d = abs(dot(norm, samp_wpos.xyz - wpos.xyz));
 
-    vec4 dr = texture(normDepthSampler, drUv);
-    vec4 ul = texture(normDepthSampler, ulUv);
-    vec4 dl = texture(normDepthSampler, dlUv);
-    vec4 ur = texture(normDepthSampler, urUv);
-    float d0 = dr.w - ul.w;
-    float d1 = dl.w - ur.w;
-    float depth_diff = sqrt(d0 * d0 + d1 * d1);
+      if (cosang < cos(debug.f4) || plane_d > depth_thresh) {
+        edge = true;
+        break;
+      }
+    }
 
-    float n0 = abs(dot(dr.xyz, normDepth.xyz));
-    float n1 = abs(dot(ul.xyz, normDepth.xyz));
-    float n2 = abs(dot(dl.xyz, normDepth.xyz));
-    float n3 = abs(dot(ur.xyz, normDepth.xyz));
-    float norm_diff = min(min(n0, n1), min(n2, n3));
-
-    if (depth_diff > depth_thresh || norm_diff < cos(debug.f4)) {
+    if (edge) {
       color = vec3(0);
     }
   }
