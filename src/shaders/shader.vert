@@ -7,10 +7,11 @@ struct Light {
   float falloff;
 };
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-  mat4 proj_view;
+layout(set = 0, binding = 0) uniform Global {
+  mat4 view;
+  mat4 proj;
   Light lights[8];
-} ubo;
+} global;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -28,7 +29,7 @@ layout(push_constant) uniform PushData {
 
 void main() {
   fragPos = vec3(push.model * vec4(inPosition, 1.0));
-  gl_Position = ubo.proj_view * push.model * vec4(inPosition, 1.0);
+  gl_Position = global.proj * global.view * push.model * vec4(inPosition, 1.0);
   fragNormal = vec3(push.model * vec4(inNormal, 0));
   fragColor = inColor;
   fragUv = inUv;

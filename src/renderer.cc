@@ -160,7 +160,7 @@ void Renderer::initVulkan() {
   createCommandPool();
   createCommandBuffers();
   createSwapchain();
-  createTextureSampler();
+  createSamplers();
   createFbos();
   createDescriptorSetLayouts();
   createShaders();
@@ -201,7 +201,8 @@ void Renderer::imguiNewFrame() {
 
 void Renderer::updateUboData(int frame) {
   GlobalData data;
-  data.proj_view = frame_state_->proj * frame_state_->view;
+  data.view = frame_state_->view;
+  data.proj = frame_state_->proj;
 
   const size_t max_lights = std::size(data.lights);
   // Add the first max_lights lights to the frame UBO, and set the rest to
@@ -1120,7 +1121,7 @@ void Renderer::createImage(
   texture.image_view = createImageView(
       *texture.image, texture.format, texture.mip_levels, aspect);
   texture.info = {
-      .sampler = *texture_sampler_,
+      .sampler = *linear_sampler_,
       .imageView = *texture.image_view,
       .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
   };
@@ -1310,7 +1311,7 @@ void Renderer::generateMipmaps(
   endSingleTimeCommands(cmd_buf);
 }
 
-void Renderer::createTextureSampler() {
+void Renderer::createSamplers() {
   vk::SamplerCreateInfo ci{
       .magFilter = vk::Filter::eLinear,
       .minFilter = vk::Filter::eLinear,
@@ -1328,7 +1329,11 @@ void Renderer::createTextureSampler() {
       .borderColor = vk::BorderColor::eIntOpaqueBlack,
       .unnormalizedCoordinates = VK_FALSE,
   };
-  texture_sampler_ = device_->createSamplerUnique(ci).value;
+  linear_sampler_ = device_->createSamplerUnique(ci).value;
+  ci.magFilter = vk::Filter::eNearest;
+  ci.minFilter = vk::Filter::eNearest;
+  ci.anisotropyEnable = VK_FALSE;
+  nearest_sampler_ = device_->createSamplerUnique(ci).value;
 }
 
 void Renderer::createFbos() {
@@ -1351,10 +1356,10 @@ void Renderer::createFbos() {
       .color_fmts = {color_fmt_},
       .samples = vk::SampleCountFlagBits::e1,
       .resolve = false,
-      // .swap = true,
-      // .swap_views = swap_views,
   };
   initFbo(post_fbo_);
+  post_fbo_.outputs[0].sampler = *nearest_sampler_;
+
   swap_fbo_ = {
       .size = swapchain_extent_,
       .swap = true,
@@ -1690,9 +1695,10 @@ void Renderer::createInFlightDescSets() {
 
   std::vector<vk::WriteDescriptorSet> writes;
   global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
-  post_dl_.updateUboBind(0, uboInfos(in_flight_.post), writes);
-  post_dl_.updateSamplerBind(1, &scene_fbo_.outputs[0], writes);
-  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[1], writes);
+  post_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
+  post_dl_.updateUboBind(1, uboInfos(in_flight_.post), writes);
+  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[0], writes);
+  post_dl_.updateSamplerBind(3, &scene_fbo_.outputs[1], writes);
   swap_dl_.updateSamplerBind(0, &post_fbo_.outputs[0], writes);
 
   device_->updateDescriptorSets(writes, nullptr);
@@ -1700,8 +1706,8 @@ void Renderer::createInFlightDescSets() {
 
 void Renderer::updateResizedDescSets() {
   std::vector<vk::WriteDescriptorSet> writes;
-  post_dl_.updateSamplerBind(1, &scene_fbo_.outputs[0], writes);
-  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[1], writes);
+  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[0], writes);
+  post_dl_.updateSamplerBind(3, &scene_fbo_.outputs[1], writes);
   swap_dl_.updateSamplerBind(0, &post_fbo_.outputs[0], writes);
 
   device_->updateDescriptorSets(writes, nullptr);

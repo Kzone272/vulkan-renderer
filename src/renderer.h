@@ -165,6 +165,7 @@ class Renderer {
   void createCanvas(Canvas& canvas);
   void createCanvasPipe(Canvas& canvas);
 
+  void createSamplers();
   void initSdlImage();
   SDL_Surface* loadImage(std::string texture_path);
   Texture* createTexture(void* texture_data, uint32_t width, uint32_t height);
@@ -176,7 +177,6 @@ class Renderer {
   void generateMipmaps(
       vk::Image img, int32_t width, int32_t height, vk::Format format,
       uint32_t mip_levels);
-  void createTextureSampler();
 
   std::unique_ptr<Model> loadModel(const ModelInfo& model_info);
   Material* loadMaterial(const MaterialInfo& mat_info);
@@ -260,7 +260,8 @@ class Renderer {
   std::vector<vk::UniqueSemaphore> img_sems_;
   std::vector<vk::UniqueSemaphore> render_sems_;
   std::vector<vk::UniqueFence> in_flight_fences_;
-  vk::UniqueSampler texture_sampler_;
+  vk::UniqueSampler linear_sampler_;
+  vk::UniqueSampler nearest_sampler_;
 
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
@@ -293,6 +294,7 @@ class Renderer {
   DescLayout post_dl_{
       .binds =
           {{.type = vk::DescriptorType::eUniformBuffer},
+           {.type = vk::DescriptorType::eUniformBuffer},
            {.type = vk::DescriptorType::eCombinedImageSampler},
            {.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,

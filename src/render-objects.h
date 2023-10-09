@@ -18,7 +18,8 @@ struct Light {
 };
 
 struct GlobalData {
-  alignas(16) mat4 proj_view;
+  alignas(16) mat4 view;
+  alignas(16) mat4 proj;
   alignas(16) Light lights[8];
 };
 
@@ -38,10 +39,10 @@ union BoolsInt {
 
 // General data than can be tied to ImGui controls.
 struct DebugData {
-  float f1 = 0;
+  float f1 = 2;
   float f2 = 0.5;
-  float f3 = 0.015;
-  float f4 = 0.25;
+  float f3 = 60;
+  float f4 = 0.86;
   BoolsInt i1 = {};
   BoolsInt i2 = {};
   BoolsInt i3 = {};

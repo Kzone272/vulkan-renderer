@@ -9,10 +9,11 @@ struct Light {
 const uint kDirectionalLightType = 1;
 const uint kPointLightType = 2;
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-  mat4 proj_view;
+layout(set = 0, binding = 0) uniform Global {
+  mat4 view;
+  mat4 proj;
   Light lights[8];
-} ubo;
+} global;
 
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
 layout(set = 1, binding = 1) uniform Material {
@@ -50,21 +51,21 @@ void main() {
       * vec4(fragColor, 1.0)
       * vec4(material.color, 1.0);
 
-  vec3 norm = normalize(fragNormal);
-  // I think this math gets z back into a linear space. It at least puts most of
-  // the values in [0,1], making it possible to visualize.
-  float z = gl_FragCoord.z / gl_FragCoord.w / 1000;
-  outNormalDepth = vec4(norm, z);
+  vec3 wnorm = normalize(fragNormal);
+  vec4 vpos = global.view * vec4(fragPos, 1);
+  vec4 vnorm = global.view * vec4(wnorm, 0);
+  float z = vpos.z;
+  outNormalDepth = vec4(vnorm.xyz, z);
 
   vec3 lambert = vec3(0);
-  for (int i = 0; i < ubo.lights.length(); i++) {
-    Light light = ubo.lights[i];
+  for (int i = 0; i < global.lights.length(); i++) {
+    Light light = global.lights[i];
 
     float intensity = 0;
     if (light.type == kDirectionalLightType) {
-      intensity = dirLight(normalize(-light.vec), norm);
+      intensity = dirLight(normalize(-light.vec), wnorm);
     } else if (light.type == kPointLightType) {
-      intensity = pointLight(light.vec, light.falloff, norm);
+      intensity = pointLight(light.vec, light.falloff, wnorm);
     }
 
     lambert += intensity * light.color * diffuse.rgb;
