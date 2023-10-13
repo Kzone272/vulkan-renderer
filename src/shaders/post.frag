@@ -82,7 +82,7 @@ void main() {
       float cosang = abs(dot(norm, samp.xyz));
       float plane_d = abs(dot(norm, sampVpos.xyz - vpos.xyz));
 
-      if (cosang < cos(debug.f4) || plane_d > depth_thresh) {
+      if (cosang < abs(cos(radians(debug.f4))) || plane_d > depth_thresh) {
         if (b3) {
           is_edge = true;
           break;

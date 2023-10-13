@@ -565,7 +565,7 @@ class HelloTriangleApp {
       ImGui::SliderFloat(
           "f3", &frame_state_.post.f3, 0, 10000, "%.5f",
           ImGuiSliderFlags_Logarithmic);
-      ImGui::SliderFloat("f4", &frame_state_.post.f4, 0, glm::half_pi<float>());
+      ImGui::SliderFloat("f4", &frame_state_.post.f4, 0, 90);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Camera")) {
