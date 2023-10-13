@@ -19,7 +19,6 @@
 #include "animation.h"
 #include "asserts.h"
 #include "defines.h"
-#include "frame-state.h"
 #include "glm-include.h"
 #include "input.h"
 #include "maths.h"
@@ -292,6 +291,7 @@ class HelloTriangleApp {
 
     bool should_draw = !window_minimized_ && !window_empty_;
     if (should_draw) {
+      resetFrameState();
       updateImgui();
       handleInput();
       if (options_.animate) {
@@ -346,9 +346,13 @@ class HelloTriangleApp {
     }
   }
 
+  void resetFrameState() {
+    frame_state_.update_canvas = frame_state_.frame_num == 0;
+  }
+
   void animate() {
-    frame_state_.anim.clear_val = updateClearValue();
-    frame_state_.anim.model_rot = updateModelRotation();
+    anim_.clear_val = updateClearValue();
+    anim_.model_rot = updateModelRotation();
 
     updateObjects();
   }
@@ -388,8 +392,8 @@ class HelloTriangleApp {
       }
       object->setPos(pos);
 
-      auto spin = glm::angleAxis(
-          glm::radians(frame_state_.anim.model_rot), vec3(0.f, 1.f, 0.f));
+      auto spin =
+          glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
       object->setRot(spin);
     }
 
@@ -561,7 +565,8 @@ class HelloTriangleApp {
       ImGui::SameLine();
       ImGui::Checkbox("i4.b4", &frame_state_.post.i4.b.b4);
       ImGui::SliderFloat("f1", &frame_state_.post.f1, 0, 10);
-      ImGui::SliderFloat("f2", &frame_state_.post.f2, 0, 1);
+      frame_state_.update_canvas |=
+          ImGui::SliderFloat("f2", &frame_state_.post.f2, 0, 1);
       ImGui::SliderFloat(
           "f3", &frame_state_.post.f3, 0, 10000, "%.5f",
           ImGuiSliderFlags_Logarithmic);
@@ -741,6 +746,11 @@ class HelloTriangleApp {
   struct UiState {
     std::string fps;
   } ui_;
+
+  struct AnimationState {
+    float clear_val = 0.0f;
+    float model_rot = 0.0f;
+  } anim_;
 
   Camera cam_;
   Trackball trackball_;

@@ -82,6 +82,17 @@ struct RenderObject {
   mat4 transform;
 };
 
+struct FrameState {
+  uint64_t frame_num = 0;
+  std::vector<RenderObject> objects;
+  std::vector<Light> lights;
+  mat4 model;
+  mat4 view;
+  mat4 proj;
+  DebugData post;
+  bool update_canvas = false;
+};
+
 struct Vertex {
   vec3 pos = {0, 0, 0};
   vec3 normal = {0, 1, 0};

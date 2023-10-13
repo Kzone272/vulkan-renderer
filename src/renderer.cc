@@ -23,7 +23,6 @@
 #include "defines.h"
 #include "descriptors.h"
 #include "files.h"
-#include "frame-state.h"
 #include "glm-include.h"
 #include "pipelines.h"
 #include "render-objects.h"
@@ -1772,7 +1771,9 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
   vk::CommandBufferBeginInfo begin_info{};
   std::ignore = cmd_buf.begin(begin_info);
 
-  renderCanvas(cmd_buf, frame, drawing_);
+  if (frame_state_->update_canvas) {
+    renderCanvas(cmd_buf, frame, drawing_);
+  }
 
   beginRp(cmd_buf, scene_fbo_, 0);
 

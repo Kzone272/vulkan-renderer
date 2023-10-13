@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "descriptors.h"
-#include "frame-state.h"
 #include "pipelines.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
