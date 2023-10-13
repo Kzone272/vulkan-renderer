@@ -773,7 +773,7 @@ void Renderer::initFbo(Fbo& fbo) {
         vk::ImageAspectFlagBits::eDepth);
   }
 
-  vk::ClearValue color_clear{{0, 0, 0, 1}};
+  vk::ClearValue color_clear{{0.f, 0.f, 0.f, 1.f}};
   vk::ClearValue depth_clear{{1.f, 0}};
 
   std::vector<vk::AttachmentDescription> atts;
@@ -1354,11 +1354,8 @@ void Renderer::createFbos() {
   post_fbo_ = {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_},
-      .samples = vk::SampleCountFlagBits::e1,
-      .resolve = false,
   };
   initFbo(post_fbo_);
-  post_fbo_.outputs[0].sampler = *nearest_sampler_;
 
   swap_fbo_ = {
       .size = swapchain_extent_,

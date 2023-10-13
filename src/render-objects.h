@@ -39,14 +39,14 @@ union BoolsInt {
 
 // General data than can be tied to ImGui controls.
 struct DebugData {
-  float f1 = 1.5;
+  float f1 = 0.707;
   float f2 = 0.5;
-  float f3 = 0.01;
+  float f3 = 2;
   float f4 = 0.5;
   BoolsInt i1 = {};
   BoolsInt i2 = {};
   BoolsInt i3 = {};
-  BoolsInt i4 = {};
+  BoolsInt i4 = {.b = {.b2 = true}};
 };
 
 enum class ModelId {
