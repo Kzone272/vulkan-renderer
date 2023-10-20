@@ -51,45 +51,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
   return VK_FALSE;
 }
 
-static vk::VertexInputBindingDescription getVertexBindingDesc() {
-  return {
-      .binding = 0,
-      .stride = sizeof(Vertex),
-      .inputRate = vk::VertexInputRate::eVertex,
-  };
-}
-
-static std::vector<vk::VertexInputAttributeDescription> getVertexAttrDescs() {
-  std::vector<vk::VertexInputAttributeDescription> attrs = {
-      {
-          .location = 0,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex, pos),
-      },
-      {
-          .location = 1,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex, normal),
-      },
-      {
-          .location = 2,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex, color),
-      },
-      {
-          .location = 3,
-          .binding = 0,
-          .format = vk::Format::eR32G32Sfloat,  // vec2
-          .offset = offsetof(Vertex, uv),
-      },
-  };
-
-  return attrs;
-}
-
 std::vector<vk::DescriptorBufferInfo*> uboInfos(std::vector<Ubo>& ubos) {
   std::vector<vk::DescriptorBufferInfo*> infos;
   for (auto& ubo : ubos) {
@@ -145,7 +106,7 @@ void Renderer::useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id) {
 
 // TODO: Return a TextureId instead.
 Texture* Renderer::getDrawingTexture() {
-  return &drawing_.fbo.colors[0];
+  return &voronoi_.fbo.colors[0];
 }
 
 void Renderer::initVulkan() {
@@ -171,8 +132,9 @@ void Renderer::initVulkan() {
   createInFlightDescSets();
   createSyncObjects();
 
-  createCanvas(drawing_);
-  createCanvasPipe(drawing_);
+  createDrawingCanvas();
+  createVoronoiCanvas();
+  createVertBufs();
 }
 
 void Renderer::initImgui() {
@@ -667,6 +629,8 @@ void Renderer::createShaders() {
   post_frag_ = createShaderModule("shaders/post.frag.spv");
   circle_frag_ = createShaderModule("shaders/circle.frag.spv");
   sample_frag_ = createShaderModule("shaders/sample.frag.spv");
+  voronoi_vert_ = createShaderModule("shaders/voronoi.vert.spv");
+  voronoi_frag_ = createShaderModule("shaders/voronoi.frag.spv");
 }
 
 void Renderer::createGraphicsPipelines() {
@@ -677,8 +641,8 @@ void Renderer::createGraphicsPipelines() {
       .size = sizeof(PushData),
   };
   vk::PipelineVertexInputStateCreateInfo vertex_in{};
-  auto vert_binding = getVertexBindingDesc();
-  auto vert_attrs = getVertexAttrDescs();
+  auto vert_binding = getBindingDesc<Vertex>();
+  auto vert_attrs = getAttrDescs<Vertex>();
   vertex_in.setVertexBindingDescriptions(vert_binding);
   vertex_in.setVertexAttributeDescriptions(vert_attrs);
   scene_pl_ = createPipeline(
@@ -936,15 +900,13 @@ void Renderer::initFbo(Fbo& fbo) {
   }
 }
 
-void Renderer::createCanvas(Canvas& canvas) {
-  canvas.fbo = {
+void Renderer::createDrawingCanvas() {
+  drawing_.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
   };
-  initFbo(canvas.fbo);
-};
+  initFbo(drawing_.fbo);
 
-void Renderer::createCanvasPipe(Canvas& canvas) {
   Pipe pipe;
   pipe.desc_los.push_back({
       .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
@@ -964,13 +926,39 @@ void Renderer::createCanvasPipe(Canvas& canvas) {
   device_->updateDescriptorSets(writes, nullptr);
 
   pipe.pl = createPipeline(
-      *device_, canvas.fbo,
+      *device_, drawing_.fbo,
       {
           .vert_shader = *fullscreen_vert_,
           .frag_shader = *circle_frag_,
           .desc_layouts = layouts,
       });
-  canvas.pipes.push_back(std::move(pipe));
+  drawing_.pipes.push_back(std::move(pipe));
+}
+
+void Renderer::createVoronoiCanvas() {
+  voronoi_.fbo = {
+      .size = {512, 512},
+      .color_fmts = {color_fmt_},
+      .depth_test = true,
+  };
+  initFbo(voronoi_.fbo);
+
+  vk::PipelineVertexInputStateCreateInfo vert_in{};
+  auto vert_bind = getBindingDesc<Vertex2d>();
+  vert_bind.inputRate = vk::VertexInputRate::eInstance;
+  vert_in.setVertexBindingDescriptions(vert_bind);
+  auto vert_attrs = getAttrDescs<Vertex2d>();
+  vert_in.setVertexAttributeDescriptions(vert_attrs);
+
+  Pipe pipe;
+  pipe.pl = createPipeline(
+      *device_, voronoi_.fbo,
+      {
+          .vert_shader = *voronoi_vert_,
+          .frag_shader = *voronoi_frag_,
+          .vert_in = vert_in,
+      });
+  voronoi_.pipes.push_back(std::move(pipe));
 }
 
 void Renderer::createCommandPool() {
@@ -1494,6 +1482,40 @@ Mesh Renderer::loadObj(std::string obj_path) {
   return std::move(mesh);
 }
 
+void Renderer::createVertBufs() {
+  // Support up to 100 voronoi cells for now.
+  vk::DeviceSize size = 100 * sizeof(Vertex2d);
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    voronoi_verts_.push_back(
+        createDynamicBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer));
+  }
+}
+
+// TODO: Use this for other buffers as well.
+DynamicBuf Renderer::createDynamicBuffer(
+    vk::DeviceSize size, vk::BufferUsageFlags usage) {
+  DynamicBuf dbuf;
+  createBuffer(
+      size, vk::BufferUsageFlagBits::eTransferSrc,
+      vk::MemoryPropertyFlagBits::eHostVisible |
+          vk::MemoryPropertyFlagBits::eHostCoherent,
+      dbuf.staging.buf, dbuf.staging.mem);
+  dbuf.staging.size = size;
+
+  dbuf.staging.mapped =
+      device_
+          ->mapMemory(*dbuf.staging.mem, dbuf.staging.offset, dbuf.staging.size)
+          .value;
+
+  createBuffer(
+      size, usage | vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal, dbuf.device.buf,
+      dbuf.device.mem);
+  dbuf.device.size = size;
+
+  return std::move(dbuf);
+}
+
 void Renderer::stageVertices(
     const std::vector<Vertex>& vertices, Model& model) {
   vk::DeviceSize size = sizeof(Vertex) * vertices.size();
@@ -1765,11 +1787,55 @@ void Renderer::renderCanvas(
   cmd_buf.endRenderPass();
 }
 
+// TODO: Generalize this for other DynamicBufs.
+void Renderer::updateVoronoiVerts(int frame) {
+  auto& vbuf = voronoi_verts_[frame];
+  auto& cmd_buf = *cmd_bufs_[frame];
+
+  vk::DeviceSize size = std::min(
+      vbuf.staging.size, sizeof(Vertex2d) * frame_state_->voronoi_cells.size());
+  memcpy(vbuf.staging.mapped, frame_state_->voronoi_cells.data(), size);
+
+  vk::BufferCopy copy{
+      .srcOffset = vbuf.staging.offset,
+      .dstOffset = vbuf.device.offset,
+      .size = size,
+  };
+  cmd_buf.copyBuffer(*vbuf.staging.buf, *vbuf.device.buf, copy);
+
+  vk::BufferMemoryBarrier barrier{
+      .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
+      .dstAccessMask = vk::AccessFlagBits::eVertexAttributeRead,
+      .buffer = *vbuf.device.buf,
+      .offset = vbuf.device.offset,
+      .size = size,
+  };
+  cmd_buf.pipelineBarrier(
+      vk::PipelineStageFlagBits::eTransfer,
+      vk::PipelineStageFlagBits::eVertexInput, {}, nullptr, barrier, nullptr);
+}
+
+void Renderer::renderVoronoi(const vk::CommandBuffer& cmd_buf, int frame) {
+  beginRp(cmd_buf, voronoi_.fbo, 0);
+
+  cmd_buf.bindPipeline(
+      vk::PipelineBindPoint::eGraphics, *voronoi_.pipes[0].pl.pipeline);
+  cmd_buf.bindVertexBuffers(0, *voronoi_verts_[frame].device.buf, {0});
+  cmd_buf.draw(6, frame_state_->voronoi_cells.size(), 0, 0);
+
+  cmd_buf.endRenderPass();
+}
+
 void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
   auto& cmd_buf = *cmd_bufs_[frame];
 
   vk::CommandBufferBeginInfo begin_info{};
   std::ignore = cmd_buf.begin(begin_info);
+
+  if (frame_state_->update_voronoi) {
+    updateVoronoiVerts(frame);
+    renderVoronoi(cmd_buf, frame);
+  }
 
   if (frame_state_->update_canvas) {
     renderCanvas(cmd_buf, frame, drawing_);

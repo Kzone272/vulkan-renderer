@@ -40,11 +40,25 @@ struct Fbo {
   std::vector<vk::UniqueFramebuffer> fbs;
 };
 
+// TODO: Replace this with Buffer.
 struct Ubo {
   vk::UniqueBuffer buf;
   vk::UniqueDeviceMemory buf_mem;
   void* buf_mapped;
   vk::DescriptorBufferInfo info;
+};
+
+struct Buffer {
+  vk::UniqueBuffer buf;
+  vk::UniqueDeviceMemory mem;
+  void* mapped = nullptr;
+  vk::DeviceSize size = 0;
+  uint32_t offset = 0;
+};
+
+struct DynamicBuf {
+  Buffer staging;
+  Buffer device;
 };
 
 struct Material {
@@ -161,8 +175,9 @@ class Renderer {
   void createGraphicsPipelines();
 
   void initFbo(Fbo& fbo);
-  void createCanvas(Canvas& canvas);
-  void createCanvasPipe(Canvas& canvas);
+  void createDrawingCanvas();
+  void createVoronoiCanvas();
+  void createVertBufs();
 
   void createSamplers();
   void initSdlImage();
@@ -199,6 +214,8 @@ class Renderer {
       vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
       vk::UniqueDeviceMemory& buf_mem);
   uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props);
+  DynamicBuf createDynamicBuffer(
+      vk::DeviceSize size, vk::BufferUsageFlags usage);
 
   vk::CommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(vk::CommandBuffer cmd_buf);
@@ -211,6 +228,9 @@ class Renderer {
   void beginRp(const vk::CommandBuffer& cmd_buf, const Fbo& fbo, int fb_ind);
   void renderCanvas(
       const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas);
+  void updateVoronoiVerts(int frame);
+  void renderVoronoi(const vk::CommandBuffer& cmd_buf, int frame);
+
   void recordCommandBuffer(int frame, uint32_t img_ind);
   void createSyncObjects();
   void recreateSwapchain();
@@ -251,6 +271,8 @@ class Renderer {
   vk::UniqueShaderModule post_frag_;
   vk::UniqueShaderModule circle_frag_;
   vk::UniqueShaderModule sample_frag_;
+  vk::UniqueShaderModule voronoi_vert_;
+  vk::UniqueShaderModule voronoi_frag_;
   Pipeline scene_pl_;
   Pipeline post_pl_;
   Pipeline swap_pl_;
@@ -305,6 +327,8 @@ class Renderer {
   };
 
   Canvas drawing_;
+  Canvas voronoi_;
+  std::vector<DynamicBuf> voronoi_verts_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
@@ -312,3 +336,66 @@ class Renderer {
   const bool enable_validation_layers_ = false;
 #endif  // DEBUG
 };
+
+template <class T>
+static vk::VertexInputBindingDescription getBindingDesc() {
+  return {
+      .binding = 0,
+      .stride = sizeof(T),
+      .inputRate = vk::VertexInputRate::eVertex,
+  };
+}
+
+template <class T>
+static std::vector<vk::VertexInputAttributeDescription> getAttrDescs();
+
+template <>
+static std::vector<vk::VertexInputAttributeDescription> getAttrDescs<Vertex>() {
+  std::vector<vk::VertexInputAttributeDescription> attrs = {
+      {
+          .location = 0,
+          .binding = 0,
+          .format = vk::Format::eR32G32B32Sfloat,  // vec3
+          .offset = offsetof(Vertex, pos),
+      },
+      {
+          .location = 1,
+          .binding = 0,
+          .format = vk::Format::eR32G32B32Sfloat,  // vec3
+          .offset = offsetof(Vertex, normal),
+      },
+      {
+          .location = 2,
+          .binding = 0,
+          .format = vk::Format::eR32G32B32Sfloat,  // vec3
+          .offset = offsetof(Vertex, color),
+      },
+      {
+          .location = 3,
+          .binding = 0,
+          .format = vk::Format::eR32G32Sfloat,  // vec2
+          .offset = offsetof(Vertex, uv),
+      },
+  };
+  return attrs;
+}
+
+template <>
+static std::vector<vk::VertexInputAttributeDescription>
+getAttrDescs<Vertex2d>() {
+  std::vector<vk::VertexInputAttributeDescription> attrs = {
+      {
+          .location = 0,
+          .binding = 0,
+          .format = vk::Format::eR32G32Sfloat,  // vec2
+          .offset = offsetof(Vertex2d, pos),
+      },
+      {
+          .location = 1,
+          .binding = 0,
+          .format = vk::Format::eR32G32B32Sfloat,  // vec3
+          .offset = offsetof(Vertex2d, color),
+      },
+  };
+  return attrs;
+}

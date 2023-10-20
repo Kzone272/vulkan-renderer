@@ -128,6 +128,20 @@ class HelloTriangleApp {
     loadModels();
     loadPrimitives();
 
+    // Random points. Chose by fair dice roll.
+    cell_centers_ = {
+        vec2(0.5, 0.5),   vec2(0.75, -0.6), vec2(-0.5, 0.75), vec2(0.8, 0.4),
+        vec2(-0.3, -0.2), vec2(-0.9, 0.8),  vec2(0.3, -0.6),  vec2(-0.8, -0.1),
+    };
+    frame_state_.voronoi_cells.push_back({.color{1, 0, 0}});
+    frame_state_.voronoi_cells.push_back({.color{0, 1, 1}});
+    frame_state_.voronoi_cells.push_back({.color{0, 0, 1}});
+    frame_state_.voronoi_cells.push_back({.color{1, 0.8, 0}});
+    frame_state_.voronoi_cells.push_back({.color{0, 1, 0}});
+    frame_state_.voronoi_cells.push_back({.color{1, 1, 0}});
+    frame_state_.voronoi_cells.push_back({.color{1, 0, 1}});
+    frame_state_.voronoi_cells.push_back({.color{0.2, 0.8, 0.6}});
+
     setupLights();
   }
 
@@ -348,13 +362,20 @@ class HelloTriangleApp {
 
   void resetFrameState() {
     frame_state_.update_canvas = frame_state_.frame_num == 0;
+    frame_state_.update_voronoi = frame_state_.frame_num == 0;
   }
 
   void animate() {
     anim_.clear_val = updateClearValue();
     anim_.model_rot = updateModelRotation();
-
     updateObjects();
+
+    for (int i = 0; i < cell_centers_.size(); i++) {
+      frame_state_.voronoi_cells[i].pos =
+          cell_centers_[i] +
+          glm::rotate(vec2(0, 0.1), time_s_ / glm::length(cell_centers_[i]));
+    }
+    frame_state_.update_voronoi = true;
   }
 
   float updateClearValue() {
@@ -751,6 +772,7 @@ class HelloTriangleApp {
     float clear_val = 0.0f;
     float model_rot = 0.0f;
   } anim_;
+  std::vector<vec2> cell_centers_;
 
   Camera cam_;
   Trackball trackball_;

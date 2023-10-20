@@ -1,8 +1,14 @@
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 
 file(GLOB shader_files
-  *.frag
-  *.vert
+  shader.vert
+  shader.frag
+  fullscreen.vert
+  post.frag
+  sample.frag
+  circle.frag
+  voronoi.vert
+  voronoi.frag
 )
 
 set(shader_binary_dir "${PROJECT_BINARY_DIR}/shaders")

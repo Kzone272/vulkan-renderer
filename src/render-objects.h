@@ -82,6 +82,11 @@ struct RenderObject {
   mat4 transform;
 };
 
+struct Vertex2d {
+  vec2 pos = {0, 0};
+  vec3 color = {0, 0, 0};
+};
+
 struct FrameState {
   uint64_t frame_num = 0;
   std::vector<RenderObject> objects;
@@ -91,6 +96,8 @@ struct FrameState {
   mat4 proj;
   DebugData post;
   bool update_canvas = false;
+  std::vector<Vertex2d> voronoi_cells;
+  bool update_voronoi = false;
 };
 
 struct Vertex {
