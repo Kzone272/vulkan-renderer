@@ -51,7 +51,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
   return VK_FALSE;
 }
 
-std::vector<vk::DescriptorBufferInfo*> uboInfos(std::vector<Ubo>& ubos) {
+std::vector<vk::DescriptorBufferInfo*> uboInfos(std::vector<Buffer>& ubos) {
   std::vector<vk::DescriptorBufferInfo*> infos;
   for (auto& ubo : ubos) {
     infos.push_back(&ubo.info);
@@ -176,10 +176,10 @@ void Renderer::updateUboData(int frame) {
     }
   }
   auto& global_ubo = in_flight_.global[frame];
-  memcpy(global_ubo.buf_mapped, &data, global_ubo.info.range);
+  memcpy(global_ubo.mapped, &data, global_ubo.info.range);
 
   auto& post_ubo = in_flight_.post[frame];
-  memcpy(post_ubo.buf_mapped, &frame_state_->post, post_ubo.info.range);
+  memcpy(post_ubo.mapped, &frame_state_->post, post_ubo.info.range);
 }
 
 void Renderer::drawFrame() {
@@ -1385,7 +1385,7 @@ Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
   stageBuffer(
       Material::size, (void*)&mat_info.ubo,
       vk::BufferUsageFlagBits::eUniformBuffer, material->ubo.buf,
-      material->ubo.buf_mem);
+      material->ubo.mem);
   material->ubo.info = vk::DescriptorBufferInfo{
       .buffer = *material->ubo.buf,
       .offset = 0,
@@ -1500,18 +1500,17 @@ DynamicBuf Renderer::createDynamicBuffer(
       vk::MemoryPropertyFlagBits::eHostVisible |
           vk::MemoryPropertyFlagBits::eHostCoherent,
       dbuf.staging.buf, dbuf.staging.mem);
-  dbuf.staging.size = size;
+  dbuf.staging.info.range = size;
 
   dbuf.staging.mapped =
-      device_
-          ->mapMemory(*dbuf.staging.mem, dbuf.staging.offset, dbuf.staging.size)
+      device_->mapMemory(*dbuf.staging.mem, dbuf.staging.info.offset, size)
           .value;
 
   createBuffer(
       size, usage | vk::BufferUsageFlagBits::eTransferDst,
       vk::MemoryPropertyFlagBits::eDeviceLocal, dbuf.device.buf,
       dbuf.device.mem);
-  dbuf.device.size = size;
+  dbuf.device.info.range = size;
 
   return std::move(dbuf);
 }
@@ -1542,21 +1541,21 @@ void Renderer::createInFlightBuffers() {
   }
 }
 
-Ubo Renderer::createMappedBuf(vk::DeviceSize size) {
-  Ubo ubo;
+Buffer Renderer::createMappedBuf(vk::DeviceSize size) {
+  Buffer buf;
   createBuffer(
       size, vk::BufferUsageFlagBits::eUniformBuffer,
       vk::MemoryPropertyFlagBits::eHostVisible |
           vk::MemoryPropertyFlagBits::eHostCoherent,
-      ubo.buf, ubo.buf_mem);
-  ubo.buf_mapped = device_->mapMemory(*ubo.buf_mem, 0, size).value;
+      buf.buf, buf.mem);
+  buf.mapped = device_->mapMemory(*buf.mem, 0, size).value;
 
-  ubo.info = vk::DescriptorBufferInfo{
-      .buffer = *ubo.buf,
+  buf.info = vk::DescriptorBufferInfo{
+      .buffer = *buf.buf,
       .offset = 0,
       .range = size,
   };
-  return ubo;
+  return buf;
 }
 
 // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
@@ -1793,12 +1792,13 @@ void Renderer::updateVoronoiVerts(int frame) {
   auto& cmd_buf = *cmd_bufs_[frame];
 
   vk::DeviceSize size = std::min(
-      vbuf.staging.size, sizeof(Vertex2d) * frame_state_->voronoi_cells.size());
+      vbuf.staging.info.range,
+      sizeof(Vertex2d) * frame_state_->voronoi_cells.size());
   memcpy(vbuf.staging.mapped, frame_state_->voronoi_cells.data(), size);
 
   vk::BufferCopy copy{
-      .srcOffset = vbuf.staging.offset,
-      .dstOffset = vbuf.device.offset,
+      .srcOffset = vbuf.staging.info.offset,
+      .dstOffset = vbuf.device.info.offset,
       .size = size,
   };
   cmd_buf.copyBuffer(*vbuf.staging.buf, *vbuf.device.buf, copy);
@@ -1807,7 +1807,7 @@ void Renderer::updateVoronoiVerts(int frame) {
       .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
       .dstAccessMask = vk::AccessFlagBits::eVertexAttributeRead,
       .buffer = *vbuf.device.buf,
-      .offset = vbuf.device.offset,
+      .offset = vbuf.device.info.offset,
       .size = size,
   };
   cmd_buf.pipelineBarrier(

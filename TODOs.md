@@ -2,8 +2,9 @@ Things I Should Do Soon:
 
 Short-term ideas:
 - Add gooch shading. As Material in scene pass? Maybe entire shader?
-- Draw some voronoi diagrams on canvas Fbo
+- Add shadow mapping for some lights.
 - Improve outline filter AA by rendering edges with MSAA.
+- Choose voronoi points with poisson disk sampling.
 - Fix memory access rendering bug when maximizing window
   - May have crept in when using Fbo for swaps? -> nope.
 - Reconsider when we set image and buffer infos

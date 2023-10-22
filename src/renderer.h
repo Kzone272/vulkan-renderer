@@ -40,20 +40,11 @@ struct Fbo {
   std::vector<vk::UniqueFramebuffer> fbs;
 };
 
-// TODO: Replace this with Buffer.
-struct Ubo {
-  vk::UniqueBuffer buf;
-  vk::UniqueDeviceMemory buf_mem;
-  void* buf_mapped;
-  vk::DescriptorBufferInfo info;
-};
-
 struct Buffer {
   vk::UniqueBuffer buf;
   vk::UniqueDeviceMemory mem;
   void* mapped = nullptr;
-  vk::DeviceSize size = 0;
-  uint32_t offset = 0;
+  vk::DescriptorBufferInfo info;
 };
 
 struct DynamicBuf {
@@ -63,7 +54,7 @@ struct DynamicBuf {
 
 struct Material {
   Texture* diffuse;
-  Ubo ubo;
+  Buffer ubo;
   vk::DescriptorSet desc_set;
 
   constexpr static vk::DeviceSize size =
@@ -202,7 +193,7 @@ class Renderer {
   void stageIndices(const std::vector<uint32_t>& indices, Model& model);
 
   void createInFlightBuffers();
-  Ubo createMappedBuf(vk::DeviceSize size);
+  Buffer createMappedBuf(vk::DeviceSize size);
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
   // from the staging_buf to dst_buf.
   void stageBuffer(
@@ -289,8 +280,8 @@ class Renderer {
   FrameState* frame_state_ = nullptr;
 
   struct InFlightState {
-    std::vector<Ubo> global;
-    std::vector<Ubo> post;
+    std::vector<Buffer> global;
+    std::vector<Buffer> post;
   } in_flight_;
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
