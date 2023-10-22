@@ -122,7 +122,7 @@ class Renderer {
 
   void initVulkan();
   void initImgui();
-  void updateUboData(int frame);
+  void updateUboData();
   void drawFrame();
   void createInstance();
   std::vector<const char*> getRequiredExtensions();
@@ -216,13 +216,12 @@ class Renderer {
   void createInFlightDescSets();
   void updateResizedDescSets();
 
-  void beginRp(const vk::CommandBuffer& cmd_buf, const Fbo& fbo, int fb_ind);
-  void renderCanvas(
-      const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas);
-  void updateVoronoiVerts(int frame);
-  void renderVoronoi(const vk::CommandBuffer& cmd_buf, int frame);
+  void beginRp(const Fbo& fbo, int fb_ind);
+  void renderCanvas(const Canvas& canvas);
+  void updateVoronoiVerts();
+  void renderVoronoi();
 
-  void recordCommandBuffer(int frame, uint32_t img_ind);
+  void recordCommandBuffer();
   void createSyncObjects();
   void recreateSwapchain();
   void cleanupSwapchain();
@@ -278,6 +277,12 @@ class Renderer {
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   FrameState* frame_state_ = nullptr;
+
+  struct DrawState {
+    vk::CommandBuffer cmd = {};
+    int frame = -1;
+    uint32_t img_ind = 0;
+  } ds_;
 
   struct InFlightState {
     std::vector<Buffer> global;

@@ -160,7 +160,7 @@ void Renderer::imguiNewFrame() {
   ImGui_ImplVulkan_NewFrame();
 }
 
-void Renderer::updateUboData(int frame) {
+void Renderer::updateUboData() {
   GlobalData data;
   data.view = frame_state_->view;
   data.proj = frame_state_->proj;
@@ -175,10 +175,10 @@ void Renderer::updateUboData(int frame) {
       data.lights[i] = frame_state_->lights[i];
     }
   }
-  auto& global_ubo = in_flight_.global[frame];
+  auto& global_ubo = in_flight_.global[ds_.frame];
   memcpy(global_ubo.mapped, &data, global_ubo.info.range);
 
-  auto& post_ubo = in_flight_.post[frame];
+  auto& post_ubo = in_flight_.post[ds_.frame];
   memcpy(post_ubo.mapped, &frame_state_->post, post_ubo.info.range);
 }
 
@@ -187,54 +187,58 @@ void Renderer::drawFrame() {
     recreateSwapchain();
   }
 
-  int frame = frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT;
+  ds_.frame = frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT;
+  ds_.cmd = *cmd_bufs_[ds_.frame];
 
-  std::ignore =
-      device_->waitForFences(*in_flight_fences_[frame], VK_TRUE, UINT64_MAX);
+  std::ignore = device_->waitForFences(
+      *in_flight_fences_[ds_.frame], VK_TRUE, UINT64_MAX);
 
-  auto [result, img_ind] = device_->acquireNextImageKHR(
-      *swapchain_, UINT64_MAX, *img_sems_[frame], {});
+  vk::Result result;
+  std::tie(result, ds_.img_ind) = device_->acquireNextImageKHR(
+      *swapchain_, UINT64_MAX, *img_sems_[ds_.frame], {});
   if (result == vk::Result::eErrorOutOfDateKHR) {
     window_resized_ = true;
     return;
   }
   ASSERT(
       result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR);
-  ASSERT(img_ind >= 0);
-  ASSERT(img_ind < swapchain_views_.size());
+  DASSERT(ds_.img_ind < swapchain_views_.size());
 
   // Only reset the fence if we're submitting work.
-  device_->resetFences(*in_flight_fences_[frame]);
+  device_->resetFences(*in_flight_fences_[ds_.frame]);
 
-  updateUboData(frame);
+  updateUboData();
 
-  cmd_bufs_[frame]->reset();
-  recordCommandBuffer(frame, img_ind);
+  ds_.cmd.reset();
+  recordCommandBuffer();
 
   vk::SubmitInfo submit_info{};
   vk::PipelineStageFlags wait_stages =
       vk::PipelineStageFlagBits::eColorAttachmentOutput;
   submit_info.setWaitDstStageMask(wait_stages);
-  submit_info.setWaitSemaphores(*img_sems_[frame]);
-  submit_info.setCommandBuffers(*cmd_bufs_[frame]);
-  submit_info.setSignalSemaphores(*render_sems_[frame]);
-  std::ignore = gfx_q_.submit(submit_info, *in_flight_fences_[frame]);
+  submit_info.setWaitSemaphores(*img_sems_[ds_.frame]);
+  submit_info.setCommandBuffers(*cmd_bufs_[ds_.frame]);
+  submit_info.setSignalSemaphores(*render_sems_[ds_.frame]);
+  std::ignore = gfx_q_.submit(submit_info, *in_flight_fences_[ds_.frame]);
 
   vk::PresentInfoKHR present_info{};
-  present_info.setWaitSemaphores(*render_sems_[frame]);
+  present_info.setWaitSemaphores(*render_sems_[ds_.frame]);
   present_info.setSwapchains(*swapchain_);
-  present_info.setImageIndices(img_ind);
+  present_info.setImageIndices(ds_.img_ind);
 
   // For some reason Vulkan.hpp asserts on eErrorOutOfDateKHR, so until that's
   // dealt with, I need to use the C interface for present.
   result = (vk::Result)vkQueuePresentKHR(
       present_q_, (VkPresentInfoKHR*)&present_info);
   // result = present_q_.presentKHR(present_info); // This crashes.
+
   if (result == vk::Result::eErrorOutOfDateKHR ||
       result == vk::Result::eSuboptimalKHR) {
     window_resized_ = true;
-    return;
   }
+
+  // Reset DrawState in case something tries to use it outside of drawFrame().
+  ds_ = {};
 }
 
 void Renderer::createInstance() {
@@ -1739,8 +1743,7 @@ void Renderer::createCommandBuffers() {
   cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
 }
 
-void Renderer::beginRp(
-    const vk::CommandBuffer& cmd_buf, const Fbo& fbo, int fb_ind) {
+void Renderer::beginRp(const Fbo& fbo, int fb_ind) {
   vk::Viewport viewport{
       .x = 0.0f,
       .y = 0.0f,
@@ -1753,8 +1756,8 @@ void Renderer::beginRp(
       .offset = {0, 0},
       .extent = fbo.size,
   };
-  cmd_buf.setViewport(0, viewport);
-  cmd_buf.setScissor(0, scissor);
+  ds_.cmd.setViewport(0, viewport);
+  ds_.cmd.setScissor(0, scissor);
 
   vk::RenderPassBeginInfo rp_info{
       .renderPass = *fbo.rp,
@@ -1764,32 +1767,30 @@ void Renderer::beginRp(
           .extent = fbo.size,
       }};
   rp_info.setClearValues(fbo.clears);
-  cmd_buf.beginRenderPass(rp_info, vk::SubpassContents::eInline);
+  ds_.cmd.beginRenderPass(rp_info, vk::SubpassContents::eInline);
 }
 
-void Renderer::renderCanvas(
-    const vk::CommandBuffer& cmd_buf, int frame, const Canvas& canvas) {
-  beginRp(cmd_buf, canvas.fbo, 0);
+void Renderer::renderCanvas(const Canvas& canvas) {
+  beginRp(canvas.fbo, 0);
 
   for (auto& pipe : canvas.pipes) {
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipe.pl.pipeline);
+    ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipe.pl.pipeline);
 
     for (auto& desc_lo : pipe.desc_los) {
-      cmd_buf.bindDescriptorSets(
+      ds_.cmd.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics, *pipe.pl.layout, 0,
-          desc_lo.sets[frame], nullptr);
+          desc_lo.sets[ds_.frame], nullptr);
     }
 
     // TODO: Make this more general.
-    cmd_buf.draw(3, 1, 0, 0);
+    ds_.cmd.draw(3, 1, 0, 0);
   }
-  cmd_buf.endRenderPass();
+  ds_.cmd.endRenderPass();
 }
 
 // TODO: Generalize this for other DynamicBufs.
-void Renderer::updateVoronoiVerts(int frame) {
-  auto& vbuf = voronoi_verts_[frame];
-  auto& cmd_buf = *cmd_bufs_[frame];
+void Renderer::updateVoronoiVerts() {
+  auto& vbuf = voronoi_verts_[ds_.frame];
 
   vk::DeviceSize size = std::min(
       vbuf.staging.info.range,
@@ -1801,7 +1802,7 @@ void Renderer::updateVoronoiVerts(int frame) {
       .dstOffset = vbuf.device.info.offset,
       .size = size,
   };
-  cmd_buf.copyBuffer(*vbuf.staging.buf, *vbuf.device.buf, copy);
+  ds_.cmd.copyBuffer(*vbuf.staging.buf, *vbuf.device.buf, copy);
 
   vk::BufferMemoryBarrier barrier{
       .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
@@ -1810,43 +1811,41 @@ void Renderer::updateVoronoiVerts(int frame) {
       .offset = vbuf.device.info.offset,
       .size = size,
   };
-  cmd_buf.pipelineBarrier(
+  ds_.cmd.pipelineBarrier(
       vk::PipelineStageFlagBits::eTransfer,
       vk::PipelineStageFlagBits::eVertexInput, {}, nullptr, barrier, nullptr);
 }
 
-void Renderer::renderVoronoi(const vk::CommandBuffer& cmd_buf, int frame) {
-  beginRp(cmd_buf, voronoi_.fbo, 0);
+void Renderer::renderVoronoi() {
+  beginRp(voronoi_.fbo, 0);
 
-  cmd_buf.bindPipeline(
+  ds_.cmd.bindPipeline(
       vk::PipelineBindPoint::eGraphics, *voronoi_.pipes[0].pl.pipeline);
-  cmd_buf.bindVertexBuffers(0, *voronoi_verts_[frame].device.buf, {0});
-  cmd_buf.draw(6, frame_state_->voronoi_cells.size(), 0, 0);
+  ds_.cmd.bindVertexBuffers(0, *voronoi_verts_[ds_.frame].device.buf, {0});
+  ds_.cmd.draw(6, frame_state_->voronoi_cells.size(), 0, 0);
 
-  cmd_buf.endRenderPass();
+  ds_.cmd.endRenderPass();
 }
 
-void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
-  auto& cmd_buf = *cmd_bufs_[frame];
-
+void Renderer::recordCommandBuffer() {
   vk::CommandBufferBeginInfo begin_info{};
-  std::ignore = cmd_buf.begin(begin_info);
+  std::ignore = ds_.cmd.begin(begin_info);
 
   if (frame_state_->update_voronoi) {
-    updateVoronoiVerts(frame);
-    renderVoronoi(cmd_buf, frame);
+    updateVoronoiVerts();
+    renderVoronoi();
   }
 
   if (frame_state_->update_canvas) {
-    renderCanvas(cmd_buf, frame, drawing_);
+    renderCanvas(drawing_);
   }
 
-  beginRp(cmd_buf, scene_fbo_, 0);
+  beginRp(scene_fbo_, 0);
 
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
-  cmd_buf.bindDescriptorSets(
+  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
+  ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0,
-      global_dl_.sets[frame], nullptr);
+      global_dl_.sets[ds_.frame], nullptr);
 
   // TODO: Sort by material, then by model.
   std::sort(
@@ -1862,7 +1861,7 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
 
     if (curr_material != model->material) {
       curr_material = model->material;
-      cmd_buf.bindDescriptorSets(
+      ds_.cmd.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 1,
           model->material->desc_set, nullptr);
     }
@@ -1870,44 +1869,44 @@ void Renderer::recordCommandBuffer(int frame, uint32_t img_ind) {
     if (curr_model_id != obj.model) {
       curr_model_id = obj.model;
       vk::DeviceSize offsets[] = {0};
-      cmd_buf.bindVertexBuffers(0, *model->vert_buf, offsets);
-      cmd_buf.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
+      ds_.cmd.bindVertexBuffers(0, *model->vert_buf, offsets);
+      ds_.cmd.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
     }
 
     PushData push_data{obj.transform};
-    cmd_buf.pushConstants<PushData>(
+    ds_.cmd.pushConstants<PushData>(
         *scene_pl_.layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
-    cmd_buf.drawIndexed(model->index_count, 1, 0, 0, 0);
+    ds_.cmd.drawIndexed(model->index_count, 1, 0, 0, 0);
   }
 
-  cmd_buf.endRenderPass();
+  ds_.cmd.endRenderPass();
 
-  beginRp(cmd_buf, post_fbo_, 0);
+  beginRp(post_fbo_, 0);
 
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
-  cmd_buf.bindDescriptorSets(
+  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
+  ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
-      post_dl_.sets[frame], nullptr);
+      post_dl_.sets[ds_.frame], nullptr);
 
-  cmd_buf.draw(3, 1, 0, 0);
+  ds_.cmd.draw(3, 1, 0, 0);
 
-  cmd_buf.endRenderPass();
+  ds_.cmd.endRenderPass();
 
-  beginRp(cmd_buf, swap_fbo_, img_ind);
+  beginRp(swap_fbo_, ds_.img_ind);
 
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_pl_.pipeline);
-  cmd_buf.bindDescriptorSets(
+  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_pl_.pipeline);
+  ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *swap_pl_.layout, 0,
-      swap_dl_.sets[frame], nullptr);
+      swap_dl_.sets[ds_.frame], nullptr);
 
-  cmd_buf.draw(3, 1, 0, 0);
+  ds_.cmd.draw(3, 1, 0, 0);
 
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
+  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
 
-  cmd_buf.endRenderPass();
+  ds_.cmd.endRenderPass();
 
-  std::ignore = cmd_buf.end();
+  std::ignore = ds_.cmd.end();
 }
 
 void Renderer::createSyncObjects() {
