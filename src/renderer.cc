@@ -17,6 +17,7 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#include <span>
 #include <vector>
 
 #include "asserts.h"
@@ -1788,32 +1789,37 @@ void Renderer::renderCanvas(const Canvas& canvas) {
   ds_.cmd.endRenderPass();
 }
 
-// TODO: Generalize this for other DynamicBufs.
-void Renderer::updateVoronoiVerts() {
-  auto& vbuf = voronoi_verts_[ds_.frame];
-
-  vk::DeviceSize size = std::min(
-      vbuf.staging.info.range,
-      sizeof(Vertex2d) * frame_state_->voronoi_cells.size());
-  memcpy(vbuf.staging.mapped, frame_state_->voronoi_cells.data(), size);
+template <class T>
+void Renderer::updateDynamicBuf(
+    DynamicBuf& dbuf, std::span<T> data, vk::PipelineStageFlags dst_stage,
+    vk::AccessFlags dst_access) {
+  size_t size = std::min((size_t)dbuf.staging.info.range, data.size_bytes());
+  memcpy(dbuf.staging.mapped, data.data(), size);
 
   vk::BufferCopy copy{
-      .srcOffset = vbuf.staging.info.offset,
-      .dstOffset = vbuf.device.info.offset,
+      .srcOffset = dbuf.staging.info.offset,
+      .dstOffset = dbuf.device.info.offset,
       .size = size,
   };
-  ds_.cmd.copyBuffer(*vbuf.staging.buf, *vbuf.device.buf, copy);
+  ds_.cmd.copyBuffer(*dbuf.staging.buf, *dbuf.device.buf, copy);
 
   vk::BufferMemoryBarrier barrier{
       .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
-      .dstAccessMask = vk::AccessFlagBits::eVertexAttributeRead,
-      .buffer = *vbuf.device.buf,
-      .offset = vbuf.device.info.offset,
+      .dstAccessMask = dst_access,
+      .buffer = *dbuf.device.buf,
+      .offset = dbuf.device.info.offset,
       .size = size,
   };
   ds_.cmd.pipelineBarrier(
-      vk::PipelineStageFlagBits::eTransfer,
-      vk::PipelineStageFlagBits::eVertexInput, {}, nullptr, barrier, nullptr);
+      vk::PipelineStageFlagBits::eTransfer, dst_stage, {}, nullptr, barrier,
+      nullptr);
+}
+
+void Renderer::updateVoronoiVerts() {
+  std::span<Vertex2d> span = frame_state_->voronoi_cells;
+  updateDynamicBuf(
+      voronoi_verts_[ds_.frame], span, vk::PipelineStageFlagBits::eVertexInput,
+      vk::AccessFlagBits::eVertexAttributeRead);
 }
 
 void Renderer::renderVoronoi() {

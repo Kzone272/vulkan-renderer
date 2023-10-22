@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <span>
 #include <vector>
 
 #include "descriptors.h"
@@ -207,6 +208,10 @@ class Renderer {
   uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props);
   DynamicBuf createDynamicBuffer(
       vk::DeviceSize size, vk::BufferUsageFlags usage);
+  template <class T>
+  void updateDynamicBuf(
+      DynamicBuf& dbuf, std::span<T> data, vk::PipelineStageFlags dst_stage,
+      vk::AccessFlags dst_access);
 
   vk::CommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(vk::CommandBuffer cmd_buf);
