@@ -52,10 +52,11 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
   return VK_FALSE;
 }
 
-std::vector<vk::DescriptorBufferInfo*> uboInfos(std::vector<Buffer>& ubos) {
+std::vector<vk::DescriptorBufferInfo*> uboInfos(
+    std::vector<DynamicBuf>& dbufs) {
   std::vector<vk::DescriptorBufferInfo*> infos;
-  for (auto& ubo : ubos) {
-    infos.push_back(&ubo.info);
+  for (auto& dbuf : dbufs) {
+    infos.push_back(&dbuf.device.info);
   }
   return infos;
 }
@@ -176,11 +177,15 @@ void Renderer::updateUboData() {
       data.lights[i] = frame_state_->lights[i];
     }
   }
-  auto& global_ubo = in_flight_.global[ds_.frame];
-  memcpy(global_ubo.mapped, &data, global_ubo.info.range);
+  auto stages = vk::PipelineStageFlagBits::eVertexShader |
+                vk::PipelineStageFlagBits::eFragmentShader;
+  updateDynamicBuf(
+      in_flight_.global[ds_.frame], std::span<GlobalData>(&data, 1), stages,
+      vk::AccessFlagBits::eUniformRead);
 
-  auto& post_ubo = in_flight_.post[ds_.frame];
-  memcpy(post_ubo.mapped, &frame_state_->post, post_ubo.info.range);
+  updateDynamicBuf(
+      in_flight_.post[ds_.frame], std::span<DebugData>(&frame_state_->post, 1),
+      stages, vk::AccessFlagBits::eUniformRead);
 }
 
 void Renderer::drawFrame() {
@@ -208,9 +213,11 @@ void Renderer::drawFrame() {
   // Only reset the fence if we're submitting work.
   device_->resetFences(*in_flight_fences_[ds_.frame]);
 
-  updateUboData();
-
   ds_.cmd.reset();
+  vk::CommandBufferBeginInfo begin_info{};
+  std::ignore = ds_.cmd.begin(begin_info);
+
+  updateUboData();
   recordCommandBuffer();
 
   vk::SubmitInfo submit_info{};
@@ -1496,7 +1503,6 @@ void Renderer::createVertBufs() {
   }
 }
 
-// TODO: Use this for other buffers as well.
 DynamicBuf Renderer::createDynamicBuffer(
     vk::DeviceSize size, vk::BufferUsageFlags usage) {
   DynamicBuf dbuf;
@@ -1506,6 +1512,7 @@ DynamicBuf Renderer::createDynamicBuffer(
           vk::MemoryPropertyFlagBits::eHostCoherent,
       dbuf.staging.buf, dbuf.staging.mem);
   dbuf.staging.info.range = size;
+  dbuf.staging.info.buffer = *dbuf.staging.buf;
 
   dbuf.staging.mapped =
       device_->mapMemory(*dbuf.staging.mem, dbuf.staging.info.offset, size)
@@ -1516,6 +1523,7 @@ DynamicBuf Renderer::createDynamicBuffer(
       vk::MemoryPropertyFlagBits::eDeviceLocal, dbuf.device.buf,
       dbuf.device.mem);
   dbuf.device.info.range = size;
+  dbuf.device.info.buffer = *dbuf.device.buf;
 
   return std::move(dbuf);
 }
@@ -1541,30 +1549,16 @@ void Renderer::createInFlightBuffers() {
   vk::DeviceSize post_size = sizeof(DebugData);
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    in_flight_.global.push_back(createMappedBuf(global_size));
-    in_flight_.post.push_back(createMappedBuf(post_size));
+    in_flight_.global.push_back(createDynamicBuffer(
+        global_size, vk::BufferUsageFlagBits::eUniformBuffer));
+    in_flight_.post.push_back(createDynamicBuffer(
+        post_size, vk::BufferUsageFlagBits::eUniformBuffer));
   }
-}
-
-Buffer Renderer::createMappedBuf(vk::DeviceSize size) {
-  Buffer buf;
-  createBuffer(
-      size, vk::BufferUsageFlagBits::eUniformBuffer,
-      vk::MemoryPropertyFlagBits::eHostVisible |
-          vk::MemoryPropertyFlagBits::eHostCoherent,
-      buf.buf, buf.mem);
-  buf.mapped = device_->mapMemory(*buf.mem, 0, size).value;
-
-  buf.info = vk::DescriptorBufferInfo{
-      .buffer = *buf.buf,
-      .offset = 0,
-      .range = size,
-  };
-  return buf;
 }
 
 // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
 // from the staging_buf to dst_buf.
+// TODO: Reuse createDynamicBuffer() for this.
 void Renderer::stageBuffer(
     vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
     vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem) {
@@ -1583,18 +1577,12 @@ void Renderer::stageBuffer(
   createBuffer(
       size, usage | vk::BufferUsageFlagBits::eTransferDst,
       vk::MemoryPropertyFlagBits::eDeviceLocal, dst_buf, dst_buf_mem);
-  copyBuffer(*staging_buf, *dst_buf, size);
-}
 
-void Renderer::copyBuffer(
-    vk::Buffer src_buf, vk::Buffer dst_buf, vk::DeviceSize size) {
   vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
-
   vk::BufferCopy copy_region{
       .size = size,
   };
-  cmd_buf.copyBuffer(src_buf, dst_buf, copy_region);
-
+  cmd_buf.copyBuffer(*staging_buf, *dst_buf, copy_region);
   endSingleTimeCommands(cmd_buf);
 }
 
@@ -1626,6 +1614,7 @@ void Renderer::endSingleTimeCommands(vk::CommandBuffer cmd_buf) {
   device_->freeCommandBuffers(*cmd_pool_, cmd_buf);
 }
 
+// TODO: return a Buffer.
 void Renderer::createBuffer(
     vk::DeviceSize size, vk::BufferUsageFlags usage,
     vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
@@ -1834,9 +1823,6 @@ void Renderer::renderVoronoi() {
 }
 
 void Renderer::recordCommandBuffer() {
-  vk::CommandBufferBeginInfo begin_info{};
-  std::ignore = ds_.cmd.begin(begin_info);
-
   if (frame_state_->update_voronoi) {
     updateVoronoiVerts();
     renderVoronoi();

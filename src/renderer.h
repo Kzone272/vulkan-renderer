@@ -194,13 +194,11 @@ class Renderer {
   void stageIndices(const std::vector<uint32_t>& indices, Model& model);
 
   void createInFlightBuffers();
-  Buffer createMappedBuf(vk::DeviceSize size);
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
   // from the staging_buf to dst_buf.
   void stageBuffer(
       vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
       vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem);
-  void copyBuffer(vk::Buffer src_buf, vk::Buffer dst_buf, vk::DeviceSize size);
   void createBuffer(
       vk::DeviceSize size, vk::BufferUsageFlags usage,
       vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
@@ -290,8 +288,8 @@ class Renderer {
   } ds_;
 
   struct InFlightState {
-    std::vector<Buffer> global;
-    std::vector<Buffer> post;
+    std::vector<DynamicBuf> global;
+    std::vector<DynamicBuf> post;
   } in_flight_;
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
