@@ -1429,9 +1429,12 @@ Texture* Renderer::loadTexture(std::string path) {
 std::unique_ptr<Model> Renderer::loadMesh(const Mesh& mesh) {
   auto model = std::make_unique<Model>();
 
-  model->index_count = mesh.indices.size();
+  model->vertex_count = mesh.vertices.size();
   stageVertices(mesh.vertices, *model);
-  stageIndices(mesh.indices, *model);
+  if (mesh.indices.size()) {
+    model->index_count = mesh.indices.size();
+    stageIndices(mesh.indices, *model);
+  }
 
   return model;
 }
@@ -1862,14 +1865,20 @@ void Renderer::recordCommandBuffer() {
       curr_model_id = obj.model;
       vk::DeviceSize offsets[] = {0};
       ds_.cmd.bindVertexBuffers(0, *model->vert_buf, offsets);
-      ds_.cmd.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
+      if (model->index_count) {
+        ds_.cmd.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
+      }
     }
 
     PushData push_data{obj.transform};
     ds_.cmd.pushConstants<PushData>(
         *scene_pl_.layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
-    ds_.cmd.drawIndexed(model->index_count, 1, 0, 0, 0);
+    if (model->index_count) {
+      ds_.cmd.drawIndexed(model->index_count, 1, 0, 0, 0);
+    } else {
+      ds_.cmd.draw(model->vertex_count, 1, 0, 0);
+    }
   }
 
   ds_.cmd.endRenderPass();

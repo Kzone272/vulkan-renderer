@@ -99,17 +99,31 @@ Mesh tetrahedron(int steps, bool in) {
   float lift = sqrt(8.f / 9.f);
   vec3 d(0, lift, 0);
 
+  vec3 ad = a - d;
+  vec3 bd = b - d;
+  vec3 cd = c - d;
+  vec3 abdN = glm::normalize(glm::cross(ad, bd));
+  vec3 acdN = glm::normalize(glm::cross(cd, ad));
+  vec3 bcdN = glm::normalize(glm::cross(bd, cd));
+  vec3 abcN = {0, -1, 0};
+
   Mesh tetra;
   vec3 color = {0.1, 0.8, 1};
-  tetra.vertices.insert(
-      tetra.vertices.begin(), {{.pos{a}, .color{color}},
-                               {.pos{b}, .color{color}},
-                               {.pos{c}, .color{color}},
-                               {.pos{d}, .color{color}}});
-  uint32_t ai = 0, bi = 1, ci = 2, di = 3;
 
-  tetra.indices.insert(
-      tetra.indices.end(), {ai, ci, bi, ai, bi, di, bi, ci, di, ci, ai, di});
+  tetra.vertices = {
+      {.pos{a}, .normal{abcN}, .color{color}},
+      {.pos{c}, .normal{abcN}, .color{color}},
+      {.pos{b}, .normal{abcN}, .color{color}},
+      {.pos{a}, .normal{abdN}, .color{color}},
+      {.pos{b}, .normal{abdN}, .color{color}},
+      {.pos{d}, .normal{abdN}, .color{color}},
+      {.pos{b}, .normal{bcdN}, .color{color}},
+      {.pos{c}, .normal{bcdN}, .color{color}},
+      {.pos{d}, .normal{bcdN}, .color{color}},
+      {.pos{c}, .normal{acdN}, .color{color}},
+      {.pos{a}, .normal{acdN}, .color{color}},
+      {.pos{d}, .normal{acdN}, .color{color}},
+  };
 
   iter(tetra, steps, in);
 
@@ -118,36 +132,36 @@ Mesh tetrahedron(int steps, bool in) {
 
 void iter(Mesh& mesh, int steps, bool in) {
   for (int i = 0; i < steps; i++) {
-    ASSERT(mesh.indices.size() % 3 == 0);
-    std::vector<uint32_t> new_indices;
-    for (int j = 0; j < mesh.indices.size(); j += 3) {
-      uint32_t ai = mesh.indices[j];
-      uint32_t bi = mesh.indices[j + 1];
-      uint32_t ci = mesh.indices[j + 2];
-      auto av = mesh.vertices[ai];
-      auto bv = mesh.vertices[bi];
-      auto cv = mesh.vertices[ci];
-      const vec3 a = av.pos;
-      const vec3 b = bv.pos;
-      const vec3 c = cv.pos;
+    ASSERT(mesh.vertices.size() % 3 == 0);
+    std::vector<Vertex> new_verts;
+    for (int j = 0; j < mesh.vertices.size(); j += 3) {
+      auto& av = mesh.vertices[j];
+      auto& bv = mesh.vertices[j + 1];
+      auto& cv = mesh.vertices[j + 2];
+      vec3 a = av.pos;
+      vec3 b = bv.pos;
+      vec3 c = cv.pos;
+      vec3 upN = av.normal;  // ABC should all have the same normal
 
       vec3 d = (b + c) / 2.f;
       vec3 dcol = (bv.color + cv.color) / 2.f;
-      uint32_t di = mesh.vertices.size();
-      mesh.vertices.push_back({.pos{d}, .color{dcol}});
 
       vec3 e = (a + c) / 2.f;
       vec3 ecol = (av.color + cv.color) / 2.f;
-      uint32_t ei = mesh.vertices.size();
-      mesh.vertices.push_back({.pos{e}, .color{ecol}});
 
       vec3 f = (a + b) / 2.f;
       vec3 fcol = (av.color + bv.color) / 2.f;
-      uint32_t fi = mesh.vertices.size();
-      mesh.vertices.push_back({.pos{f}, .color{fcol}});
 
-      new_indices.insert(
-          new_indices.end(), {ai, fi, ei, fi, bi, di, di, ci, ei});
+      new_verts.insert(
+          new_verts.end(), {av,
+                            {.pos{f}, .normal{upN}, .color{fcol}},
+                            {.pos{e}, .normal{upN}, .color{ecol}},
+                            {.pos{f}, .normal{upN}, .color{fcol}},
+                            bv,
+                            {.pos{d}, .normal{upN}, .color{dcol}},
+                            {.pos{d}, .normal{upN}, .color{dcol}},
+                            cv,
+                            {.pos{e}, .normal{upN}, .color{ecol}}});
 
       // point on abc plane:
       vec3 gprime = (a + b + c) / 3.f;
@@ -166,12 +180,24 @@ void iter(Mesh& mesh, int steps, bool in) {
       gcol.r *= 0.5;
       gcol.g *= 0.5;
 
-      uint32_t gi = mesh.vertices.size();
-      mesh.vertices.push_back({.pos{g}, .color{gcol}});
+      vec3 dg = d - g;
+      vec3 eg = e - g;
+      vec3 fg = f - g;
+      vec3 degN = glm::normalize(glm::cross(dg, eg));
+      vec3 dfgN = glm::normalize(glm::cross(fg, dg));
+      vec3 efgN = glm::normalize(glm::cross(eg, fg));
 
-      new_indices.insert(
-          new_indices.end(), {ei, fi, gi, fi, di, gi, di, ei, gi});
+      new_verts.insert(
+          new_verts.end(), {{.pos{e}, .normal{efgN}, .color{ecol}},
+                            {.pos{f}, .normal{efgN}, .color{fcol}},
+                            {.pos{g}, .normal{efgN}, .color{gcol}},
+                            {.pos{f}, .normal{dfgN}, .color{fcol}},
+                            {.pos{d}, .normal{dfgN}, .color{dcol}},
+                            {.pos{g}, .normal{dfgN}, .color{gcol}},
+                            {.pos{d}, .normal{degN}, .color{dcol}},
+                            {.pos{e}, .normal{degN}, .color{ecol}},
+                            {.pos{g}, .normal{degN}, .color{gcol}}});
     }
-    mesh.indices = std::move(new_indices);
+    mesh.vertices = std::move(new_verts);
   }
 }
