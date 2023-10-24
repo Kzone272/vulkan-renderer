@@ -169,7 +169,7 @@ void iter(Mesh& mesh, int steps, bool in) {
       vec3 ac = c - a;
       vec3 normal = glm::normalize(glm::cross(ab, ac));
 
-      float lift = 1.f / 4.f;
+      float lift = 0.23;
       if (in) {
         lift *= -1;
       }
