@@ -1,12 +1,12 @@
 #version 450
 
+#include "structs.glsl"
+
 layout(location = 0) in vec2 fragUv;
 
-// TODO: Move this into shared glsl code.
-layout(set = 0, binding = 0) uniform DebugData {
-  float f1, f2, f3, f4;
-  int i1, i2, i3, i4;
-} debug;
+layout(set = 0, binding = 0) uniform DebugBlock {
+  DebugData debug;
+};
 
 layout(location = 0) out vec4 outColor;
 

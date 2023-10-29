@@ -1,18 +1,10 @@
 #version 450
 
-struct Light {
-  uint type;
-  vec3 vec;
-  vec3 color;
-  float falloff;
-};
+#include "structs.glsl"
 
-layout(set = 0, binding = 0) uniform Global {
-  mat4 view;
-  mat4 proj;
-  mat4 inv_proj;
-  Light lights[8];
-} global;
+layout(set = 0, binding = 0) uniform GlobalBlock {
+  GlobalData global;
+};
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;

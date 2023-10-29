@@ -1,25 +1,15 @@
 #version 450
 
-struct Light {
-  uint type;
-  vec3 vec;
-  vec3 color;
-  float falloff;
+#include "structs.glsl"
+#include "maths.glsl"
+
+layout(set = 0, binding = 0) uniform GlobalBlock {
+  GlobalData global;
 };
-const uint kDirectionalLightType = 1;
-const uint kPointLightType = 2;
-
-layout(set = 0, binding = 0) uniform Global {
-  mat4 view;
-  mat4 proj;
-  mat4 inv_proj;
-  Light lights[8];
-} global;
-
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
-layout(set = 1, binding = 1) uniform Material {
-  vec3 color;
-} material;
+layout(set = 1, binding = 1) uniform MaterialBlock {
+  Material material;
+};
 
 layout(location = 0) in vec3 fragNormal;
 layout(location = 1) in vec3 fragColor;
@@ -28,12 +18,6 @@ layout(location = 3) in vec3 fragPos;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormalDepth;
-
-
-// TODO: Put this in some shared place?
-float map(float value, float min1, float max1, float min2, float max2) {
-  return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
-}
 
 
 float dirLight(vec3 l, vec3 norm) {
