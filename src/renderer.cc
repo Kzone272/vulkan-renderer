@@ -166,6 +166,7 @@ void Renderer::updateUboData() {
   GlobalData data;
   data.view = frame_state_->view;
   data.proj = frame_state_->proj;
+  data.inv_proj = glm::inverse(frame_state_->proj);
 
   const size_t max_lights = std::size(data.lights);
   // Add the first max_lights lights to the frame UBO, and set the rest to

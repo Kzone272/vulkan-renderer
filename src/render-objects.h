@@ -20,6 +20,7 @@ struct Light {
 struct GlobalData {
   alignas(16) mat4 view;
   alignas(16) mat4 proj;
+  alignas(16) mat4 inv_proj;
   alignas(16) Light lights[8];
 };
 

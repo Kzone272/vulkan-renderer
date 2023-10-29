@@ -1,6 +1,8 @@
 Things I Should Do Soon:
 
 Short-term ideas:
+- Setup glslc to allow including shared shader code
+  - for common math functions and struct definitions
 - Add gooch shading. As Material in scene pass? Maybe entire shader?
 - Add shadow mapping for some lights.
 - Improve outline filter AA by rendering edges with MSAA.

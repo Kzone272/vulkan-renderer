@@ -7,6 +7,7 @@ layout(origin_upper_left) in vec4 gl_FragCoord;
 layout(set = 0, binding = 0) uniform Global {
   mat4 view;
   mat4 proj;
+  mat4 inv_proj;
 } global;
 layout(set = 0, binding = 1) uniform DebugData {
   float f1, f2, f3, f4;
@@ -17,11 +18,9 @@ layout(set = 0, binding = 3) uniform sampler2D normDepthSampler;
 
 layout(location = 0) out vec4 outColor;
 
-mat4 ctov = inverse(global.proj);
-
 vec4 getViewPos(vec3 cpos) {
   vec4 ndc = vec4(cpos, 1);
-  vec4 vpos = ctov * ndc;
+  vec4 vpos = global.inv_proj * ndc;
   vpos /= vpos.w;
   return vpos;
 }
