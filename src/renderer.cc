@@ -88,9 +88,15 @@ void Renderer::resizeWindow(uint32_t width, uint32_t height) {
   height_ = height;
 }
 
-void Renderer::useModel(ModelId model_id, const ModelInfo& model_info) {
+void Renderer::useModel(
+    ModelId model_id, const std::string& obj_path, MaterialId mat_id) {
   if (!loaded_models_.contains(model_id)) {
-    auto model = loadModel(model_info);
+    Mesh mesh = loadObj(obj_path);
+    auto model = loadMesh(mesh);
+
+    ASSERT(mat_id < loaded_materials_.size());
+    model->material = loaded_materials_[mat_id].get();
+
     loaded_models_.insert({model_id, std::move(model)});
   }
 }
@@ -104,6 +110,14 @@ void Renderer::useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id) {
   auto model = loadMesh(mesh);
   model->material = loaded_materials_[mat_id].get();
   loaded_models_[model_id] = std::move(model);
+}
+
+void Renderer::setModelMaterial(ModelId model_id, MaterialId mat_id) {
+  ASSERT(mat_id < loaded_materials_.size());
+  auto model = loaded_models_.find(model_id);
+  ASSERT(model != loaded_models_.end());
+
+  model->second->material = loaded_materials_[mat_id].get();
 }
 
 // TODO: Return a TextureId instead.
@@ -1365,23 +1379,6 @@ void Renderer::createFbos() {
   initFbo(swap_fbo_);
 }
 
-std::unique_ptr<Model> Renderer::loadModel(const ModelInfo& model_info) {
-  auto model = std::make_unique<Model>();
-
-  MaterialInfo mat_info{
-      .diffuse_path = model_info.texture_path,
-  };
-  model->material = loadMaterial(mat_info);
-
-  Mesh mesh = loadObj(model_info.obj_path);
-
-  model->index_count = mesh.indices.size();
-  stageVertices(mesh.vertices, *model);
-  stageIndices(mesh.indices, *model);
-
-  return model;
-}
-
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
   auto material = std::make_unique<Material>();
   auto* ptr = material.get();
@@ -1396,13 +1393,13 @@ Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
   }
 
   stageBuffer(
-      Material::size, (void*)&mat_info.ubo,
+      sizeof(MaterialData), (void*)&mat_info.data,
       vk::BufferUsageFlagBits::eUniformBuffer, material->ubo.buf,
       material->ubo.mem);
   material->ubo.info = vk::DescriptorBufferInfo{
       .buffer = *material->ubo.buf,
       .offset = 0,
-      .range = Material::size,
+      .range = sizeof(MaterialData),
   };
 
   material->desc_set =

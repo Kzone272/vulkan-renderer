@@ -57,9 +57,6 @@ struct Material {
   Texture* diffuse;
   Buffer ubo;
   vk::DescriptorSet desc_set;
-
-  constexpr static vk::DeviceSize size =
-      sizeof(MaterialInfo::UniformBufferObject);
 };
 
 struct Model {
@@ -100,9 +97,12 @@ class Renderer {
   void drawFrame(FrameState* frame_state);
   void cleanup();
   void resizeWindow(uint32_t width, uint32_t height);
-  void useModel(ModelId model_id, const ModelInfo& model_info);
   MaterialId useMaterial(const MaterialInfo& mat_info);
+  // TODO: Delete this function and move obj loading out of the renderer.
+  void useModel(
+      ModelId model_id, const std::string& obj_path, MaterialId mat_id);
   void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id);
+  void setModelMaterial(ModelId model_id, MaterialId material_id);
   // TODO: Return a TextureId instead.
   Texture* getDrawingTexture();
   void imguiNewFrame();
@@ -185,7 +185,6 @@ class Renderer {
       vk::Image img, int32_t width, int32_t height, vk::Format format,
       uint32_t mip_levels);
 
-  std::unique_ptr<Model> loadModel(const ModelInfo& model_info);
   Material* loadMaterial(const MaterialInfo& mat_info);
   Texture* loadTexture(std::string path);
   std::unique_ptr<Model> loadMesh(const Mesh& mesh);

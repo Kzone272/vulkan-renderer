@@ -1,6 +1,7 @@
 #version 450
 
 #include "structs.glsl"
+#include "maths.glsl"
 
 layout(location = 0) in vec2 fragUv;
 layout(origin_upper_left) in vec4 gl_FragCoord;
@@ -42,7 +43,7 @@ void main() {
   
   vec3 color = scene.rgb;
   if (desat) {
-    float grey = dot(scene.rgb, vec3(.21, .72, .07));
+    float grey = greyscale(scene.rgb);
     color = mix(vec3(grey), scene.rgb, debug.f1);
   } else if (debug.i1 == 1) {
     color = vec3(norm.x, norm.y, -norm.z);

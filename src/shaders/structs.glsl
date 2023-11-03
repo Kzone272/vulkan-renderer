@@ -1,3 +1,5 @@
+// Common structs used across shaders.
+
 struct Light {
   uint type;
   vec3 vec;
@@ -19,6 +21,10 @@ struct DebugData {
   int i1, i2, i3, i4;
 };
 
-struct Material {
-  vec3 color;
+struct MaterialData {
+  uint type;
+  vec3 color1;
+  vec3 color2;
 };
+const uint kPhongMaterial = 0;
+const uint kGoochMaterial = 1;

@@ -67,14 +67,22 @@ struct ModelInfo {
   mat4 model_transform{1};
 };
 
+struct MaterialData {
+  enum class Type {
+    Phong,
+    Gooch,
+  };
+  Type type = Type::Phong;
+  alignas(16) vec3 color1 = {1, 1, 1};
+  alignas(16) vec3 color2 = {0, 0, 0};
+};
+
 struct Texture;
 struct MaterialInfo {
   // TODO: Make this a TextureId
   Texture* diffuse_texture;
   std::optional<std::string> diffuse_path;
-  struct UniformBufferObject {
-    vec3 color = {1, 1, 1};
-  } ubo;
+  MaterialData data;
 };
 typedef uint32_t MaterialId;
 

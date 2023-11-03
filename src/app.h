@@ -27,6 +27,7 @@
 #include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
+#include "vec-maths.h"
 
 namespace {
 
@@ -125,6 +126,7 @@ class HelloTriangleApp {
     auto* room = world_.addChild(std::make_unique<Object>(ModelId::Viking));
     room->setPos(vec3(300, 1, 300));
 
+    loadMaterials();
     loadModels();
     loadPrimitives();
 
@@ -145,6 +147,28 @@ class HelloTriangleApp {
     setupLights();
   }
 
+  void loadMaterials() {
+    auto cube_mat = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
+    auto bone_mat = renderer_->useMaterial({.data{.color1{0.9, 0.2, 0.1}}});
+    auto control_mat = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
+    auto floor_mat = renderer_->useMaterial({
+        .diffuse_texture = renderer_->getDrawingTexture(),
+        // .diffuse_path = "assets/textures/viking_room.png",
+        .data{.color1{0.2, 0.2, 0.2}},
+    });
+    gooch_mat_ = renderer_->useMaterial({.data{
+        .type = MaterialData::Type::Gooch,
+        .color1{fromHex(0xff8d83)},
+        .color2{fromHex(0x8e9ce2)},
+    }});
+
+    default_mats_.insert({ModelId::Cube, cube_mat});
+    default_mats_.insert({ModelId::Bone, bone_mat});
+    default_mats_.insert({ModelId::Control, control_mat});
+    default_mats_.insert({ModelId::Floor, floor_mat});
+    default_mats_.insert({ModelId::Tetra, cube_mat});
+  }
+
   void loadModels() {
     auto models = world_.getModels();
     std::set<ModelId> model_set(models.begin(), models.end());
@@ -156,29 +180,36 @@ class HelloTriangleApp {
       if (it == model_registry.end()) {
         continue;
       }
-      renderer_->useModel(id, it->second);
+      auto& info = it->second;
+      auto mat_id = renderer_->useMaterial({.diffuse_path = info.texture_path});
+      renderer_->useModel(id, info.obj_path, mat_id);
+      default_mats_.insert({id, mat_id});
     }
   }
 
-  void loadPrimitives() {
-    MaterialId cube_mat = renderer_->useMaterial({.ubo{.color{0, 0.8, 0.8}}});
-    MaterialId bone_mat = renderer_->useMaterial({.ubo{.color{0.9, 0.2, 0.1}}});
-    MaterialId control_mat =
-        renderer_->useMaterial({.ubo{.color{0.1, 1, 0.2}}});
-    MaterialId floor_mat = renderer_->useMaterial({
-        .diffuse_texture = renderer_->getDrawingTexture(),
-        // .diffuse_path = "assets/textures/viking_room.png",
-        .ubo{.color{0.2, 0.2, 0.2}},
-    });
-    MaterialId white_mat = renderer_->useMaterial({});
+  void useMesh(ModelId model, const Mesh& mesh) {
+    renderer_->useMesh(model, mesh, default_mats_[model]);
+  }
 
-    renderer_->useMesh(ModelId::Cube, makeCube(), cube_mat);
-    renderer_->useMesh(ModelId::Bone, makeCube(), bone_mat);
-    renderer_->useMesh(ModelId::Control, makeCube(), control_mat);
-    renderer_->useMesh(ModelId::Floor, makePlane(10000, 10000), floor_mat);
-    renderer_->useMesh(
-        ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in),
-        white_mat);
+  void loadPrimitives() {
+    auto cube = makeCube();
+    useMesh(ModelId::Cube, cube);
+    useMesh(ModelId::Bone, cube);
+    useMesh(ModelId::Control, cube);
+    useMesh(ModelId::Floor, makePlane(10000, 10000));
+    useMesh(
+        ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
+  }
+
+  void setGooch(bool on) {
+    std::vector<ModelId> gooch_models = {
+        ModelId::Cube,  ModelId::Bone, ModelId::Control,
+        ModelId::Tetra, ModelId::Pony, ModelId::Viking,
+    };
+    for (auto& model : gooch_models) {
+      renderer_->setModelMaterial(
+          model, on ? gooch_mat_ : default_mats_[model]);
+    }
   }
 
   void remakeGrid(int grid) {
@@ -573,6 +604,9 @@ class HelloTriangleApp {
 
     ImGui::Begin("Misc Controls");
 
+    if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
+      setGooch(ui_.gooch);
+    }
     ImGui::BeginTabBar("Misc Tabs");
     if (ImGui::BeginTabItem("Post Fx")) {
       ImGui::SliderInt("i1", (int*)&frame_state_.post.i1.i, 0, 4);
@@ -766,6 +800,7 @@ class HelloTriangleApp {
 
   struct UiState {
     std::string fps;
+    bool gooch = false;
   } ui_;
 
   struct AnimationState {
@@ -787,6 +822,9 @@ class HelloTriangleApp {
   Skelly skelly_;
   int move_preset_ = 0;
   int size_preset_ = 0;
+
+  std::map<ModelId, MaterialId> default_mats_;
+  MaterialId gooch_mat_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
