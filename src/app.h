@@ -18,6 +18,7 @@
 
 #include "animation.h"
 #include "asserts.h"
+#include "assets.h"
 #include "defines.h"
 #include "glm-include.h"
 #include "input.h"
@@ -182,7 +183,8 @@ class HelloTriangleApp {
       }
       auto& info = it->second;
       auto mat_id = renderer_->useMaterial({.diffuse_path = info.texture_path});
-      renderer_->useModel(id, info.obj_path, mat_id);
+      Mesh mesh = loadObj(info.obj_path);
+      renderer_->useMesh(id, mesh, mat_id);
       default_mats_.insert({id, mat_id});
     }
   }

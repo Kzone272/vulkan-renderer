@@ -7,8 +7,6 @@
 #include <SDL_image.h>
 #include <SDL_vulkan.h>
 #include <imgui/backends/imgui_impl_vulkan.h>
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
 
 #include <algorithm>
 #include <array>
@@ -86,19 +84,6 @@ void Renderer::resizeWindow(uint32_t width, uint32_t height) {
   window_resized_ = true;
   width_ = width;
   height_ = height;
-}
-
-void Renderer::useModel(
-    ModelId model_id, const std::string& obj_path, MaterialId mat_id) {
-  if (!loaded_models_.contains(model_id)) {
-    Mesh mesh = loadObj(obj_path);
-    auto model = loadMesh(mesh);
-
-    ASSERT(mat_id < loaded_materials_.size());
-    model->material = loaded_materials_[mat_id].get();
-
-    loaded_models_.insert({model_id, std::move(model)});
-  }
 }
 
 MaterialId Renderer::useMaterial(const MaterialInfo& mat_info) {
@@ -1448,51 +1433,6 @@ Texture* Renderer::getColorTexture(uint32_t color) {
   color_textures_.emplace(color, texture);
 
   return texture;
-}
-
-Mesh Renderer::loadObj(std::string obj_path) {
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-  std::string warn;
-  std::string err;
-  ASSERT(tinyobj::LoadObj(
-      &attrib, &shapes, &materials, &warn, &err, obj_path.c_str()));
-
-  Mesh mesh;
-  std::unordered_map<Vertex, uint32_t> uniq_verts;
-  for (const auto& shape : shapes) {
-    for (const auto& index : shape.mesh.indices) {
-      Vertex vert{};
-      vert.pos = {
-          attrib.vertices[3 * index.vertex_index],
-          attrib.vertices[3 * index.vertex_index + 1],
-          attrib.vertices[3 * index.vertex_index + 2],
-      };
-      vert.uv = {
-          attrib.texcoords[2 * index.texcoord_index],
-          1.f - attrib.texcoords[2 * index.texcoord_index + 1],  // Flip v
-      };
-      vert.normal = {
-          attrib.normals[3 * index.normal_index],
-          attrib.normals[3 * index.normal_index + 1],
-          attrib.normals[3 * index.normal_index + 2],
-      };
-
-      auto it = uniq_verts.find(vert);
-      if (it == uniq_verts.end()) {
-        it = uniq_verts.insert({vert, static_cast<uint32_t>(uniq_verts.size())})
-                 .first;
-        mesh.vertices.push_back(vert);
-      }
-      mesh.indices.push_back(it->second);
-    }
-  }
-  printf(
-      "loaded %zd vertices, %zd indices\n", mesh.vertices.size(),
-      mesh.indices.size());
-
-  return std::move(mesh);
 }
 
 void Renderer::createVertBufs() {

@@ -98,9 +98,6 @@ class Renderer {
   void cleanup();
   void resizeWindow(uint32_t width, uint32_t height);
   MaterialId useMaterial(const MaterialInfo& mat_info);
-  // TODO: Delete this function and move obj loading out of the renderer.
-  void useModel(
-      ModelId model_id, const std::string& obj_path, MaterialId mat_id);
   void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id);
   void setModelMaterial(ModelId model_id, MaterialId material_id);
   // TODO: Return a TextureId instead.
@@ -189,7 +186,6 @@ class Renderer {
   Texture* loadTexture(std::string path);
   std::unique_ptr<Model> loadMesh(const Mesh& mesh);
   Texture* getColorTexture(uint32_t color);
-  Mesh loadObj(std::string obj_path);
   void stageVertices(const std::vector<Vertex>& vertices, Model& model);
   void stageIndices(const std::vector<uint32_t>& indices, Model& model);
 
