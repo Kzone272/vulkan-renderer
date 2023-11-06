@@ -590,7 +590,7 @@ class HelloTriangleApp {
   void flattenObjectTree() {
     frame_state_.objects.clear();
     mat4 identity(1);
-    world_.getRenderObjects(identity, frame_state_.objects);
+    world_.getSceneObjects(identity, frame_state_.objects);
   }
 
   void updateImgui() {

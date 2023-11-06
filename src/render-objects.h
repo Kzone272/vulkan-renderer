@@ -86,7 +86,7 @@ struct MaterialInfo {
 };
 typedef uint32_t MaterialId;
 
-struct RenderObject {
+struct SceneObject {
   ModelId model;
   mat4 transform;
 };
@@ -98,7 +98,7 @@ struct Vertex2d {
 
 struct FrameState {
   uint64_t frame_num = 0;
-  std::vector<RenderObject> objects;
+  std::vector<SceneObject> objects;
   std::vector<Light> lights;
   mat4 model;
   mat4 view;

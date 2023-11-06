@@ -219,6 +219,9 @@ class Renderer {
   void renderCanvas(const Canvas& canvas);
   void updateVoronoiVerts();
   void renderVoronoi();
+  void renderScene();
+  void renderPost();
+  void renderSwap();
 
   void recordCommandBuffer();
   void createSyncObjects();

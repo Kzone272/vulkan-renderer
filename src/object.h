@@ -178,7 +178,7 @@ class Object {
     owned_children_.clear();
   }
 
-  void getRenderObjects(const mat4& parent, std::vector<RenderObject>& objs) {
+  void getSceneObjects(const mat4& parent, std::vector<SceneObject>& objs) {
     mat4 transform = parent * getTransform();
     if (model_ != ModelId::None) {
       objs.push_back({
@@ -187,7 +187,7 @@ class Object {
       });
     }
     for (auto& child : children_) {
-      child->getRenderObjects(transform, objs);
+      child->getSceneObjects(transform, objs);
     }
   }
 

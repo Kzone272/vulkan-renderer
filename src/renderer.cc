@@ -1763,16 +1763,7 @@ void Renderer::renderVoronoi() {
   ds_.cmd.endRenderPass();
 }
 
-void Renderer::recordCommandBuffer() {
-  if (frame_state_->update_voronoi) {
-    updateVoronoiVerts();
-    renderVoronoi();
-  }
-
-  if (frame_state_->update_canvas) {
-    renderCanvas(drawing_);
-  }
-
+void Renderer::renderScene() {
   beginRp(scene_fbo_, 0);
 
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
@@ -1820,30 +1811,45 @@ void Renderer::recordCommandBuffer() {
   }
 
   ds_.cmd.endRenderPass();
+}
 
+void Renderer::renderPost() {
   beginRp(post_fbo_, 0);
 
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
   ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
       post_dl_.sets[ds_.frame], nullptr);
-
   ds_.cmd.draw(3, 1, 0, 0);
 
   ds_.cmd.endRenderPass();
+}
 
+void Renderer::renderSwap() {
   beginRp(swap_fbo_, ds_.img_ind);
 
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_pl_.pipeline);
   ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *swap_pl_.layout, 0,
       swap_dl_.sets[ds_.frame], nullptr);
-
   ds_.cmd.draw(3, 1, 0, 0);
 
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
 
   ds_.cmd.endRenderPass();
+}
+
+void Renderer::recordCommandBuffer() {
+  if (frame_state_->update_voronoi) {
+    updateVoronoiVerts();
+    renderVoronoi();
+  }
+  if (frame_state_->update_canvas) {
+    renderCanvas(drawing_);
+  }
+  renderScene();
+  renderPost();
+  renderSwap();
 
   std::ignore = ds_.cmd.end();
 }
