@@ -12,8 +12,8 @@ layout(set = 0, binding = 0) uniform GlobalBlock {
 layout(set = 0, binding = 1) uniform DebugBlock {
   DebugData debug;
 };
-layout(set = 0, binding = 2) uniform sampler2D sceneSampler;
-layout(set = 0, binding = 3) uniform sampler2D normDepthSampler;
+layout(set = 1, binding = 0) uniform sampler2D sceneSampler;
+layout(set = 1, binding = 1) uniform sampler2D normDepthSampler;
 
 layout(location = 0) out vec4 outColor;
 

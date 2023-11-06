@@ -34,7 +34,7 @@ struct Fbo {
   // Outputs
   std::vector<Texture> colors;
   std::vector<Texture> resolves;
-  std::vector<vk::DescriptorImageInfo> outputs;
+  DescLayout output_set;
   Texture depth;
   vk::UniqueRenderPass rp;
   std::vector<vk::ClearValue> clears;
@@ -159,7 +159,6 @@ class Renderer {
       vk::FormatFeatureFlags features);
 
   void createFbos();
-  void createDescriptorSetLayouts();
   vk::UniqueShaderModule createShaderModule(std::string filename);
   void createShaders();
   void createGraphicsPipelines();
@@ -212,8 +211,7 @@ class Renderer {
 
   void createDescriptorPool();
   void createImguiDescriptorPool();
-  void createInFlightDescSets();
-  void updateResizedDescSets();
+  void createDescSets();
 
   void beginRp(const Fbo& fbo, int fb_ind);
   void renderCanvas(const Canvas& canvas);
@@ -252,9 +250,6 @@ class Renderer {
   vk::Format swapchain_format_;
   vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
-  Fbo scene_fbo_;
-  Fbo post_fbo_;
-  Fbo swap_fbo_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
   vk::UniqueShaderModule scene_vert_;
@@ -265,6 +260,9 @@ class Renderer {
   vk::UniqueShaderModule sample_frag_;
   vk::UniqueShaderModule voronoi_vert_;
   vk::UniqueShaderModule voronoi_frag_;
+  Fbo scene_fbo_;
+  Fbo post_fbo_;
+  Fbo swap_fbo_;
   Pipeline scene_pl_;
   Pipeline post_pl_;
   Pipeline swap_pl_;
@@ -313,13 +311,10 @@ class Renderer {
   DescLayout post_dl_{
       .binds =
           {{.type = vk::DescriptorType::eUniformBuffer},
-           {.type = vk::DescriptorType::eUniformBuffer},
-           {.type = vk::DescriptorType::eCombinedImageSampler},
-           {.type = vk::DescriptorType::eCombinedImageSampler}},
+           {.type = vk::DescriptorType::eUniformBuffer}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
-  // Bound in swap render pass
-  DescLayout swap_dl_{
+  DescLayout sampler_dl_{
       .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };

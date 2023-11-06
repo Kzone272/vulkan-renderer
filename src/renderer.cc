@@ -64,6 +64,7 @@ std::vector<vk::DescriptorBufferInfo*> uboInfos(
 void Renderer::init(FrameState* frame_state) {
   frame_state_ = frame_state;
   initVulkan();
+  initSdlImage();
   initImgui();
 }
 
@@ -122,15 +123,13 @@ void Renderer::initVulkan() {
   createCommandBuffers();
   createSwapchain();
   createSamplers();
-  createFbos();
-  createDescriptorSetLayouts();
-  createShaders();
-  createGraphicsPipelines();
   createInFlightBuffers();
-  initSdlImage();
   createDescriptorPool();
   createImguiDescriptorPool();
-  createInFlightDescSets();
+  createDescSets();
+  createFbos();
+  createShaders();
+  createGraphicsPipelines();
   createSyncObjects();
 
   createDrawingCanvas();
@@ -627,13 +626,6 @@ vk::UniqueImageView Renderer::createImageView(
   return device_->createImageViewUnique(ci).value;
 }
 
-void Renderer::createDescriptorSetLayouts() {
-  global_dl_.init(*device_);
-  post_dl_.init(*device_);
-  material_dl_.init(*device_);
-  swap_dl_.init(*device_);
-}
-
 void Renderer::createShaders() {
   scene_vert_ = createShaderModule("shaders/shader.vert.spv");
   scene_frag_ = createShaderModule("shaders/shader.frag.spv");
@@ -674,7 +666,7 @@ void Renderer::createGraphicsPipelines() {
       {
           .vert_shader = *fullscreen_vert_,
           .frag_shader = *post_frag_,
-          .desc_layouts = {*post_dl_.layout},
+          .desc_layouts = {*post_dl_.layout, *scene_fbo_.output_set.layout},
           .vert_in = {},
           .cull_mode = vk::CullModeFlagBits::eBack,
       });
@@ -684,7 +676,7 @@ void Renderer::createGraphicsPipelines() {
       {
           .vert_shader = *fullscreen_vert_,
           .frag_shader = *sample_frag_,
-          .desc_layouts = {*swap_dl_.layout},
+          .desc_layouts = {*sampler_dl_.layout},
           .vert_in = {},
           .cull_mode = vk::CullModeFlagBits::eBack,
       });
@@ -700,6 +692,8 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
 }
 
 void Renderer::initFbo(Fbo& fbo) {
+  std::vector<vk::DescriptorImageInfo> infos;
+
   for (auto& format : fbo.color_fmts) {
     Texture color{
         .size = fbo.size,
@@ -714,7 +708,7 @@ void Renderer::initFbo(Fbo& fbo) {
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor);
     if (!fbo.resolve) {
-      fbo.outputs.push_back(color.info);
+      infos.push_back(color.info);
     }
     fbo.colors.push_back(std::move(color));
 
@@ -730,7 +724,7 @@ void Renderer::initFbo(Fbo& fbo) {
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
           vk::ImageAspectFlagBits::eColor);
-      fbo.outputs.push_back(resolve.info);
+      infos.push_back(resolve.info);
       fbo.resolves.push_back(std::move(resolve));
     }
   }
@@ -747,6 +741,21 @@ void Renderer::initFbo(Fbo& fbo) {
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth);
   }
+
+  fbo.output_set = {
+      .binds =
+          {infos.size(),
+           Binding{.type = vk::DescriptorType::eCombinedImageSampler}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+  fbo.output_set.init(*device_);
+  fbo.output_set.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+
+  std::vector<vk::WriteDescriptorSet> writes;
+  for (int i = 0; i < infos.size(); i++) {
+    fbo.output_set.updateSamplerBind(i, &infos[i], writes);
+  }
+  device_->updateDescriptorSets(writes, nullptr);
 
   vk::ClearValue color_clear{{0.f, 0.f, 0.f, 1.f}};
   vk::ClearValue depth_clear{{1.f, 0}};
@@ -1346,16 +1355,16 @@ void Renderer::createFbos() {
   };
   initFbo(scene_fbo_);
 
-  std::vector<vk::ImageView> swap_views;
-  for (auto& view : swapchain_views_) {
-    swap_views.push_back(*view);
-  }
   post_fbo_ = {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_},
   };
   initFbo(post_fbo_);
 
+  std::vector<vk::ImageView> swap_views;
+  for (auto& view : swapchain_views_) {
+    swap_views.push_back(*view);
+  }
   swap_fbo_ = {
       .size = swapchain_extent_,
       .swap = true,
@@ -1640,27 +1649,19 @@ void Renderer::createImguiDescriptorPool() {
   imgui_desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
 }
 
-void Renderer::createInFlightDescSets() {
+void Renderer::createDescSets() {
+  global_dl_.init(*device_);
+  post_dl_.init(*device_);
+  material_dl_.init(*device_);  // Sets allocated per material.
+  sampler_dl_.init(*device_);   // Doesn't need sets allocated.
+
   global_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
   post_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
-  swap_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
 
   std::vector<vk::WriteDescriptorSet> writes;
   global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
   post_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
   post_dl_.updateUboBind(1, uboInfos(in_flight_.post), writes);
-  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[0], writes);
-  post_dl_.updateSamplerBind(3, &scene_fbo_.outputs[1], writes);
-  swap_dl_.updateSamplerBind(0, &post_fbo_.outputs[0], writes);
-
-  device_->updateDescriptorSets(writes, nullptr);
-}
-
-void Renderer::updateResizedDescSets() {
-  std::vector<vk::WriteDescriptorSet> writes;
-  post_dl_.updateSamplerBind(2, &scene_fbo_.outputs[0], writes);
-  post_dl_.updateSamplerBind(3, &scene_fbo_.outputs[1], writes);
-  swap_dl_.updateSamplerBind(0, &post_fbo_.outputs[0], writes);
 
   device_->updateDescriptorSets(writes, nullptr);
 }
@@ -1820,6 +1821,9 @@ void Renderer::renderPost() {
   ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
       post_dl_.sets[ds_.frame], nullptr);
+  ds_.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 1,
+      scene_fbo_.output_set.sets[ds_.frame], nullptr);
   ds_.cmd.draw(3, 1, 0, 0);
 
   ds_.cmd.endRenderPass();
@@ -1831,7 +1835,7 @@ void Renderer::renderSwap() {
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_pl_.pipeline);
   ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *swap_pl_.layout, 0,
-      swap_dl_.sets[ds_.frame], nullptr);
+      post_fbo_.output_set.sets[ds_.frame], nullptr);
   ds_.cmd.draw(3, 1, 0, 0);
 
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
@@ -1875,7 +1879,6 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
   createFbos();
-  updateResizedDescSets();
 
   window_resized_ = false;
 }
