@@ -5,22 +5,10 @@
 #include <vector>
 
 #include "descriptors.h"
+#include "images.h"
 #include "pipelines.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
-
-struct Texture {
-  // Inputs
-  vk::Extent2D size;
-  vk::Format format;
-  uint32_t mip_levels = 1;
-  vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
-  // Outputs
-  vk::UniqueImage image;
-  vk::UniqueDeviceMemory image_mem;
-  vk::UniqueImageView image_view;
-  vk::DescriptorImageInfo info;
-};
 
 struct Fbo {
   // Inputs
@@ -89,6 +77,14 @@ struct Canvas {
   std::vector<Pipe> pipes;
 };
 
+// struct Pass {
+//   Fbo fbo;
+//   std::vector<DescLayout> los;
+//   std::vector<Pipeline> pls;
+
+//   void init()
+// };
+
 struct SDL_Window;
 struct SDL_Surface;
 
@@ -150,12 +146,6 @@ class Renderer {
   vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& caps);
   void createSwapchain();
 
-  void createImage(
-      Texture& texture, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-      vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect);
-  vk::UniqueImageView createImageView(
-      vk::Image img, vk::Format format, uint32_t mip_levels,
-      vk::ImageAspectFlags aspect_flags);
   void createCommandPool();
   void createCommandBuffers();
 
@@ -173,6 +163,8 @@ class Renderer {
   void initFbo(Fbo& fbo);
   void resizeFbo(Fbo& fbo, vk::Extent2D size);
   void initFboImages(Fbo& fbo);
+
+  // void initPass(Pass& pass);
 
   void createDrawingCanvas();
   void createVoronoiCanvas();
@@ -208,7 +200,6 @@ class Renderer {
       vk::DeviceSize size, vk::BufferUsageFlags usage,
       vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
       vk::UniqueDeviceMemory& buf_mem);
-  uint32_t findMemoryType(uint32_t type_filter, vk::MemoryPropertyFlags props);
   DynamicBuf createDynamicBuffer(
       vk::DeviceSize size, vk::BufferUsageFlags usage);
   template <class T>
@@ -254,6 +245,7 @@ class Renderer {
   vk::UniqueDevice device_;
   vk::Queue gfx_q_;
   vk::Queue present_q_;
+  ImageFactory factory_;
   SwapchainSupportDetails swapchain_support_;
   vk::UniqueSwapchainKHR swapchain_;
   vk::Format color_fmt_ = vk::Format::eB8G8R8A8Unorm;

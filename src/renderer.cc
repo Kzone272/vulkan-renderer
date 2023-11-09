@@ -23,6 +23,7 @@
 #include "descriptors.h"
 #include "files.h"
 #include "glm-include.h"
+#include "images.h"
 #include "pipelines.h"
 #include "render-objects.h"
 #include "strings.h"
@@ -520,6 +521,8 @@ void Renderer::createLogicalDevice() {
   ASSERT(gfx_q_);
   present_q_ = device_->getQueue(q_indices_.present_family, 0);
   ASSERT(present_q_);
+
+  factory_.init(*device_, &mem_props_);
 }
 
 vk::SurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(
@@ -600,7 +603,7 @@ void Renderer::createSwapchain() {
 
   swapchain_views_.resize(swapchain_images.size());
   for (size_t i = 0; i < swapchain_images.size(); i++) {
-    swapchain_views_[i] = createImageView(
+    swapchain_views_[i] = factory_.createImageView(
         swapchain_images[i], swapchain_format_, 1,
         vk::ImageAspectFlagBits::eColor);
   }
@@ -608,23 +611,6 @@ void Renderer::createSwapchain() {
   printf(
       "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
       swapchain_format_, swapchain_extent_.width, swapchain_extent_.height);
-}
-
-vk::UniqueImageView Renderer::createImageView(
-    vk::Image img, vk::Format format, uint32_t mip_levels,
-    vk::ImageAspectFlags aspect_flags) {
-  vk::ImageViewCreateInfo ci{
-      .image = img,
-      .viewType = vk::ImageViewType::e2D,
-      .format = format,
-      .subresourceRange = {
-          .aspectMask = aspect_flags,
-          .baseMipLevel = 0,
-          .levelCount = mip_levels,
-          .baseArrayLayer = 0,
-          .layerCount = 1,
-      }};
-  return device_->createImageViewUnique(ci).value;
 }
 
 void Renderer::createShaders() {
@@ -733,10 +719,10 @@ void Renderer::initFboImages(Fbo& fbo) {
     auto usage = vk::ImageUsageFlagBits::eColorAttachment |
                  (fbo.resolve ? vk::ImageUsageFlagBits::eTransientAttachment
                               : vk::ImageUsageFlagBits::eSampled);
-    createImage(
+    factory_.createImage(
         color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
-        vk::ImageAspectFlagBits::eColor);
+        vk::ImageAspectFlagBits::eColor, *linear_sampler_);
     fbo.colors.push_back(std::move(color));
 
     if (fbo.resolve && !fbo.swap) {
@@ -745,12 +731,12 @@ void Renderer::initFboImages(Fbo& fbo) {
           .format = format,
           .samples = vk::SampleCountFlagBits::e1,
       };
-      createImage(
+      factory_.createImage(
           resolve, vk::ImageTiling::eOptimal,
           vk::ImageUsageFlagBits::eColorAttachment |
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
-          vk::ImageAspectFlagBits::eColor);
+          vk::ImageAspectFlagBits::eColor, *linear_sampler_);
       fbo.resolves.push_back(std::move(resolve));
     }
   }
@@ -761,11 +747,11 @@ void Renderer::initFboImages(Fbo& fbo) {
         .format = findDepthFormat(),
         .samples = fbo.samples,
     };
-    createImage(
+    factory_.createImage(
         fbo.depth, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
-        vk::ImageAspectFlagBits::eDepth);
+        vk::ImageAspectFlagBits::eDepth, {});
   }
 }
 
@@ -1116,13 +1102,13 @@ Texture* Renderer::createTexture(
   memcpy(mapped_data, texture_data, static_cast<size_t>(image_size));
   device_->unmapMemory(*staging_buf_mem);
 
-  createImage(
+  factory_.createImage(
       *texture.get(), vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eTransferSrc |
           vk::ImageUsageFlagBits::eTransferDst |
           vk::ImageUsageFlagBits::eSampled,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      vk::ImageAspectFlagBits::eColor);
+      vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor,
+      *linear_sampler_);
 
   transitionImageLayout(
       *texture->image, texture->format, texture->mip_levels,
@@ -1136,45 +1122,6 @@ Texture* Renderer::createTexture(
   auto* ptr = texture.get();
   loaded_textures_.push_back(std::move(texture));
   return ptr;
-}
-
-void Renderer::createImage(
-    Texture& texture, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-    vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect) {
-  vk::ImageCreateInfo img_ci{
-      .imageType = vk::ImageType::e2D,
-      .format = texture.format,
-      .extent =
-          {.width = texture.size.width,
-           .height = texture.size.height,
-           .depth = 1},
-      .mipLevels = texture.mip_levels,
-      .arrayLayers = 1,
-      .samples = texture.samples,
-      .tiling = tiling,
-      .usage = usage,
-      .sharingMode = vk::SharingMode::eExclusive,
-      .initialLayout = vk::ImageLayout::eUndefined,
-  };
-  texture.image = device_->createImageUnique(img_ci).value;
-
-  vk::MemoryRequirements mem_reqs =
-      device_->getImageMemoryRequirements(*texture.image);
-
-  vk::MemoryAllocateInfo alloc_info{
-      .allocationSize = mem_reqs.size,
-      .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
-  };
-  texture.image_mem = device_->allocateMemoryUnique(alloc_info).value;
-  std::ignore = device_->bindImageMemory(*texture.image, *texture.image_mem, 0);
-
-  texture.image_view = createImageView(
-      *texture.image, texture.format, texture.mip_levels, aspect);
-  texture.info = {
-      .sampler = *linear_sampler_,
-      .imageView = *texture.image_view,
-      .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-  };
 }
 
 void Renderer::transitionImageLayout(
@@ -1623,22 +1570,11 @@ void Renderer::createBuffer(
 
   vk::MemoryAllocateInfo alloc_info{
       .allocationSize = mem_reqs.size,
-      .memoryTypeIndex = findMemoryType(mem_reqs.memoryTypeBits, props),
+      .memoryTypeIndex =
+          findMemoryType(mem_reqs.memoryTypeBits, props, mem_props_),
   };
   buf_mem = device_->allocateMemoryUnique(alloc_info).value;
   std::ignore = device_->bindBufferMemory(*buf, *buf_mem, 0);
-}
-
-uint32_t Renderer::findMemoryType(
-    uint32_t type_filter, vk::MemoryPropertyFlags props) {
-  for (uint32_t i = 0; i < mem_props_.memoryTypeCount; i++) {
-    if (type_filter & (1 << i) &&
-        (mem_props_.memoryTypes[i].propertyFlags & props) == props) {
-      return i;
-    }
-  }
-  ASSERT(false);
-  return 0;
 }
 
 void Renderer::createDescriptorPool() {

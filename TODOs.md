@@ -1,7 +1,6 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Move image creation out of Renderer
 - Create Pass struct
   - Owns DescriptorLayouts used in this pass
   - Allocates the Ubos for the layouts

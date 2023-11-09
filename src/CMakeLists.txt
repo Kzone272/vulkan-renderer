@@ -25,6 +25,8 @@ add_executable(main
   pipelines.cc
   assets.h
   assets.cc
+  images.h
+  images.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)
