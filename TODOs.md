@@ -1,6 +1,11 @@
 Things I Should Do Soon:
 
 Short-term ideas:
+- Move image creation out of Renderer
+- Create Pass struct
+  - Owns DescriptorLayouts used in this pass
+  - Allocates the Ubos for the layouts
+  - Owns pipelines used in the pass, references relevant layouts
 - Separate DebugData's for different shaders, and for App.
 - Add shadow mapping for some lights.
 - Improve outline filter AA by rendering edges with MSAA.

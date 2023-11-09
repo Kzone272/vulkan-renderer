@@ -248,6 +248,7 @@ class Renderer {
       dbg_messenger_;
   vk::PhysicalDevice physical_device_;
   vk::PhysicalDeviceProperties device_props_;
+  vk::PhysicalDeviceMemoryProperties mem_props_;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
   vk::UniqueDevice device_;

@@ -406,6 +406,7 @@ void Renderer::pickPhysicalDevice() {
   }
   ASSERT(physical_device_);
   device_props_ = physical_device_.getProperties();
+  mem_props_ = physical_device_.getMemoryProperties();
   msaa_samples_ = getMaxSampleCount();
   printf("max msaa samples: %d\n", msaa_samples_);
 
@@ -1630,12 +1631,9 @@ void Renderer::createBuffer(
 
 uint32_t Renderer::findMemoryType(
     uint32_t type_filter, vk::MemoryPropertyFlags props) {
-  vk::PhysicalDeviceMemoryProperties mem_props =
-      physical_device_.getMemoryProperties();
-
-  for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
+  for (uint32_t i = 0; i < mem_props_.memoryTypeCount; i++) {
     if (type_filter & (1 << i) &&
-        (mem_props.memoryTypes[i].propertyFlags & props) == props) {
+        (mem_props_.memoryTypes[i].propertyFlags & props) == props) {
       return i;
     }
   }
