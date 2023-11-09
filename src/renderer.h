@@ -16,7 +16,8 @@ struct Fbo {
   std::vector<vk::Format> color_fmts;
   vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
   bool resolve = false;
-  bool depth_test = false;
+  std::optional<vk::Format> depth_fmt;
+  vk::Sampler output_sampler;
   bool swap = false;
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;
@@ -29,6 +30,10 @@ struct Fbo {
   std::vector<vk::ClearValue> clears;
   std::vector<vk::UniqueFramebuffer> fbs;
 
+  void init(vk::Device& device, ImageFactory& factory, vk::DescriptorPool pool);
+  void resize(vk::Extent2D size, vk::Device& device, ImageFactory& factory);
+
+  void initImages(ImageFactory& factory);
   void initDescs(vk::Device& device, vk::DescriptorPool& pool);
   void updateDescs(vk::Device& device);
   void initRp(vk::Device& device);
@@ -162,7 +167,6 @@ class Renderer {
 
   void initFbo(Fbo& fbo);
   void resizeFbo(Fbo& fbo, vk::Extent2D size);
-  void initFboImages(Fbo& fbo);
 
   // void initPass(Pass& pass);
 

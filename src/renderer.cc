@@ -679,25 +679,35 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
 }
 
 void Renderer::initFbo(Fbo& fbo) {
-  initFboImages(fbo);
-  fbo.initDescs(*device_, *desc_pool_);
-  fbo.initRp(*device_);
-  fbo.initFb(*device_);
+  fbo.init(*device_, factory_, *desc_pool_);
 }
 
 void Renderer::resizeFbo(Fbo& fbo, vk::Extent2D size) {
-  fbo.resetImages();
   if (fbo.swap) {
+    fbo.swap_format = swapchain_format_;
     fbo.swap_views.clear();
     for (auto& view : swapchain_views_) {
       fbo.swap_views.push_back(*view);
     }
   }
+  fbo.resize(size, *device_, factory_);
+}
 
-  fbo.size = size;
-  initFboImages(fbo);
-  fbo.updateDescs(*device_);
-  fbo.initFb(*device_);
+void Fbo::init(
+    vk::Device& device, ImageFactory& factory, vk::DescriptorPool pool) {
+  initImages(factory);
+  initDescs(device, pool);
+  initRp(device);
+  initFb(device);
+}
+
+void Fbo::resize(vk::Extent2D size, vk::Device& device, ImageFactory& factory) {
+  resetImages();
+
+  this->size = size;
+  initImages(factory);
+  updateDescs(device);
+  initFb(device);
 }
 
 void Fbo::resetImages() {
@@ -709,46 +719,46 @@ void Fbo::resetImages() {
 
 // TODO: Make this a member of Fbo. Figure out how to deal with createImage()
 //   which calls a number of Renderer functions.
-void Renderer::initFboImages(Fbo& fbo) {
-  for (auto& format : fbo.color_fmts) {
+void Fbo::initImages(ImageFactory& factory) {
+  for (auto& format : color_fmts) {
     Texture color{
-        .size = fbo.size,
+        .size = size,
         .format = format,
-        .samples = fbo.samples,
+        .samples = samples,
     };
     auto usage = vk::ImageUsageFlagBits::eColorAttachment |
-                 (fbo.resolve ? vk::ImageUsageFlagBits::eTransientAttachment
-                              : vk::ImageUsageFlagBits::eSampled);
-    factory_.createImage(
+                 (resolve ? vk::ImageUsageFlagBits::eTransientAttachment
+                          : vk::ImageUsageFlagBits::eSampled);
+    factory.createImage(
         color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
-        vk::ImageAspectFlagBits::eColor, *linear_sampler_);
-    fbo.colors.push_back(std::move(color));
+        vk::ImageAspectFlagBits::eColor, output_sampler);
+    colors.push_back(std::move(color));
 
-    if (fbo.resolve && !fbo.swap) {
+    if (resolve && !swap) {
       Texture resolve{
-          .size = fbo.size,
+          .size = size,
           .format = format,
           .samples = vk::SampleCountFlagBits::e1,
       };
-      factory_.createImage(
+      factory.createImage(
           resolve, vk::ImageTiling::eOptimal,
           vk::ImageUsageFlagBits::eColorAttachment |
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
-          vk::ImageAspectFlagBits::eColor, *linear_sampler_);
-      fbo.resolves.push_back(std::move(resolve));
+          vk::ImageAspectFlagBits::eColor, output_sampler);
+      resolves.push_back(std::move(resolve));
     }
   }
 
-  if (fbo.depth_test) {
-    fbo.depth = {
-        .size = fbo.size,
-        .format = findDepthFormat(),
-        .samples = fbo.samples,
+  if (depth_fmt) {
+    depth = {
+        .size = size,
+        .format = *depth_fmt,
+        .samples = samples,
     };
-    factory_.createImage(
-        fbo.depth, vk::ImageTiling::eOptimal,
+    factory.createImage(
+        depth, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth, {});
@@ -831,12 +841,12 @@ void Fbo::initRp(vk::Device& device) {
     }
   }
 
-  // This won't be used if depth_test = false.
+  // This won't be used when not depth testing.
   vk::AttachmentReference depth_ref{
       .attachment = static_cast<uint32_t>(atts.size()),
       .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
   };
-  if (depth_test) {
+  if (depth_fmt) {
     atts.push_back({
         .format = depth.format,
         .samples = depth.samples,
@@ -877,7 +887,7 @@ void Fbo::initRp(vk::Device& device) {
       .pipelineBindPoint = vk::PipelineBindPoint::eGraphics};
   subpass.setResolveAttachments(resolve_refs);
   subpass.setColorAttachments(color_refs);
-  subpass.setPDepthStencilAttachment(depth_test ? &depth_ref : nullptr);
+  subpass.setPDepthStencilAttachment(depth_fmt ? &depth_ref : nullptr);
 
   std::vector<vk::SubpassDependency> deps;
   // This render pass's write should finish before it's read from.
@@ -889,7 +899,7 @@ void Fbo::initRp(vk::Device& device) {
       .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
       .dstAccessMask = vk::AccessFlagBits::eShaderRead,
   });
-  if (depth_test) {
+  if (depth_fmt) {
     // Previous depth tests should finish before we clear the depth buffer.
     deps.push_back({
         .srcSubpass = VK_SUBPASS_EXTERNAL,
@@ -933,7 +943,7 @@ void Fbo::initFb(vk::Device& device) {
   for (auto& texture : resolves) {
     views.push_back(*texture.image_view);
   }
-  if (depth_test) {
+  if (depth_fmt) {
     views.push_back(*depth.image_view);
   }
   if (swap) {
@@ -953,6 +963,7 @@ void Renderer::createDrawingCanvas() {
   drawing_.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
+      .output_sampler = *linear_sampler_,
   };
   initFbo(drawing_.fbo);
 
@@ -988,7 +999,8 @@ void Renderer::createVoronoiCanvas() {
   voronoi_.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
-      .depth_test = true,
+      .depth_fmt = findDepthFormat(),
+      .output_sampler = *linear_sampler_,
   };
   initFbo(voronoi_.fbo);
 
@@ -1340,13 +1352,15 @@ void Renderer::createFbos() {
       // Disable msaa for now because it makes outline filter worse
       // .samples = msaa_samples_,
       // .resolve = true,
-      .depth_test = true,
+      .depth_fmt = findDepthFormat(),
+      .output_sampler = *linear_sampler_,
   };
   initFbo(scene_fbo_);
 
   post_fbo_ = {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_},
+      .output_sampler = *linear_sampler_,
   };
   initFbo(post_fbo_);
 

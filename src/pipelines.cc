@@ -98,7 +98,7 @@ Pipeline createPipeline(
       .pViewportState = &viewport_state,
       .pRasterizationState = &rasterizer,
       .pMultisampleState = &multisampling,
-      .pDepthStencilState = fbo.depth_test ? &depth_ci : nullptr,
+      .pDepthStencilState = fbo.depth_fmt ? &depth_ci : nullptr,
       .pColorBlendState = &color_blending,
       .pDynamicState = &dyn_state,
       .layout = *pl.layout,
