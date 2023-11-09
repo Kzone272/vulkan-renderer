@@ -27,6 +27,8 @@ add_executable(main
   assets.cc
   images.h
   images.cc
+  fbo.h
+  fbo.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)
