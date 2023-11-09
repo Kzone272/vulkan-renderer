@@ -30,6 +30,7 @@ struct Fbo {
   bool resolve = false;
   bool depth_test = false;
   bool swap = false;
+  vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;
   // Outputs
   std::vector<Texture> colors;
@@ -39,6 +40,12 @@ struct Fbo {
   vk::UniqueRenderPass rp;
   std::vector<vk::ClearValue> clears;
   std::vector<vk::UniqueFramebuffer> fbs;
+
+  void initDescs(vk::Device& device, vk::DescriptorPool& pool);
+  void updateDescs(vk::Device& device);
+  void initRp(vk::Device& device);
+  void initFb(vk::Device& device);
+  void resetImages();
 };
 
 struct Buffer {
@@ -164,6 +171,9 @@ class Renderer {
   void createGraphicsPipelines();
 
   void initFbo(Fbo& fbo);
+  void resizeFbo(Fbo& fbo, vk::Extent2D size);
+  void initFboImages(Fbo& fbo);
+
   void createDrawingCanvas();
   void createVoronoiCanvas();
   void createVertBufs();
@@ -224,7 +234,6 @@ class Renderer {
   void recordCommandBuffer();
   void createSyncObjects();
   void recreateSwapchain();
-  void cleanupSwapchain();
 
   // The window should only be used in createSurface().
   SDL_Window* window_ = nullptr;

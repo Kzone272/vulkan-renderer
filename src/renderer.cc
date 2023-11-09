@@ -692,8 +692,37 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
 }
 
 void Renderer::initFbo(Fbo& fbo) {
-  std::vector<vk::DescriptorImageInfo> infos;
+  initFboImages(fbo);
+  fbo.initDescs(*device_, *desc_pool_);
+  fbo.initRp(*device_);
+  fbo.initFb(*device_);
+}
 
+void Renderer::resizeFbo(Fbo& fbo, vk::Extent2D size) {
+  fbo.resetImages();
+  if (fbo.swap) {
+    fbo.swap_views.clear();
+    for (auto& view : swapchain_views_) {
+      fbo.swap_views.push_back(*view);
+    }
+  }
+
+  fbo.size = size;
+  initFboImages(fbo);
+  fbo.updateDescs(*device_);
+  fbo.initFb(*device_);
+}
+
+void Fbo::resetImages() {
+  colors.clear();
+  resolves.clear();
+  depth = {};
+  fbs.clear();  // Framebuffers reference the ImageViews
+}
+
+// TODO: Make this a member of Fbo. Figure out how to deal with createImage()
+//   which calls a number of Renderer functions.
+void Renderer::initFboImages(Fbo& fbo) {
   for (auto& format : fbo.color_fmts) {
     Texture color{
         .size = fbo.size,
@@ -707,9 +736,6 @@ void Renderer::initFbo(Fbo& fbo) {
         color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor);
-    if (!fbo.resolve) {
-      infos.push_back(color.info);
-    }
     fbo.colors.push_back(std::move(color));
 
     if (fbo.resolve && !fbo.swap) {
@@ -724,7 +750,6 @@ void Renderer::initFbo(Fbo& fbo) {
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
           vk::ImageAspectFlagBits::eColor);
-      infos.push_back(resolve.info);
       fbo.resolves.push_back(std::move(resolve));
     }
   }
@@ -741,50 +766,64 @@ void Renderer::initFbo(Fbo& fbo) {
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth);
   }
+}
 
-  fbo.output_set = {
+void Fbo::initDescs(vk::Device& device, vk::DescriptorPool& pool) {
+  if (swap) {
+    return;
+  }
+
+  output_set = {
       .binds =
-          {infos.size(),
+          {color_fmts.size(),
            Binding{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
-  fbo.output_set.init(*device_);
-  fbo.output_set.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+  output_set.init(device);
+  output_set.alloc(device, pool, MAX_FRAMES_IN_FLIGHT);
+  updateDescs(device);
+}
 
+void Fbo::updateDescs(vk::Device& device) {
   std::vector<vk::WriteDescriptorSet> writes;
-  for (int i = 0; i < infos.size(); i++) {
-    fbo.output_set.updateSamplerBind(i, &infos[i], writes);
-  }
-  device_->updateDescriptorSets(writes, nullptr);
 
+  auto& outputs = resolve ? resolves : colors;
+  for (int i = 0; i < outputs.size(); i++) {
+    output_set.updateSamplerBind(i, &outputs[i].info, writes);
+  }
+
+  device.updateDescriptorSets(writes, nullptr);
+}
+
+void Fbo::initRp(vk::Device& device) {
   vk::ClearValue color_clear{{0.f, 0.f, 0.f, 1.f}};
   vk::ClearValue depth_clear{{1.f, 0}};
 
   std::vector<vk::AttachmentDescription> atts;
   std::vector<vk::AttachmentReference> color_refs;
   std::vector<vk::AttachmentReference> resolve_refs;
-  for (auto& format : fbo.color_fmts) {
+  for (auto& format : color_fmts) {
     color_refs.push_back({
         .attachment = static_cast<uint32_t>(atts.size()),
         .layout = vk::ImageLayout::eColorAttachmentOptimal,
     });
     atts.push_back({
         .format = format,
-        .samples = fbo.samples,
+        .samples = samples,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
         .initialLayout = vk::ImageLayout::eUndefined,
-        .finalLayout = fbo.resolve ? vk::ImageLayout::eColorAttachmentOptimal
-                                   : vk::ImageLayout::eShaderReadOnlyOptimal,
+        .finalLayout = resolve ? vk::ImageLayout::eColorAttachmentOptimal
+                               : vk::ImageLayout::eShaderReadOnlyOptimal,
     });
-    fbo.clears.push_back(color_clear);
+    clears.push_back(color_clear);
   }
 
-  if (fbo.resolve) {
-    for (auto& format : fbo.color_fmts) {
-      if (!fbo.swap) {
+  if (resolve) {
+    for (auto& format : color_fmts) {
+      if (!swap) {
         resolve_refs.push_back({
             .attachment = static_cast<uint32_t>(atts.size()),
             .layout = vk::ImageLayout::eColorAttachmentOptimal,
@@ -801,19 +840,19 @@ void Renderer::initFbo(Fbo& fbo) {
         });
       }
       // Clear not used for resolves.
-      fbo.clears.push_back({});
+      clears.push_back({});
     }
   }
 
-  // This won't be used if fbo.depth_test = false.
+  // This won't be used if depth_test = false.
   vk::AttachmentReference depth_ref{
       .attachment = static_cast<uint32_t>(atts.size()),
       .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
   };
-  if (fbo.depth_test) {
+  if (depth_test) {
     atts.push_back({
-        .format = fbo.depth.format,
-        .samples = fbo.depth.samples,
+        .format = depth.format,
+        .samples = depth.samples,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
@@ -821,21 +860,21 @@ void Renderer::initFbo(Fbo& fbo) {
         .initialLayout = vk::ImageLayout::eUndefined,
         .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
     });
-    fbo.clears.push_back(depth_clear);
+    clears.push_back(depth_clear);
   }
 
-  if (fbo.swap) {
+  if (swap) {
     vk::AttachmentReference ref{
         .attachment = static_cast<uint32_t>(atts.size()),
         .layout = vk::ImageLayout::eColorAttachmentOptimal,
     };
-    if (fbo.resolve) {
+    if (resolve) {
       resolve_refs.push_back(ref);
     } else {
       color_refs.push_back(ref);
     }
     atts.push_back({
-        .format = swapchain_format_,
+        .format = swap_format,
         .samples = vk::SampleCountFlagBits::e1,
         .loadOp = vk::AttachmentLoadOp::eDontCare,
         .storeOp = vk::AttachmentStoreOp::eStore,
@@ -844,14 +883,14 @@ void Renderer::initFbo(Fbo& fbo) {
         .initialLayout = vk::ImageLayout::eUndefined,
         .finalLayout = vk::ImageLayout::ePresentSrcKHR,
     });
-    fbo.clears.push_back({});
+    clears.push_back({});
   }
 
   vk::SubpassDescription subpass{
       .pipelineBindPoint = vk::PipelineBindPoint::eGraphics};
   subpass.setResolveAttachments(resolve_refs);
   subpass.setColorAttachments(color_refs);
-  subpass.setPDepthStencilAttachment(fbo.depth_test ? &depth_ref : nullptr);
+  subpass.setPDepthStencilAttachment(depth_test ? &depth_ref : nullptr);
 
   std::vector<vk::SubpassDependency> deps;
   // This render pass's write should finish before it's read from.
@@ -863,7 +902,7 @@ void Renderer::initFbo(Fbo& fbo) {
       .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
       .dstAccessMask = vk::AccessFlagBits::eShaderRead,
   });
-  if (fbo.depth_test) {
+  if (depth_test) {
     // Previous depth tests should finish before we clear the depth buffer.
     deps.push_back({
         .srcSubpass = VK_SUBPASS_EXTERNAL,
@@ -874,7 +913,7 @@ void Renderer::initFbo(Fbo& fbo) {
         .dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite,
     });
   }
-  if (fbo.swap) {
+  if (swap) {
     // Wait for swapchain image to be acquired before writing to it.
     deps.push_back({
         .srcSubpass = VK_SUBPASS_EXTERNAL,
@@ -890,34 +929,36 @@ void Renderer::initFbo(Fbo& fbo) {
   rp_ci.setAttachments(atts);
   rp_ci.setSubpasses(subpass);
   rp_ci.setDependencies(deps);
-  fbo.rp = device_->createRenderPassUnique(rp_ci).value;
+  rp = device.createRenderPassUnique(rp_ci).value;
+}
 
+void Fbo::initFb(vk::Device& device) {
   vk::FramebufferCreateInfo fb_ci{
-      .renderPass = *fbo.rp,
-      .width = fbo.size.width,
-      .height = fbo.size.height,
+      .renderPass = *rp,
+      .width = size.width,
+      .height = size.height,
       .layers = 1,
   };
   std::vector<vk::ImageView> views;
-  for (auto& texture : fbo.colors) {
+  for (auto& texture : colors) {
     views.push_back(*texture.image_view);
   }
-  for (auto& texture : fbo.resolves) {
+  for (auto& texture : resolves) {
     views.push_back(*texture.image_view);
   }
-  if (fbo.depth_test) {
-    views.push_back(*fbo.depth.image_view);
+  if (depth_test) {
+    views.push_back(*depth.image_view);
   }
-  if (fbo.swap) {
+  if (swap) {
     views.push_back({});
-    for (auto& view : fbo.swap_views) {
+    for (auto& view : swap_views) {
       views.back() = view;
       fb_ci.setAttachments(views);
-      fbo.fbs.push_back(device_->createFramebufferUnique(fb_ci).value);
+      fbs.push_back(device.createFramebufferUnique(fb_ci).value);
     }
   } else {
     fb_ci.setAttachments(views);
-    fbo.fbs.push_back(device_->createFramebufferUnique(fb_ci).value);
+    fbs.push_back(device.createFramebufferUnique(fb_ci).value);
   }
 }
 
@@ -1368,6 +1409,7 @@ void Renderer::createFbos() {
   swap_fbo_ = {
       .size = swapchain_extent_,
       .swap = true,
+      .swap_format = swapchain_format_,
       .swap_views = swap_views,
   };
   initFbo(swap_fbo_);
@@ -1874,16 +1916,16 @@ void Renderer::createSyncObjects() {
 
 void Renderer::recreateSwapchain() {
   std::ignore = device_->waitIdle();
-  cleanupSwapchain();
+
+  swapchain_views_.clear();
+  swapchain_.reset();
 
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
-  createFbos();
+
+  resizeFbo(scene_fbo_, swapchain_extent_);
+  resizeFbo(post_fbo_, swapchain_extent_);
+  resizeFbo(swap_fbo_, swapchain_extent_);
 
   window_resized_ = false;
-}
-
-void Renderer::cleanupSwapchain() {
-  swapchain_views_.clear();
-  swapchain_.reset();
 }
