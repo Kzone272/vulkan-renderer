@@ -5,16 +5,15 @@
 // TODO: Probably should avoid this include by moving structs around.
 #include "renderer.h"
 
-Pipeline createPipeline(
-    vk::Device device, const Fbo& fbo, const PipelineInfo& pli) {
+void initPipeline(vk::Device device, const Fbo& fbo, Pipeline& pl) {
   vk::PipelineShaderStageCreateInfo vert_ci{
       .stage = vk::ShaderStageFlagBits::eVertex,
-      .module = pli.vert_shader,
+      .module = pl.vert_shader,
       .pName = "main",
   };
   vk::PipelineShaderStageCreateInfo frag_ci{
       .stage = vk::ShaderStageFlagBits::eFragment,
-      .module = pli.frag_shader,
+      .module = pl.frag_shader,
       .pName = "main",
   };
   std::vector<vk::PipelineShaderStageCreateInfo> shader_stages = {
@@ -41,7 +40,7 @@ Pipeline createPipeline(
       .depthClampEnable = VK_FALSE,
       .rasterizerDiscardEnable = VK_FALSE,
       .polygonMode = vk::PolygonMode::eFill,
-      .cullMode = pli.cull_mode,
+      .cullMode = pl.cull_mode,
       .frontFace = vk::FrontFace::eClockwise,
       .depthBiasEnable = VK_FALSE,
       .lineWidth = 1.0f,
@@ -75,7 +74,7 @@ Pipeline createPipeline(
       .logicOpEnable = VK_FALSE};
   std::vector<vk::PipelineColorBlendAttachmentState> blend_atts(
       fbo.swap ? 1 : fbo.color_fmts.size(),
-      pli.enable_blending ? color_blend_att : no_blend_att);
+      pl.enable_blending ? color_blend_att : no_blend_att);
   color_blending.setAttachments(blend_atts);
 
   vk::PipelineDepthStencilStateCreateInfo depth_ci{
@@ -85,15 +84,18 @@ Pipeline createPipeline(
       .stencilTestEnable = VK_FALSE,
   };
 
-  Pipeline pl;
-
   vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-  pipeline_layout_ci.setSetLayouts(pli.desc_layouts);
-  pipeline_layout_ci.setPushConstantRanges(pli.push_ranges);
-  pl.layout = device.createPipelineLayoutUnique(pipeline_layout_ci).value;
+  std::vector<vk::DescriptorSetLayout> set_layouts;
+  for (auto* desc_lo : pl.desc_layouts) {
+    set_layouts.push_back(*desc_lo->layout);
+  }
+  pipeline_layout_ci.setSetLayouts(set_layouts);
+  pipeline_layout_ci.setPushConstantRanges(pl.push_ranges);
+  pl.layout =
+      std::move(device.createPipelineLayoutUnique(pipeline_layout_ci).value);
 
   vk::GraphicsPipelineCreateInfo pipeline_ci{
-      .pVertexInputState = &pli.vert_in,
+      .pVertexInputState = &pl.vert_in,
       .pInputAssemblyState = &input_assembly,
       .pViewportState = &viewport_state,
       .pRasterizationState = &rasterizer,
@@ -106,6 +108,6 @@ Pipeline createPipeline(
       .subpass = 0,
   };
   pipeline_ci.setStages(shader_stages);
-  pl.pipeline = device.createGraphicsPipelineUnique(nullptr, pipeline_ci).value;
-  return pl;
+  pl.pipeline = std::move(
+      device.createGraphicsPipelineUnique(nullptr, pipeline_ci).value);
 }

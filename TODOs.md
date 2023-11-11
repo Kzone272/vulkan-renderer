@@ -1,10 +1,10 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Create Pass struct
-  - Owns DescriptorLayouts used in this pass
+- Finish Pass struct
   - Allocates the Ubos for the layouts
-  - Owns pipelines used in the pass, references relevant layouts
+- Create VulkanState global object to make passing vk handles around easier.
+- Simplify adding new shaders. Probably stored in a map keyed by filename.
 - Separate DebugData's for different shaders, and for App.
 - Add shadow mapping for some lights.
 - Improve outline filter AA by rendering edges with MSAA.

@@ -7,6 +7,7 @@
 #include "descriptors.h"
 #include "fbo.h"
 #include "images.h"
+#include "pass.h"
 #include "pipelines.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
@@ -39,26 +40,12 @@ struct Model {
   Material* material;
 };
 
-// TODO: This probably shouldn't exist. I think DescLayouts should just move
-// into Pipeline.
-struct Pipe {
-  std::vector<DescLayout> desc_los;
-  Pipeline pl;
-};
-
 // An offscreen render target that can be sampled.
+// TODO: Delete this in favour of Pass.
 struct Canvas {
   Fbo fbo;
-  std::vector<Pipe> pipes;
+  std::vector<Pipeline> pls;
 };
-
-// struct Pass {
-//   Fbo fbo;
-//   std::vector<DescLayout> los;
-//   std::vector<Pipeline> pls;
-
-//   void init()
-// };
 
 struct SDL_Window;
 struct SDL_Surface;
@@ -80,6 +67,7 @@ class Renderer {
   void setModelMaterial(ModelId model_id, MaterialId material_id);
   // TODO: Return a TextureId instead.
   Texture* getDrawingTexture();
+  Texture* getVoronoiTexture();
   void imguiNewFrame();
 
  private:
@@ -138,9 +126,8 @@ class Renderer {
   void initFbo(Fbo& fbo);
   void resizeFbo(Fbo& fbo, vk::Extent2D size);
 
-  // void initPass(Pass& pass);
-
-  void createDrawingCanvas();
+  void initPass(Pass& pass);
+  void createDrawing();
   void createVoronoiCanvas();
   void createVertBufs();
 
@@ -189,7 +176,7 @@ class Renderer {
   void createDescSets();
 
   void beginRp(const Fbo& fbo, int fb_ind);
-  void renderCanvas(const Canvas& canvas);
+  void renderDrawing();
   void updateVoronoiVerts();
   void renderVoronoi();
   void renderScene();
@@ -295,9 +282,14 @@ class Renderer {
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  Canvas drawing_;
   Canvas voronoi_;
   std::vector<DynamicBuf> voronoi_verts_;
+
+  struct Drawing {
+    Pass pass;
+    Pipeline* draw;
+    DescLayout* inputs;
+  } drawing_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

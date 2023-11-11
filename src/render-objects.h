@@ -104,7 +104,7 @@ struct FrameState {
   mat4 view;
   mat4 proj;
   DebugData post;
-  bool update_canvas = false;
+  bool update_drawing = false;
   std::vector<Vertex2d> voronoi_cells;
   bool update_voronoi = false;
 };

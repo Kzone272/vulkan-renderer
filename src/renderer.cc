@@ -110,6 +110,10 @@ void Renderer::setModelMaterial(ModelId model_id, MaterialId mat_id) {
 
 // TODO: Return a TextureId instead.
 Texture* Renderer::getDrawingTexture() {
+  return &drawing_.pass.fbo.colors[0];
+}
+// TODO: Return a TextureId instead.
+Texture* Renderer::getVoronoiTexture() {
   return &voronoi_.fbo.colors[0];
 }
 
@@ -134,7 +138,7 @@ void Renderer::initVulkan() {
   createGraphicsPipelines();
   createSyncObjects();
 
-  createDrawingCanvas();
+  createDrawing();
   createVoronoiCanvas();
   createVertBufs();
 }
@@ -637,37 +641,34 @@ void Renderer::createGraphicsPipelines() {
   auto vert_attrs = getAttrDescs<Vertex>();
   vertex_in.setVertexBindingDescriptions(vert_binding);
   vertex_in.setVertexAttributeDescriptions(vert_attrs);
-  scene_pl_ = createPipeline(
-      *device_, scene_fbo_,
-      {
-          .vert_shader = *scene_vert_,
-          .frag_shader = *scene_frag_,
-          .desc_layouts = {*global_dl_.layout, *material_dl_.layout},
-          .push_ranges = {scene_push},
-          .vert_in = vertex_in,
-          .cull_mode = vk::CullModeFlagBits::eNone,
-      });
+  scene_pl_ = {
+      .vert_shader = *scene_vert_,
+      .frag_shader = *scene_frag_,
+      .desc_layouts = {&global_dl_, &material_dl_},
+      .push_ranges = {scene_push},
+      .vert_in = vertex_in,
+      .cull_mode = vk::CullModeFlagBits::eNone,
+  };
+  initPipeline(*device_, scene_fbo_, scene_pl_);
 
   // Post processing pipeline
-  post_pl_ = createPipeline(
-      *device_, post_fbo_,
-      {
-          .vert_shader = *fullscreen_vert_,
-          .frag_shader = *post_frag_,
-          .desc_layouts = {*post_dl_.layout, *scene_fbo_.output_set.layout},
-          .vert_in = {},
-          .cull_mode = vk::CullModeFlagBits::eBack,
-      });
+  post_pl_ = {
+      .vert_shader = *fullscreen_vert_,
+      .frag_shader = *post_frag_,
+      .desc_layouts = {&post_dl_, &scene_fbo_.output_set},
+      .vert_in = {},
+      .cull_mode = vk::CullModeFlagBits::eBack,
+  };
+  initPipeline(*device_, post_fbo_, post_pl_);
 
-  swap_pl_ = createPipeline(
-      *device_, swap_fbo_,
-      {
-          .vert_shader = *fullscreen_vert_,
-          .frag_shader = *sample_frag_,
-          .desc_layouts = {*sampler_dl_.layout},
-          .vert_in = {},
-          .cull_mode = vk::CullModeFlagBits::eBack,
-      });
+  swap_pl_ = {
+      .vert_shader = *fullscreen_vert_,
+      .frag_shader = *sample_frag_,
+      .desc_layouts = {&sampler_dl_},
+      .vert_in = {},
+      .cull_mode = vk::CullModeFlagBits::eBack,
+  };
+  initPipeline(*device_, swap_fbo_, swap_pl_);
 }
 
 vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
@@ -703,40 +704,46 @@ void Renderer::resizeFbo(Fbo& fbo, vk::Extent2D size) {
   fbo.initFb(*device_);
 }
 
-void Renderer::createDrawingCanvas() {
-  drawing_.fbo = {
+void Renderer::createDrawing() {
+  auto& pass = drawing_.pass;
+  pass.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
       .output_sampler = *linear_sampler_,
   };
-  initFbo(drawing_.fbo);
 
-  Pipe pipe;
-  pipe.desc_los.push_back({
+  drawing_.inputs = pass.makeDescLayout();
+  *drawing_.inputs = {
       .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
       .stages = vk::ShaderStageFlagBits::eFragment,
-  });
+  };
 
-  std::vector<vk::DescriptorSetLayout> layouts;
+  drawing_.draw = drawing_.pass.makePipeline();
+  *drawing_.draw = {
+      .vert_shader = *fullscreen_vert_,
+      .frag_shader = *circle_frag_,
+      .desc_layouts = {drawing_.inputs},
+  };
+
+  initPass(pass);
+
+  // TODO: Generalize so this can be part of initPass()
   std::vector<vk::WriteDescriptorSet> writes;
-  for (auto& desc_lo : pipe.desc_los) {
-    desc_lo.init(*device_);
-    desc_lo.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
-    // TODO: Generalize
-    desc_lo.updateUboBind(0, uboInfos(in_flight_.post), writes);
-
-    layouts.push_back(*desc_lo.layout);
-  }
+  drawing_.inputs->updateUboBind(0, uboInfos(in_flight_.post), writes);
   device_->updateDescriptorSets(writes, nullptr);
+}
 
-  pipe.pl = createPipeline(
-      *device_, drawing_.fbo,
-      {
-          .vert_shader = *fullscreen_vert_,
-          .frag_shader = *circle_frag_,
-          .desc_layouts = layouts,
-      });
-  drawing_.pipes.push_back(std::move(pipe));
+void Renderer::initPass(Pass& pass) {
+  initFbo(pass.fbo);
+
+  for (auto& lo : pass.los) {
+    lo->init(*device_);
+    lo->alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+  }
+
+  for (auto& pl : pass.pls) {
+    initPipeline(*device_, pass.fbo, *pl);
+  }
 }
 
 void Renderer::createVoronoiCanvas() {
@@ -755,15 +762,13 @@ void Renderer::createVoronoiCanvas() {
   auto vert_attrs = getAttrDescs<Vertex2d>();
   vert_in.setVertexAttributeDescriptions(vert_attrs);
 
-  Pipe pipe;
-  pipe.pl = createPipeline(
-      *device_, voronoi_.fbo,
-      {
-          .vert_shader = *voronoi_vert_,
-          .frag_shader = *voronoi_frag_,
-          .vert_in = vert_in,
-      });
-  voronoi_.pipes.push_back(std::move(pipe));
+  Pipeline draw = {
+      .vert_shader = *voronoi_vert_,
+      .frag_shader = *voronoi_frag_,
+      .vert_in = vert_in,
+  };
+  initPipeline(*device_, voronoi_.fbo, draw);
+  voronoi_.pls.push_back(std::move(draw));
 }
 
 void Renderer::createCommandPool() {
@@ -1436,21 +1441,15 @@ void Renderer::beginRp(const Fbo& fbo, int fb_ind) {
   ds_.cmd.beginRenderPass(rp_info, vk::SubpassContents::eInline);
 }
 
-void Renderer::renderCanvas(const Canvas& canvas) {
-  beginRp(canvas.fbo, 0);
+void Renderer::renderDrawing() {
+  beginRp(drawing_.pass.fbo, 0);
+  ds_.cmd.bindPipeline(
+      vk::PipelineBindPoint::eGraphics, *drawing_.draw->pipeline);
+  ds_.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *drawing_.draw->layout, 0,
+      drawing_.inputs->sets[ds_.frame], nullptr);
 
-  for (auto& pipe : canvas.pipes) {
-    ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipe.pl.pipeline);
-
-    for (auto& desc_lo : pipe.desc_los) {
-      ds_.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *pipe.pl.layout, 0,
-          desc_lo.sets[ds_.frame], nullptr);
-    }
-
-    // TODO: Make this more general.
-    ds_.cmd.draw(3, 1, 0, 0);
-  }
+  ds_.cmd.draw(3, 1, 0, 0);
   ds_.cmd.endRenderPass();
 }
 
@@ -1491,7 +1490,7 @@ void Renderer::renderVoronoi() {
   beginRp(voronoi_.fbo, 0);
 
   ds_.cmd.bindPipeline(
-      vk::PipelineBindPoint::eGraphics, *voronoi_.pipes[0].pl.pipeline);
+      vk::PipelineBindPoint::eGraphics, *voronoi_.pls[0].pipeline);
   ds_.cmd.bindVertexBuffers(0, *voronoi_verts_[ds_.frame].device.buf, {0});
   ds_.cmd.draw(6, frame_state_->voronoi_cells.size(), 0, 0);
 
@@ -1582,8 +1581,8 @@ void Renderer::recordCommandBuffer() {
     updateVoronoiVerts();
     renderVoronoi();
   }
-  if (frame_state_->update_canvas) {
-    renderCanvas(drawing_);
+  if (frame_state_->update_drawing) {
+    renderDrawing();
   }
   renderScene();
   renderPost();

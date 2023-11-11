@@ -152,11 +152,19 @@ class HelloTriangleApp {
     auto cube_mat = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
     auto bone_mat = renderer_->useMaterial({.data{.color1{0.9, 0.2, 0.1}}});
     auto control_mat = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
-    auto floor_mat = renderer_->useMaterial({
-        .diffuse_texture = renderer_->getDrawingTexture(),
-        // .diffuse_path = "assets/textures/viking_room.png",
+    auto viking_mat = renderer_->useMaterial({
+        .diffuse_path = "assets/textures/viking_room.png",
         .data{.color1{0.2, 0.2, 0.2}},
     });
+    auto drawing_mat = renderer_->useMaterial({
+        .diffuse_texture = renderer_->getDrawingTexture(),
+        .data{.color1{0.2, 0.2, 0.2}},
+    });
+    auto voronoi_mat = renderer_->useMaterial({
+        .diffuse_texture = renderer_->getVoronoiTexture(),
+        .data{.color1{0.2, 0.2, 0.2}},
+    });
+    floor_mats_ = {viking_mat, drawing_mat, voronoi_mat};
     gooch_mat_ = renderer_->useMaterial({.data{
         .type = MaterialData::Type::Gooch,
         .color1{fromHex(0xff8d83)},
@@ -166,7 +174,7 @@ class HelloTriangleApp {
     default_mats_.insert({ModelId::Cube, cube_mat});
     default_mats_.insert({ModelId::Bone, bone_mat});
     default_mats_.insert({ModelId::Control, control_mat});
-    default_mats_.insert({ModelId::Floor, floor_mat});
+    default_mats_.insert({ModelId::Floor, floor_mats_[ui_.floor]});
     default_mats_.insert({ModelId::Tetra, cube_mat});
   }
 
@@ -394,7 +402,7 @@ class HelloTriangleApp {
   }
 
   void resetFrameState() {
-    frame_state_.update_canvas = frame_state_.frame_num == 0;
+    frame_state_.update_drawing = frame_state_.frame_num == 0;
     frame_state_.update_voronoi = frame_state_.frame_num == 0;
   }
 
@@ -403,12 +411,14 @@ class HelloTriangleApp {
     anim_.model_rot = updateModelRotation();
     updateObjects();
 
-    for (int i = 0; i < cell_centers_.size(); i++) {
-      frame_state_.voronoi_cells[i].pos =
-          cell_centers_[i] +
-          glm::rotate(vec2(0, 0.1), time_s_ / glm::length(cell_centers_[i]));
+    if ((Floor)ui_.floor == Floor::Voronoi) {
+      for (int i = 0; i < cell_centers_.size(); i++) {
+        frame_state_.voronoi_cells[i].pos =
+            cell_centers_[i] +
+            glm::rotate(vec2(0, 0.1), time_s_ / glm::length(cell_centers_[i]));
+      }
+      frame_state_.update_voronoi = true;
     }
-    frame_state_.update_voronoi = true;
   }
 
   float updateClearValue() {
@@ -606,9 +616,6 @@ class HelloTriangleApp {
 
     ImGui::Begin("Misc Controls");
 
-    if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
-      setGooch(ui_.gooch);
-    }
     ImGui::BeginTabBar("Misc Tabs");
     if (ImGui::BeginTabItem("Post Fx")) {
       ImGui::SliderInt("i1", (int*)&frame_state_.post.i1.i, 0, 4);
@@ -622,12 +629,23 @@ class HelloTriangleApp {
       ImGui::SameLine();
       ImGui::Checkbox("i4.b4", &frame_state_.post.i4.b.b4);
       ImGui::SliderFloat("f1", &frame_state_.post.f1, 0, 10);
-      frame_state_.update_canvas |=
-          ImGui::SliderFloat("f2", &frame_state_.post.f2, 0, 1);
+      frame_state_.update_drawing |=
+          ImGui::SliderFloat("f2", &frame_state_.post.f2, 0, 1) &&
+          (Floor)ui_.floor == Floor::Drawing;
       ImGui::SliderFloat(
           "f3", &frame_state_.post.f3, 0, 10000, "%.5f",
           ImGuiSliderFlags_Logarithmic);
       ImGui::SliderFloat("f4", &frame_state_.post.f4, 0, 90);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("General")) {
+      if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
+        setGooch(ui_.gooch);
+      }
+      if (ImGui::SliderInt("Floor", &ui_.floor, 0, (int)Floor::NumFloors - 1)) {
+        MaterialId floor = floor_mats_[ui_.floor];
+        renderer_->setModelMaterial(ModelId::Floor, floor);
+      }
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Camera")) {
@@ -800,9 +818,16 @@ class HelloTriangleApp {
     int tetra_steps = 2;
   } options_;
 
+  enum class Floor {
+    Viking,
+    Drawing,
+    Voronoi,
+    NumFloors,
+  };
   struct UiState {
     std::string fps;
     bool gooch = false;
+    int floor = (int)Floor::Drawing;
   } ui_;
 
   struct AnimationState {
@@ -827,6 +852,7 @@ class HelloTriangleApp {
 
   std::map<ModelId, MaterialId> default_mats_;
   MaterialId gooch_mat_;
+  std::vector<MaterialId> floor_mats_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
