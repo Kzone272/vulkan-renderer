@@ -114,7 +114,7 @@ Texture* Renderer::getDrawingTexture() {
 }
 // TODO: Return a TextureId instead.
 Texture* Renderer::getVoronoiTexture() {
-  return &voronoi_.fbo.colors[0];
+  return &voronoi_.pass.fbo.colors[0];
 }
 
 void Renderer::initVulkan() {
@@ -141,8 +141,7 @@ void Renderer::initVulkan() {
   createSyncObjects();
 
   createDrawing();
-  createVoronoiCanvas();
-  createVertBufs();
+  createVoronoi();
 }
 
 void Renderer::initImgui() {
@@ -724,14 +723,14 @@ void Renderer::initPass(Pass& pass) {
   }
 }
 
-void Renderer::createVoronoiCanvas() {
-  voronoi_.fbo = {
+void Renderer::createVoronoi() {
+  auto& pass = voronoi_.pass;
+  pass.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
       .depth_fmt = findDepthFormat(),
       .output_sampler = *linear_sampler_,
   };
-  voronoi_.fbo.init(vs_);
 
   vk::PipelineVertexInputStateCreateInfo vert_in{};
   auto vert_bind = getBindingDesc<Vertex2d>();
@@ -740,13 +739,21 @@ void Renderer::createVoronoiCanvas() {
   auto vert_attrs = getAttrDescs<Vertex2d>();
   vert_in.setVertexAttributeDescriptions(vert_attrs);
 
-  Pipeline draw = {
+  voronoi_.draw = pass.makePipeline();
+  *voronoi_.draw = {
       .vert_shader = *voronoi_vert_,
       .frag_shader = *voronoi_frag_,
       .vert_in = vert_in,
   };
-  initPipeline(*device_, voronoi_.fbo, draw);
-  voronoi_.pls.push_back(std::move(draw));
+
+  // Support up to 100 voronoi cells for now.
+  vk::DeviceSize size = 100 * sizeof(Vertex2d);
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    voronoi_.verts.push_back(
+        createDynamicBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer));
+  }
+
+  initPass(voronoi_.pass);
 }
 
 void Renderer::createCommandPool() {
@@ -1176,15 +1183,6 @@ Texture* Renderer::getColorTexture(uint32_t color) {
   return texture;
 }
 
-void Renderer::createVertBufs() {
-  // Support up to 100 voronoi cells for now.
-  vk::DeviceSize size = 100 * sizeof(Vertex2d);
-  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    voronoi_verts_.push_back(
-        createDynamicBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer));
-  }
-}
-
 DynamicBuf Renderer::createDynamicBuffer(
     vk::DeviceSize size, vk::BufferUsageFlags usage) {
   DynamicBuf dbuf;
@@ -1459,19 +1457,17 @@ void Renderer::updateDynamicBuf(
       nullptr);
 }
 
-void Renderer::updateVoronoiVerts() {
+void Renderer::renderVoronoi() {
   std::span<Vertex2d> span = frame_state_->voronoi_cells;
   updateDynamicBuf(
-      voronoi_verts_[ds_.frame], span, vk::PipelineStageFlagBits::eVertexInput,
+      voronoi_.verts[ds_.frame], span, vk::PipelineStageFlagBits::eVertexInput,
       vk::AccessFlagBits::eVertexAttributeRead);
-}
 
-void Renderer::renderVoronoi() {
-  beginRp(voronoi_.fbo, 0);
+  beginRp(voronoi_.pass.fbo, 0);
 
   ds_.cmd.bindPipeline(
-      vk::PipelineBindPoint::eGraphics, *voronoi_.pls[0].pipeline);
-  ds_.cmd.bindVertexBuffers(0, *voronoi_verts_[ds_.frame].device.buf, {0});
+      vk::PipelineBindPoint::eGraphics, *voronoi_.draw->pipeline);
+  ds_.cmd.bindVertexBuffers(0, *voronoi_.verts[ds_.frame].device.buf, {0});
   ds_.cmd.draw(6, frame_state_->voronoi_cells.size(), 0, 0);
 
   ds_.cmd.endRenderPass();
@@ -1558,7 +1554,6 @@ void Renderer::renderSwap() {
 
 void Renderer::recordCommandBuffer() {
   if (frame_state_->update_voronoi) {
-    updateVoronoiVerts();
     renderVoronoi();
   }
   if (frame_state_->update_drawing) {

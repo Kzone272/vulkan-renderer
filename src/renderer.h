@@ -40,13 +40,6 @@ struct Model {
   Material* material;
 };
 
-// An offscreen render target that can be sampled.
-// TODO: Delete this in favour of Pass.
-struct Canvas {
-  Fbo fbo;
-  std::vector<Pipeline> pls;
-};
-
 struct SDL_Window;
 struct SDL_Surface;
 
@@ -125,8 +118,7 @@ class Renderer {
 
   void initPass(Pass& pass);
   void createDrawing();
-  void createVoronoiCanvas();
-  void createVertBufs();
+  void createVoronoi();
 
   void createSamplers();
   void initSdlImage();
@@ -174,7 +166,6 @@ class Renderer {
 
   void beginRp(const Fbo& fbo, int fb_ind);
   void renderDrawing();
-  void updateVoronoiVerts();
   void renderVoronoi();
   void renderScene();
   void renderPost();
@@ -280,14 +271,17 @@ class Renderer {
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  Canvas voronoi_;
-  std::vector<DynamicBuf> voronoi_verts_;
-
   struct Drawing {
     Pass pass;
     Pipeline* draw;
     DescLayout* inputs;
   } drawing_;
+
+  struct Voronoi {
+    Pass pass;
+    Pipeline* draw;
+    std::vector<DynamicBuf> verts;
+  } voronoi_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
