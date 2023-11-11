@@ -1,5 +1,21 @@
 #include "fbo.h"
 
+void Fbo::init(const VulkanState& vs) {
+  initImages(vs);
+  initDescs(vs);
+  initRp(vs);
+  initFb(vs);
+}
+
+void Fbo::resize(const VulkanState& vs, vk::Extent2D new_size) {
+  resetImages();
+
+  size = new_size;
+  initImages(vs);
+  updateDescs(vs);
+  initFb(vs);
+}
+
 void Fbo::resetImages() {
   colors.clear();
   resolves.clear();
@@ -7,7 +23,7 @@ void Fbo::resetImages() {
   fbs.clear();  // Framebuffers reference the ImageViews
 }
 
-void Fbo::initImages(ImageFactory& factory) {
+void Fbo::initImages(const VulkanState& vs) {
   for (auto& format : color_fmts) {
     Texture color{
         .size = size,
@@ -17,8 +33,8 @@ void Fbo::initImages(ImageFactory& factory) {
     auto usage = vk::ImageUsageFlagBits::eColorAttachment |
                  (resolve ? vk::ImageUsageFlagBits::eTransientAttachment
                           : vk::ImageUsageFlagBits::eSampled);
-    factory.createImage(
-        color, vk::ImageTiling::eOptimal, usage,
+    createImage(
+        vs, color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor, output_sampler);
     colors.push_back(std::move(color));
@@ -29,8 +45,8 @@ void Fbo::initImages(ImageFactory& factory) {
           .format = format,
           .samples = vk::SampleCountFlagBits::e1,
       };
-      factory.createImage(
-          resolve, vk::ImageTiling::eOptimal,
+      createImage(
+          vs, resolve, vk::ImageTiling::eOptimal,
           vk::ImageUsageFlagBits::eColorAttachment |
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
@@ -45,16 +61,16 @@ void Fbo::initImages(ImageFactory& factory) {
         .format = *depth_fmt,
         .samples = samples,
     };
-    factory.createImage(
-        depth, vk::ImageTiling::eOptimal,
+    createImage(
+        vs, depth, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth, {});
   }
 }
 
-void Fbo::initDescs(int count, vk::Device& device, vk::DescriptorPool& pool) {
-  if (swap) {
+void Fbo::initDescs(const VulkanState& vs) {
+  if (desc_count == 0) {
     return;
   }
 
@@ -64,12 +80,16 @@ void Fbo::initDescs(int count, vk::Device& device, vk::DescriptorPool& pool) {
            Binding{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
-  output_set.init(device);
-  output_set.alloc(device, pool, count);
-  updateDescs(device);
+  output_set.init(vs);
+  output_set.alloc(vs, desc_count);
+  updateDescs(vs);
 }
 
-void Fbo::updateDescs(vk::Device& device) {
+void Fbo::updateDescs(const VulkanState& vs) {
+  if (desc_count == 0) {
+    return;
+  }
+
   std::vector<vk::WriteDescriptorSet> writes;
 
   auto& outputs = resolve ? resolves : colors;
@@ -77,10 +97,10 @@ void Fbo::updateDescs(vk::Device& device) {
     output_set.updateSamplerBind(i, &outputs[i].info, writes);
   }
 
-  device.updateDescriptorSets(writes, nullptr);
+  vs.device.updateDescriptorSets(writes, nullptr);
 }
 
-void Fbo::initRp(vk::Device& device) {
+void Fbo::initRp(const VulkanState& vs) {
   vk::ClearValue color_clear{{0.f, 0.f, 0.f, 1.f}};
   vk::ClearValue depth_clear{{1.f, 0}};
 
@@ -214,10 +234,10 @@ void Fbo::initRp(vk::Device& device) {
   rp_ci.setAttachments(atts);
   rp_ci.setSubpasses(subpass);
   rp_ci.setDependencies(deps);
-  rp = device.createRenderPassUnique(rp_ci).value;
+  rp = vs.device.createRenderPassUnique(rp_ci).value;
 }
 
-void Fbo::initFb(vk::Device& device) {
+void Fbo::initFb(const VulkanState& vs) {
   vk::FramebufferCreateInfo fb_ci{
       .renderPass = *rp,
       .width = size.width,
@@ -239,10 +259,10 @@ void Fbo::initFb(vk::Device& device) {
     for (auto& view : swap_views) {
       views.back() = view;
       fb_ci.setAttachments(views);
-      fbs.push_back(device.createFramebufferUnique(fb_ci).value);
+      fbs.push_back(vs.device.createFramebufferUnique(fb_ci).value);
     }
   } else {
     fb_ci.setAttachments(views);
-    fbs.push_back(device.createFramebufferUnique(fb_ci).value);
+    fbs.push_back(vs.device.createFramebufferUnique(fb_ci).value);
   }
 }

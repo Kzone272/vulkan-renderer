@@ -19,8 +19,8 @@ struct DescLayout {
   vk::UniqueDescriptorSetLayout layout;
   std::vector<vk::DescriptorSet> sets;
 
-  void init(vk::Device& device);
-  void alloc(vk::Device& device, vk::DescriptorPool& pool, int count);
+  void init(const VulkanState& vs);
+  void alloc(const VulkanState& vs, int count);
   void updateUboBind(
       uint32_t index, const std::vector<vk::DescriptorBufferInfo*>& infos,
       std::vector<vk::WriteDescriptorSet>& writes);
@@ -38,8 +38,7 @@ void updateDescSet(
     DescSetUpdates updates, std::vector<vk::WriteDescriptorSet>& writes);
 
 std::vector<vk::DescriptorSet> allocDescSets(
-    vk::Device device, vk::DescriptorPool pool, vk::DescriptorSetLayout layout,
-    size_t count);
+    const VulkanState& vs, vk::DescriptorSetLayout layout, size_t count);
 
 vk::DescriptorSet allocDescSet(
-    vk::Device device, vk::DescriptorPool pool, vk::DescriptorSetLayout layout);
+    const VulkanState& vs, vk::DescriptorSetLayout layout);

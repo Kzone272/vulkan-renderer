@@ -2,10 +2,10 @@
 
 #include "asserts.h"
 
-void ImageFactory::createImage(
-    Texture& texture, vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-    vk::MemoryPropertyFlags props, vk::ImageAspectFlags aspect,
-    vk::Sampler sampler) {
+void createImage(
+    const VulkanState& vs, Texture& texture, vk::ImageTiling tiling,
+    vk::ImageUsageFlags usage, vk::MemoryPropertyFlags props,
+    vk::ImageAspectFlags aspect, vk::Sampler sampler) {
   vk::ImageCreateInfo img_ci{
       .imageType = vk::ImageType::e2D,
       .format = texture.format,
@@ -21,21 +21,22 @@ void ImageFactory::createImage(
       .sharingMode = vk::SharingMode::eExclusive,
       .initialLayout = vk::ImageLayout::eUndefined,
   };
-  texture.image = device_.createImageUnique(img_ci).value;
+  texture.image = vs.device.createImageUnique(img_ci).value;
 
   vk::MemoryRequirements mem_reqs =
-      device_.getImageMemoryRequirements(*texture.image);
+      vs.device.getImageMemoryRequirements(*texture.image);
 
   vk::MemoryAllocateInfo alloc_info{
       .allocationSize = mem_reqs.size,
       .memoryTypeIndex =
-          findMemoryType(mem_reqs.memoryTypeBits, props, *mem_props_),
+          findMemoryType(mem_reqs.memoryTypeBits, props, vs.mem_props),
   };
-  texture.image_mem = device_.allocateMemoryUnique(alloc_info).value;
-  std::ignore = device_.bindImageMemory(*texture.image, *texture.image_mem, 0);
+  texture.image_mem = vs.device.allocateMemoryUnique(alloc_info).value;
+  std::ignore =
+      vs.device.bindImageMemory(*texture.image, *texture.image_mem, 0);
 
   texture.image_view = createImageView(
-      *texture.image, texture.format, texture.mip_levels, aspect);
+      vs, *texture.image, texture.format, texture.mip_levels, aspect);
   texture.info = {
       .sampler = sampler,
       .imageView = *texture.image_view,
@@ -43,9 +44,9 @@ void ImageFactory::createImage(
   };
 }
 
-vk::UniqueImageView ImageFactory::createImageView(
-    vk::Image img, vk::Format format, uint32_t mip_levels,
-    vk::ImageAspectFlags aspect_flags) {
+vk::UniqueImageView createImageView(
+    const VulkanState& vs, vk::Image img, vk::Format format,
+    uint32_t mip_levels, vk::ImageAspectFlags aspect_flags) {
   vk::ImageViewCreateInfo ci{
       .image = img,
       .viewType = vk::ImageViewType::e2D,
@@ -57,7 +58,7 @@ vk::UniqueImageView ImageFactory::createImageView(
           .baseArrayLayer = 0,
           .layerCount = 1,
       }};
-  return device_.createImageViewUnique(ci).value;
+  return vs.device.createImageViewUnique(ci).value;
 }
 
 uint32_t findMemoryType(

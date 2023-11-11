@@ -129,9 +129,11 @@ void Renderer::initVulkan() {
   createCommandBuffers();
   createSwapchain();
   createSamplers();
-  createInFlightBuffers();
   createDescriptorPool();
   createImguiDescriptorPool();
+  // VulkanState should now fully defined.
+
+  createInFlightBuffers();
   createDescSets();
   createFbos();
   createShaders();
@@ -411,8 +413,8 @@ void Renderer::pickPhysicalDevice() {
     break;
   }
   ASSERT(physical_device_);
-  device_props_ = physical_device_.getProperties();
-  mem_props_ = physical_device_.getMemoryProperties();
+  vs_.device_props = physical_device_.getProperties();
+  vs_.mem_props = physical_device_.getMemoryProperties();
   msaa_samples_ = getMaxSampleCount();
   printf("max msaa samples: %d\n", msaa_samples_);
 
@@ -426,8 +428,8 @@ void Renderer::pickPhysicalDevice() {
 }
 
 vk::SampleCountFlagBits Renderer::getMaxSampleCount() {
-  auto count_limit = device_props_.limits.framebufferColorSampleCounts &
-                     device_props_.limits.framebufferDepthSampleCounts;
+  auto count_limit = vs_.device_props.limits.framebufferColorSampleCounts &
+                     vs_.device_props.limits.framebufferDepthSampleCounts;
 
   constexpr std::array<vk::SampleCountFlagBits, 6> possible_counts = {
       vk::SampleCountFlagBits::e64, vk::SampleCountFlagBits::e32,
@@ -521,13 +523,12 @@ void Renderer::createLogicalDevice() {
     device_ci.setPEnabledLayerNames(validation_layers);
   }
   device_ = physical_device_.createDeviceUnique(device_ci).value;
+  vs_.device = *device_;
 
   gfx_q_ = device_->getQueue(q_indices_.gfx_family, 0);
   ASSERT(gfx_q_);
   present_q_ = device_->getQueue(q_indices_.present_family, 0);
   ASSERT(present_q_);
-
-  factory_.init(*device_, &mem_props_);
 }
 
 vk::SurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(
@@ -608,8 +609,8 @@ void Renderer::createSwapchain() {
 
   swapchain_views_.resize(swapchain_images.size());
   for (size_t i = 0; i < swapchain_images.size(); i++) {
-    swapchain_views_[i] = factory_.createImageView(
-        swapchain_images[i], swapchain_format_, 1,
+    swapchain_views_[i] = createImageView(
+        vs_, swapchain_images[i], swapchain_format_, 1,
         vk::ImageAspectFlagBits::eColor);
   }
 
@@ -680,36 +681,13 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
   return device_->createShaderModuleUnique(ci).value;
 }
 
-void Renderer::initFbo(Fbo& fbo) {
-  fbo.initImages(factory_);
-  fbo.initDescs(MAX_FRAMES_IN_FLIGHT, *device_, *desc_pool_);
-  fbo.initRp(*device_);
-  fbo.initFb(*device_);
-}
-
-void Renderer::resizeFbo(Fbo& fbo, vk::Extent2D size) {
-  if (fbo.swap) {
-    fbo.swap_format = swapchain_format_;
-    fbo.swap_views.clear();
-    for (auto& view : swapchain_views_) {
-      fbo.swap_views.push_back(*view);
-    }
-  }
-
-  fbo.resetImages();
-
-  fbo.size = size;
-  fbo.initImages(factory_);
-  fbo.updateDescs(*device_);
-  fbo.initFb(*device_);
-}
-
 void Renderer::createDrawing() {
   auto& pass = drawing_.pass;
   pass.fbo = {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
       .output_sampler = *linear_sampler_,
+      .desc_count = MAX_FRAMES_IN_FLIGHT,
   };
 
   drawing_.inputs = pass.makeDescLayout();
@@ -734,11 +712,11 @@ void Renderer::createDrawing() {
 }
 
 void Renderer::initPass(Pass& pass) {
-  initFbo(pass.fbo);
+  pass.fbo.init(vs_);
 
   for (auto& lo : pass.los) {
-    lo->init(*device_);
-    lo->alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+    lo->init(vs_);
+    lo->alloc(vs_, MAX_FRAMES_IN_FLIGHT);
   }
 
   for (auto& pl : pass.pls) {
@@ -753,7 +731,7 @@ void Renderer::createVoronoiCanvas() {
       .depth_fmt = findDepthFormat(),
       .output_sampler = *linear_sampler_,
   };
-  initFbo(voronoi_.fbo);
+  voronoi_.fbo.init(vs_);
 
   vk::PipelineVertexInputStateCreateInfo vert_in{};
   auto vert_bind = getBindingDesc<Vertex2d>();
@@ -863,8 +841,8 @@ Texture* Renderer::createTexture(
   memcpy(mapped_data, texture_data, static_cast<size_t>(image_size));
   device_->unmapMemory(*staging_buf_mem);
 
-  factory_.createImage(
-      *texture.get(), vk::ImageTiling::eOptimal,
+  createImage(
+      vs_, *texture.get(), vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eTransferSrc |
           vk::ImageUsageFlagBits::eTransferDst |
           vk::ImageUsageFlagBits::eSampled,
@@ -1079,7 +1057,7 @@ void Renderer::createSamplers() {
       .addressModeW = vk::SamplerAddressMode::eRepeat,
       .mipLodBias = 0.f,
       .anisotropyEnable = VK_TRUE,
-      .maxAnisotropy = device_props_.limits.maxSamplerAnisotropy,
+      .maxAnisotropy = vs_.device_props.limits.maxSamplerAnisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = vk::CompareOp::eAlways,
       .minLod = 0.f,
@@ -1103,15 +1081,17 @@ void Renderer::createFbos() {
       // .resolve = true,
       .depth_fmt = findDepthFormat(),
       .output_sampler = *linear_sampler_,
+      .desc_count = MAX_FRAMES_IN_FLIGHT,
   };
-  initFbo(scene_fbo_);
+  scene_fbo_.init(vs_);
 
   post_fbo_ = {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_},
       .output_sampler = *linear_sampler_,
+      .desc_count = MAX_FRAMES_IN_FLIGHT,
   };
-  initFbo(post_fbo_);
+  post_fbo_.init(vs_);
 
   std::vector<vk::ImageView> swap_views;
   for (auto& view : swapchain_views_) {
@@ -1123,7 +1103,7 @@ void Renderer::createFbos() {
       .swap_format = swapchain_format_,
       .swap_views = swap_views,
   };
-  initFbo(swap_fbo_);
+  swap_fbo_.init(vs_);
 }
 
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
@@ -1149,8 +1129,7 @@ Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
       .range = sizeof(MaterialData),
   };
 
-  material->desc_set =
-      allocDescSet(*device_, *desc_pool_, *material_dl_.layout);
+  material->desc_set = allocDescSet(vs_, *material_dl_.layout);
   std::vector<vk::WriteDescriptorSet> writes;
   updateDescSet(
       material->desc_set, material_dl_,
@@ -1334,7 +1313,7 @@ void Renderer::createBuffer(
   vk::MemoryAllocateInfo alloc_info{
       .allocationSize = mem_reqs.size,
       .memoryTypeIndex =
-          findMemoryType(mem_reqs.memoryTypeBits, props, mem_props_),
+          findMemoryType(mem_reqs.memoryTypeBits, props, vs_.mem_props),
   };
   buf_mem = device_->allocateMemoryUnique(alloc_info).value;
   std::ignore = device_->bindBufferMemory(*buf, *buf_mem, 0);
@@ -1356,6 +1335,7 @@ void Renderer::createDescriptorPool() {
   };
   pool_ci.setPoolSizes(pool_sizes);
   desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
+  vs_.desc_pool = *desc_pool_;
 }
 
 void Renderer::createImguiDescriptorPool() {
@@ -1389,13 +1369,13 @@ void Renderer::createImguiDescriptorPool() {
 }
 
 void Renderer::createDescSets() {
-  global_dl_.init(*device_);
-  post_dl_.init(*device_);
-  material_dl_.init(*device_);  // Sets allocated per material.
-  sampler_dl_.init(*device_);   // Doesn't need sets allocated.
+  global_dl_.init(vs_);
+  post_dl_.init(vs_);
+  material_dl_.init(vs_);  // These sets are allocated per material.
+  sampler_dl_.init(vs_);   // Doesn't need sets allocated.
 
-  global_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
-  post_dl_.alloc(*device_, *desc_pool_, MAX_FRAMES_IN_FLIGHT);
+  global_dl_.alloc(vs_, MAX_FRAMES_IN_FLIGHT);
+  post_dl_.alloc(vs_, MAX_FRAMES_IN_FLIGHT);
 
   std::vector<vk::WriteDescriptorSet> writes;
   global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
@@ -1614,9 +1594,15 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
 
-  resizeFbo(scene_fbo_, swapchain_extent_);
-  resizeFbo(post_fbo_, swapchain_extent_);
-  resizeFbo(swap_fbo_, swapchain_extent_);
+  scene_fbo_.resize(vs_, swapchain_extent_);
+  post_fbo_.resize(vs_, swapchain_extent_);
+
+  swap_fbo_.swap_format = swapchain_format_;
+  swap_fbo_.swap_views.clear();
+  for (auto& view : swapchain_views_) {
+    swap_fbo_.swap_views.push_back(*view);
+  }
+  swap_fbo_.resize(vs_, swapchain_extent_);
 
   window_resized_ = false;
 }

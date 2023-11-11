@@ -12,6 +12,7 @@ struct Fbo {
   bool resolve = false;
   std::optional<vk::Format> depth_fmt;
   vk::Sampler output_sampler;
+  int desc_count = 0;
   bool swap = false;
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;
@@ -24,10 +25,13 @@ struct Fbo {
   std::vector<vk::ClearValue> clears;
   std::vector<vk::UniqueFramebuffer> fbs;
 
-  void initImages(ImageFactory& factory);
-  void initDescs(int desc_count, vk::Device& device, vk::DescriptorPool& pool);
-  void updateDescs(vk::Device& device);
-  void initRp(vk::Device& device);
-  void initFb(vk::Device& device);
+  void init(const VulkanState& vs);
+  void resize(const VulkanState& vs, vk::Extent2D new_size);
+
+  void initImages(const VulkanState& vs);
+  void initDescs(const VulkanState& vs);
+  void updateDescs(const VulkanState& vs);
+  void initRp(const VulkanState& vs);
+  void initFb(const VulkanState& vs);
   void resetImages();
 };

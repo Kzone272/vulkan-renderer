@@ -62,28 +62,26 @@ void updateDescSet(
 }
 
 std::vector<vk::DescriptorSet> allocDescSets(
-    vk::Device device, vk::DescriptorPool pool, vk::DescriptorSetLayout layout,
-    size_t count) {
+    const VulkanState& vs, vk::DescriptorSetLayout layout, size_t count) {
   std::vector<vk::DescriptorSetLayout> layouts(count, layout);
   vk::DescriptorSetAllocateInfo ai{
-      .descriptorPool = pool,
+      .descriptorPool = vs.desc_pool,
   };
   ai.setSetLayouts(layouts);
 
-  auto desc_sets = device.allocateDescriptorSets(ai).value;
+  auto desc_sets = vs.device.allocateDescriptorSets(ai).value;
   DASSERT(desc_sets.size() == count);
 
   return desc_sets;
 }
 
 vk::DescriptorSet allocDescSet(
-    vk::Device device, vk::DescriptorPool pool,
-    vk::DescriptorSetLayout layout) {
-  auto desc_sets = allocDescSets(device, pool, layout, 1);
+    const VulkanState& vs, vk::DescriptorSetLayout layout) {
+  auto desc_sets = allocDescSets(vs, layout, 1);
   return desc_sets[0];
 }
 
-void DescLayout::init(vk::Device& device) {
+void DescLayout::init(const VulkanState& vs) {
   uint32_t i = 0;
   std::vector<vk::DescriptorSetLayoutBinding> bindings;
   for (auto& bind : binds) {
@@ -98,12 +96,11 @@ void DescLayout::init(vk::Device& device) {
 
   vk::DescriptorSetLayoutCreateInfo layout_ci{};
   layout_ci.setBindings(bindings);
-  layout = device.createDescriptorSetLayoutUnique(layout_ci).value;
+  layout = vs.device.createDescriptorSetLayoutUnique(layout_ci).value;
 }
 
-void DescLayout::alloc(
-    vk::Device& device, vk::DescriptorPool& pool, int count) {
-  sets = allocDescSets(device, pool, *layout, count);
+void DescLayout::alloc(const VulkanState& vs, int count) {
+  sets = allocDescSets(vs, *layout, count);
 }
 
 void DescLayout::updateUboBind(

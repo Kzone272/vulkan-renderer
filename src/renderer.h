@@ -123,9 +123,6 @@ class Renderer {
   void createShaders();
   void createGraphicsPipelines();
 
-  void initFbo(Fbo& fbo);
-  void resizeFbo(Fbo& fbo, vk::Extent2D size);
-
   void initPass(Pass& pass);
   void createDrawing();
   void createVoronoiCanvas();
@@ -193,20 +190,21 @@ class Renderer {
   uint32_t width_ = 100;
   uint32_t height_ = 100;
 
+  // The members in this struct should never change after handing it out, or
+  // problems are likely to occur.
+  VulkanState vs_;
+
   vk::UniqueInstance instance_;
   vk::DispatchLoaderDynamic dldi_;
   vk::UniqueSurfaceKHR surface_;
   vk::UniqueHandle<vk::DebugUtilsMessengerEXT, vk::DispatchLoaderDynamic>
       dbg_messenger_;
   vk::PhysicalDevice physical_device_;
-  vk::PhysicalDeviceProperties device_props_;
-  vk::PhysicalDeviceMemoryProperties mem_props_;
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
   vk::UniqueDevice device_;
   vk::Queue gfx_q_;
   vk::Queue present_q_;
-  ImageFactory factory_;
   SwapchainSupportDetails swapchain_support_;
   vk::UniqueSwapchainKHR swapchain_;
   vk::Format color_fmt_ = vk::Format::eB8G8R8A8Unorm;
