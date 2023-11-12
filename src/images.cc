@@ -1,6 +1,7 @@
 #include "images.h"
 
 #include "asserts.h"
+#include "buffers.h"
 
 void createImage(
     const VulkanState& vs, Texture& texture, vk::ImageTiling tiling,
@@ -28,8 +29,7 @@ void createImage(
 
   vk::MemoryAllocateInfo alloc_info{
       .allocationSize = mem_reqs.size,
-      .memoryTypeIndex =
-          findMemoryType(mem_reqs.memoryTypeBits, props, vs.mem_props),
+      .memoryTypeIndex = findMemoryType(vs, mem_reqs.memoryTypeBits, props),
   };
   texture.image_mem = vs.device.allocateMemoryUnique(alloc_info).value;
   std::ignore =
@@ -59,17 +59,4 @@ vk::UniqueImageView createImageView(
           .layerCount = 1,
       }};
   return vs.device.createImageViewUnique(ci).value;
-}
-
-uint32_t findMemoryType(
-    uint32_t type_filter, vk::MemoryPropertyFlags props,
-    const vk::PhysicalDeviceMemoryProperties& device_mem_props) {
-  for (uint32_t i = 0; i < device_mem_props.memoryTypeCount; i++) {
-    if (type_filter & (1 << i) &&
-        (device_mem_props.memoryTypes[i].propertyFlags & props) == props) {
-      return i;
-    }
-  }
-  ASSERT(false);
-  return 0;
 }

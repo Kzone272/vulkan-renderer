@@ -23,7 +23,3 @@ void createImage(
 vk::UniqueImageView createImageView(
     const VulkanState& vs, vk::Image img, vk::Format format,
     uint32_t mip_levels, vk::ImageAspectFlags aspect_flags);
-
-uint32_t findMemoryType(
-    uint32_t type_filter, vk::MemoryPropertyFlags props,
-    const vk::PhysicalDeviceMemoryProperties& device_mem_props);

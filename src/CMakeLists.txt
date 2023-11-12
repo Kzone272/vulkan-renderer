@@ -32,6 +32,8 @@ add_executable(main
   pass.h
   pass.cc
   render-state.h
+  buffers.h
+  buffers.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

@@ -1,6 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
+- Move all Pass related code out of Renderer
+  - init()
+  - Separate shaders code
 - Speed up build.
   - Make sure multithreaded building is working. I may have disabled it?
 - Simplify creating Ubo DynamicBufs and attaching to descriptors.

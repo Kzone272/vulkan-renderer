@@ -4,6 +4,7 @@
 #include <span>
 #include <vector>
 
+#include "buffers.h"
 #include "descriptors.h"
 #include "fbo.h"
 #include "images.h"
@@ -11,18 +12,6 @@
 #include "pipelines.h"
 #include "render-objects.h"
 #include "vulkan-include.h"
-
-struct Buffer {
-  vk::UniqueBuffer buf;
-  vk::UniqueDeviceMemory mem;
-  void* mapped = nullptr;
-  vk::DescriptorBufferInfo info;
-};
-
-struct DynamicBuf {
-  Buffer staging;
-  Buffer device;
-};
 
 struct Material {
   Texture* diffuse;
@@ -144,12 +133,6 @@ class Renderer {
   void stageBuffer(
       vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
       vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem);
-  void createBuffer(
-      vk::DeviceSize size, vk::BufferUsageFlags usage,
-      vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
-      vk::UniqueDeviceMemory& buf_mem);
-  DynamicBuf createDynamicBuffer(
-      vk::DeviceSize size, vk::BufferUsageFlags usage);
 
   vk::CommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(vk::CommandBuffer cmd_buf);

@@ -651,7 +651,7 @@ void Renderer::createDrawing() {
 
   for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     drawing_.debugs.push_back(createDynamicBuffer(
-        sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
+        vs_, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   // TODO: Generalize so this can be part of pass.init()
@@ -694,7 +694,7 @@ void Renderer::createVoronoi() {
   vk::DeviceSize size = 100 * sizeof(Vertex2d);
   for (int i = 0; i < vs_.kMaxFramesInFlight; i++) {
     voronoi_.verts.push_back(
-        createDynamicBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer));
+        createDynamicBuffer(vs_, size, vk::BufferUsageFlagBits::eVertexBuffer));
   }
 
   voronoi_.pass.init(vs_);
@@ -755,7 +755,7 @@ void Renderer::createScene() {
 
   for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     scene_.globals.push_back(createDynamicBuffer(
-        sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
+        vs_, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
@@ -819,7 +819,7 @@ void Renderer::createPost() {
 
   for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     post_.debugs.push_back(createDynamicBuffer(
-        sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
+        vs_, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
@@ -950,7 +950,7 @@ Texture* Renderer::createTexture(
   vk::UniqueDeviceMemory staging_buf_mem;
   vk::DeviceSize image_size = width * height * 4;
   createBuffer(
-      image_size, vk::BufferUsageFlagBits::eTransferSrc,
+      vs_, image_size, vk::BufferUsageFlagBits::eTransferSrc,
       vk::MemoryPropertyFlagBits::eHostVisible |
           vk::MemoryPropertyFlagBits::eHostCoherent,
       staging_buf, staging_buf_mem);
@@ -1260,31 +1260,6 @@ Texture* Renderer::getColorTexture(uint32_t color) {
   return texture;
 }
 
-DynamicBuf Renderer::createDynamicBuffer(
-    vk::DeviceSize size, vk::BufferUsageFlags usage) {
-  DynamicBuf dbuf;
-  createBuffer(
-      size, vk::BufferUsageFlagBits::eTransferSrc,
-      vk::MemoryPropertyFlagBits::eHostVisible |
-          vk::MemoryPropertyFlagBits::eHostCoherent,
-      dbuf.staging.buf, dbuf.staging.mem);
-  dbuf.staging.info.range = size;
-  dbuf.staging.info.buffer = *dbuf.staging.buf;
-
-  dbuf.staging.mapped =
-      device_->mapMemory(*dbuf.staging.mem, dbuf.staging.info.offset, size)
-          .value;
-
-  createBuffer(
-      size, usage | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal, dbuf.device.buf,
-      dbuf.device.mem);
-  dbuf.device.info.range = size;
-  dbuf.device.info.buffer = *dbuf.device.buf;
-
-  return std::move(dbuf);
-}
-
 void Renderer::stageVertices(
     const std::vector<Vertex>& vertices, Model& model) {
   vk::DeviceSize size = sizeof(Vertex) * vertices.size();
@@ -1303,6 +1278,7 @@ void Renderer::stageIndices(
 
 // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
 // from the staging_buf to dst_buf.
+// TODO: Move to buffers.h
 // TODO: Reuse createDynamicBuffer() for this.
 void Renderer::stageBuffer(
     vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
@@ -1310,7 +1286,7 @@ void Renderer::stageBuffer(
   vk::UniqueBuffer staging_buf;
   vk::UniqueDeviceMemory staging_buf_mem;
   createBuffer(
-      size, vk::BufferUsageFlagBits::eTransferSrc,
+      vs_, size, vk::BufferUsageFlagBits::eTransferSrc,
       vk::MemoryPropertyFlagBits::eHostVisible |
           vk::MemoryPropertyFlagBits::eHostCoherent,
       staging_buf, staging_buf_mem);
@@ -1320,7 +1296,7 @@ void Renderer::stageBuffer(
   device_->unmapMemory(*staging_buf_mem);
 
   createBuffer(
-      size, usage | vk::BufferUsageFlagBits::eTransferDst,
+      vs_, size, usage | vk::BufferUsageFlagBits::eTransferDst,
       vk::MemoryPropertyFlagBits::eDeviceLocal, dst_buf, dst_buf_mem);
 
   vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
@@ -1357,29 +1333,6 @@ void Renderer::endSingleTimeCommands(vk::CommandBuffer cmd_buf) {
   std::ignore = gfx_q_.waitIdle();
 
   device_->freeCommandBuffers(*cmd_pool_, cmd_buf);
-}
-
-// TODO: return a Buffer.
-void Renderer::createBuffer(
-    vk::DeviceSize size, vk::BufferUsageFlags usage,
-    vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
-    vk::UniqueDeviceMemory& buf_mem) {
-  vk::BufferCreateInfo buffer_ci{
-      .size = size,
-      .usage = usage,
-      .sharingMode = vk::SharingMode::eExclusive,
-  };
-  buf = device_->createBufferUnique(buffer_ci).value;
-
-  vk::MemoryRequirements mem_reqs = device_->getBufferMemoryRequirements(*buf);
-
-  vk::MemoryAllocateInfo alloc_info{
-      .allocationSize = mem_reqs.size,
-      .memoryTypeIndex =
-          findMemoryType(mem_reqs.memoryTypeBits, props, vs_.mem_props),
-  };
-  buf_mem = device_->allocateMemoryUnique(alloc_info).value;
-  std::ignore = device_->bindBufferMemory(*buf, *buf_mem, 0);
 }
 
 void Renderer::createDescriptorPool() {
