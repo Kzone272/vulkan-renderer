@@ -3,6 +3,7 @@
 #include <variant>
 #include <vector>
 
+#include "render-state.h"
 #include "vulkan-include.h"
 
 struct Binding {

@@ -2,8 +2,7 @@
 
 #include "pipelines.h"
 
-// TODO: Probably should avoid this include by moving structs around.
-#include "renderer.h"
+#include "fbo.h"
 
 void initPipeline(vk::Device device, const Fbo& fbo, Pipeline& pl) {
   vk::PipelineShaderStageCreateInfo vert_ci{

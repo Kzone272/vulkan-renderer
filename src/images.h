@@ -1,5 +1,6 @@
 #pragma once
 
+#include "render-state.h"
 #include "vulkan-include.h"
 
 struct Texture {

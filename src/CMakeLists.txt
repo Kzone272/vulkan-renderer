@@ -30,6 +30,7 @@ add_executable(main
   fbo.h
   fbo.cc
   pass.h
+  render-state.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

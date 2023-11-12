@@ -27,6 +27,7 @@
 #include "images.h"
 #include "pipelines.h"
 #include "render-objects.h"
+#include "render-state.h"
 #include "strings.h"
 #include "vulkan-include.h"
 

@@ -1,7 +1,5 @@
 #include "fbo.h"
 
-#include "renderer.h"
-
 void Fbo::init(const VulkanState& vs) {
   initImages(vs);
   initDescs(vs);

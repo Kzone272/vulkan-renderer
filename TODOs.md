@@ -1,8 +1,10 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Finish Pass struct
-  - Allocates the Ubos for the layouts
+- Speed up build.
+  - Make sure multithreaded building is working. I may have disabled it?
+- Simplify creating Ubo DynamicBufs and attaching to descriptors.
+  - Not totally clear what that interface should look like.
 - Simplify adding new shaders. Probably stored in a map keyed by filename.
 - Add shadow mapping for some lights.
 - Improve outline filter AA by rendering edges with MSAA.

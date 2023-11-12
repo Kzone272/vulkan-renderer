@@ -40,12 +40,6 @@ struct Model {
   Material* material;
 };
 
-struct DrawState {
-  vk::CommandBuffer cmd = {};
-  int frame = -1;
-  uint32_t img_ind = 0;
-};
-
 struct SDL_Window;
 struct SDL_Surface;
 

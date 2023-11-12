@@ -2,9 +2,8 @@
 
 #include "descriptors.h"
 #include "images.h"
+#include "render-state.h"
 #include "vulkan-include.h"
-
-struct DrawState;
 
 struct Fbo {
   // Inputs
