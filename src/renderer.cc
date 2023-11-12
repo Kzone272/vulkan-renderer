@@ -131,14 +131,16 @@ void Renderer::initVulkan() {
   createSamplers();
   createDescriptorPool();
   createImguiDescriptorPool();
+  createSyncObjects();
+  createShaders();
   // VulkanState should now fully defined.
+
+  createScene();
 
   createInFlightBuffers();
   createDescSets();
   createFbos();
-  createShaders();
   createGraphicsPipelines();
-  createSyncObjects();
 
   createDrawing();
   createVoronoi();
@@ -168,30 +170,12 @@ void Renderer::imguiNewFrame() {
 }
 
 void Renderer::updateUboData() {
-  GlobalData data;
-  data.view = frame_state_->view;
-  data.proj = frame_state_->proj;
-  data.inv_proj = glm::inverse(frame_state_->proj);
-
-  const size_t max_lights = std::size(data.lights);
-  // Add the first max_lights lights to the frame UBO, and set the rest to
-  // None.
-  for (size_t i = 0; i < max_lights; i++) {
-    if (i >= frame_state_->lights.size()) {
-      data.lights[i].type = Light::Type::None;
-    } else {
-      data.lights[i] = frame_state_->lights[i];
-    }
-  }
   auto stages = vk::PipelineStageFlagBits::eVertexShader |
                 vk::PipelineStageFlagBits::eFragmentShader;
   updateDynamicBuf(
-      in_flight_.global[ds_.frame], std::span<GlobalData>(&data, 1), stages,
+      ds_.cmd, in_flight_.post[ds_.frame],
+      std::span<DebugData>(&frame_state_->post, 1), stages,
       vk::AccessFlagBits::eUniformRead);
-
-  updateDynamicBuf(
-      in_flight_.post[ds_.frame], std::span<DebugData>(&frame_state_->post, 1),
-      stages, vk::AccessFlagBits::eUniformRead);
 }
 
 void Renderer::drawFrame() {
@@ -223,6 +207,7 @@ void Renderer::drawFrame() {
   vk::CommandBufferBeginInfo begin_info{};
   std::ignore = ds_.cmd.begin(begin_info);
 
+  scene_.update(ds_, *frame_state_);
   updateUboData();
   recordCommandBuffer();
 
@@ -630,32 +615,11 @@ void Renderer::createShaders() {
 }
 
 void Renderer::createGraphicsPipelines() {
-  // Scene pipeline
-  vk::PushConstantRange scene_push{
-      .stageFlags = vk::ShaderStageFlagBits::eVertex,
-      .offset = 0,
-      .size = sizeof(PushData),
-  };
-  vk::PipelineVertexInputStateCreateInfo vertex_in{};
-  auto vert_binding = getBindingDesc<Vertex>();
-  auto vert_attrs = getAttrDescs<Vertex>();
-  vertex_in.setVertexBindingDescriptions(vert_binding);
-  vertex_in.setVertexAttributeDescriptions(vert_attrs);
-  scene_pl_ = {
-      .vert_shader = *scene_vert_,
-      .frag_shader = *scene_frag_,
-      .desc_layouts = {&global_dl_, &material_dl_},
-      .push_ranges = {scene_push},
-      .vert_in = vertex_in,
-      .cull_mode = vk::CullModeFlagBits::eNone,
-  };
-  initPipeline(*device_, scene_fbo_, scene_pl_);
-
   // Post processing pipeline
   post_pl_ = {
       .vert_shader = *fullscreen_vert_,
       .frag_shader = *post_frag_,
-      .desc_layouts = {&post_dl_, &scene_fbo_.output_set},
+      .desc_layouts = {&post_dl_, &scene_.pass.fbo.output_set},
       .vert_in = {},
       .cull_mode = vk::CullModeFlagBits::eBack,
   };
@@ -754,6 +718,93 @@ void Renderer::createVoronoi() {
   }
 
   initPass(voronoi_.pass);
+}
+
+void Renderer::createScene() {
+  auto& pass = scene_.pass;
+  pass.fbo = {
+      .size = swapchain_extent_,
+      .color_fmts = {color_fmt_, vk::Format::eR32G32B32A32Sfloat},
+      // Disable msaa for now because it makes outline filter worse
+      // .samples = msaa_samples_,
+      // .resolve = true,
+      .depth_fmt = findDepthFormat(),
+      .output_sampler = *linear_sampler_,
+      .desc_count = MAX_FRAMES_IN_FLIGHT,
+  };
+
+  // Bound per frame.
+  scene_.global = pass.makeDescLayout();
+  *scene_.global = {
+      .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
+      .stages =
+          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+  };
+  // Bound per material
+  // TODO: Don't allocate any here. These sets are allocated per material.
+  scene_.material = pass.makeDescLayout();
+  *scene_.material = {
+      .binds =
+          {{.type = vk::DescriptorType::eCombinedImageSampler},
+           {.type = vk::DescriptorType::eUniformBuffer}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+
+  vk::PushConstantRange scene_push{
+      .stageFlags = vk::ShaderStageFlagBits::eVertex,
+      .offset = 0,
+      .size = sizeof(PushData),
+  };
+  vk::PipelineVertexInputStateCreateInfo vertex_in{};
+  auto vert_binding = getBindingDesc<Vertex>();
+  auto vert_attrs = getAttrDescs<Vertex>();
+  vertex_in.setVertexBindingDescriptions(vert_binding);
+  vertex_in.setVertexAttributeDescriptions(vert_attrs);
+
+  scene_.draw = pass.makePipeline();
+  *scene_.draw = {
+      .vert_shader = *scene_vert_,
+      .frag_shader = *scene_frag_,
+      .desc_layouts = {scene_.global, scene_.material},
+      .push_ranges = {scene_push},
+      .vert_in = vertex_in,
+      .cull_mode = vk::CullModeFlagBits::eNone,
+  };
+
+  initPass(pass);
+
+  vk::DeviceSize global_size = sizeof(GlobalData);
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    scene_.globals.push_back(createDynamicBuffer(
+        global_size, vk::BufferUsageFlagBits::eUniformBuffer));
+  }
+
+  std::vector<vk::WriteDescriptorSet> writes;
+  scene_.global->updateUboBind(0, uboInfos(scene_.globals), writes);
+  device_->updateDescriptorSets(writes, nullptr);
+}
+
+void Renderer::Scene::update(const DrawState& ds, const FrameState& fs) {
+  GlobalData data;
+  data.view = fs.view;
+  data.proj = fs.proj;
+  data.inv_proj = glm::inverse(fs.proj);
+
+  const size_t max_lights = std::size(data.lights);
+  // Add the first max_lights lights to the frame UBO, and set the rest to
+  // None.
+  for (size_t i = 0; i < max_lights; i++) {
+    if (i >= fs.lights.size()) {
+      data.lights[i].type = Light::Type::None;
+    } else {
+      data.lights[i] = fs.lights[i];
+    }
+  }
+  auto stages = vk::PipelineStageFlagBits::eVertexShader |
+                vk::PipelineStageFlagBits::eFragmentShader;
+  updateDynamicBuf(
+      ds.cmd, globals[ds.frame], std::span<GlobalData>(&data, 1), stages,
+      vk::AccessFlagBits::eUniformRead);
 }
 
 void Renderer::createCommandPool() {
@@ -1080,18 +1131,6 @@ void Renderer::createSamplers() {
 }
 
 void Renderer::createFbos() {
-  scene_fbo_ = {
-      .size = swapchain_extent_,
-      .color_fmts = {color_fmt_, vk::Format::eR32G32B32A32Sfloat},
-      // Disable msaa for now because it makes outline filter worse
-      // .samples = msaa_samples_,
-      // .resolve = true,
-      .depth_fmt = findDepthFormat(),
-      .output_sampler = *linear_sampler_,
-      .desc_count = MAX_FRAMES_IN_FLIGHT,
-  };
-  scene_fbo_.init(vs_);
-
   post_fbo_ = {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_},
@@ -1136,10 +1175,10 @@ Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
       .range = sizeof(MaterialData),
   };
 
-  material->desc_set = allocDescSet(vs_, *material_dl_.layout);
+  material->desc_set = allocDescSet(vs_, *scene_.material->layout);
   std::vector<vk::WriteDescriptorSet> writes;
   updateDescSet(
-      material->desc_set, material_dl_,
+      material->desc_set, *scene_.material,
       {&material->diffuse->info, &material->ubo.info}, writes);
   device_->updateDescriptorSets(writes, nullptr);
 
@@ -1225,12 +1264,9 @@ void Renderer::stageIndices(
 }
 
 void Renderer::createInFlightBuffers() {
-  vk::DeviceSize global_size = sizeof(GlobalData);
   vk::DeviceSize post_size = sizeof(DebugData);
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    in_flight_.global.push_back(createDynamicBuffer(
-        global_size, vk::BufferUsageFlagBits::eUniformBuffer));
     in_flight_.post.push_back(createDynamicBuffer(
         post_size, vk::BufferUsageFlagBits::eUniformBuffer));
   }
@@ -1367,17 +1403,13 @@ void Renderer::createImguiDescriptorPool() {
 }
 
 void Renderer::createDescSets() {
-  global_dl_.init(vs_);
   post_dl_.init(vs_);
-  material_dl_.init(vs_);  // These sets are allocated per material.
-  sampler_dl_.init(vs_);   // Doesn't need sets allocated.
+  sampler_dl_.init(vs_);  // Doesn't need sets allocated.
 
-  global_dl_.alloc(vs_, MAX_FRAMES_IN_FLIGHT);
   post_dl_.alloc(vs_, MAX_FRAMES_IN_FLIGHT);
 
   std::vector<vk::WriteDescriptorSet> writes;
-  global_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
-  post_dl_.updateUboBind(0, uboInfos(in_flight_.global), writes);
+  post_dl_.updateUboBind(0, uboInfos(scene_.globals), writes);
   post_dl_.updateUboBind(1, uboInfos(in_flight_.post), writes);
 
   device_->updateDescriptorSets(writes, nullptr);
@@ -1432,9 +1464,9 @@ void Renderer::renderDrawing() {
 }
 
 template <class T>
-void Renderer::updateDynamicBuf(
-    DynamicBuf& dbuf, std::span<T> data, vk::PipelineStageFlags dst_stage,
-    vk::AccessFlags dst_access) {
+void updateDynamicBuf(
+    vk::CommandBuffer cmd, DynamicBuf& dbuf, std::span<T> data,
+    vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access) {
   size_t size = std::min((size_t)dbuf.staging.info.range, data.size_bytes());
   memcpy(dbuf.staging.mapped, data.data(), size);
 
@@ -1443,7 +1475,7 @@ void Renderer::updateDynamicBuf(
       .dstOffset = dbuf.device.info.offset,
       .size = size,
   };
-  ds_.cmd.copyBuffer(*dbuf.staging.buf, *dbuf.device.buf, copy);
+  cmd.copyBuffer(*dbuf.staging.buf, *dbuf.device.buf, copy);
 
   vk::BufferMemoryBarrier barrier{
       .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
@@ -1452,7 +1484,7 @@ void Renderer::updateDynamicBuf(
       .offset = dbuf.device.info.offset,
       .size = size,
   };
-  ds_.cmd.pipelineBarrier(
+  cmd.pipelineBarrier(
       vk::PipelineStageFlagBits::eTransfer, dst_stage, {}, nullptr, barrier,
       nullptr);
 }
@@ -1460,7 +1492,8 @@ void Renderer::updateDynamicBuf(
 void Renderer::renderVoronoi() {
   std::span<Vertex2d> span = frame_state_->voronoi_cells;
   updateDynamicBuf(
-      voronoi_.verts[ds_.frame], span, vk::PipelineStageFlagBits::eVertexInput,
+      ds_.cmd, voronoi_.verts[ds_.frame], span,
+      vk::PipelineStageFlagBits::eVertexInput,
       vk::AccessFlagBits::eVertexAttributeRead);
 
   beginRp(voronoi_.pass.fbo, 0);
@@ -1474,12 +1507,14 @@ void Renderer::renderVoronoi() {
 }
 
 void Renderer::renderScene() {
-  beginRp(scene_fbo_, 0);
+  beginRp(scene_.pass.fbo, 0);
 
-  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene_pl_.pipeline);
+  auto& draw = *scene_.draw;
+
+  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw.pipeline);
   ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 0,
-      global_dl_.sets[ds_.frame], nullptr);
+      vk::PipelineBindPoint::eGraphics, *draw.layout, 0,
+      scene_.global->sets[ds_.frame], nullptr);
 
   // TODO: Sort by material, then by model.
   std::sort(
@@ -1496,7 +1531,7 @@ void Renderer::renderScene() {
     if (curr_material != model->material) {
       curr_material = model->material;
       ds_.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *scene_pl_.layout, 1,
+          vk::PipelineBindPoint::eGraphics, *draw.layout, 1,
           model->material->desc_set, nullptr);
     }
 
@@ -1511,7 +1546,7 @@ void Renderer::renderScene() {
 
     PushData push_data{obj.transform};
     ds_.cmd.pushConstants<PushData>(
-        *scene_pl_.layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
+        *draw.layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
     if (model->index_count) {
       ds_.cmd.drawIndexed(model->index_count, 1, 0, 0, 0);
@@ -1532,7 +1567,7 @@ void Renderer::renderPost() {
       post_dl_.sets[ds_.frame], nullptr);
   ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 1,
-      scene_fbo_.output_set.sets[ds_.frame], nullptr);
+      scene_.pass.fbo.output_set.sets[ds_.frame], nullptr);
   ds_.cmd.draw(3, 1, 0, 0);
 
   ds_.cmd.endRenderPass();
@@ -1589,7 +1624,7 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
 
-  scene_fbo_.resize(vs_, swapchain_extent_);
+  scene_.pass.fbo.resize(vs_, swapchain_extent_);
   post_fbo_.resize(vs_, swapchain_extent_);
 
   swap_fbo_.swap_format = swapchain_format_;

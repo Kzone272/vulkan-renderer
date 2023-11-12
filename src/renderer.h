@@ -119,6 +119,7 @@ class Renderer {
   void initPass(Pass& pass);
   void createDrawing();
   void createVoronoi();
+  void createScene();
 
   void createSamplers();
   void initSdlImage();
@@ -152,10 +153,6 @@ class Renderer {
       vk::UniqueDeviceMemory& buf_mem);
   DynamicBuf createDynamicBuffer(
       vk::DeviceSize size, vk::BufferUsageFlags usage);
-  template <class T>
-  void updateDynamicBuf(
-      DynamicBuf& dbuf, std::span<T> data, vk::PipelineStageFlags dst_stage,
-      vk::AccessFlags dst_access);
 
   vk::CommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(vk::CommandBuffer cmd_buf);
@@ -212,10 +209,8 @@ class Renderer {
   vk::UniqueShaderModule sample_frag_;
   vk::UniqueShaderModule voronoi_vert_;
   vk::UniqueShaderModule voronoi_frag_;
-  Fbo scene_fbo_;
   Fbo post_fbo_;
   Fbo swap_fbo_;
-  Pipeline scene_pl_;
   Pipeline post_pl_;
   Pipeline swap_pl_;
   vk::UniqueCommandPool cmd_pool_;
@@ -237,7 +232,6 @@ class Renderer {
   } ds_;
 
   struct InFlightState {
-    std::vector<DynamicBuf> global;
     std::vector<DynamicBuf> post;
   } in_flight_;
 
@@ -246,19 +240,6 @@ class Renderer {
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
 
-  // Bound per frame.
-  DescLayout global_dl_{
-      .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
-      .stages =
-          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-  };
-  // Bound per material
-  DescLayout material_dl_{
-      .binds =
-          {{.type = vk::DescriptorType::eCombinedImageSampler},
-           {.type = vk::DescriptorType::eUniformBuffer}},
-      .stages = vk::ShaderStageFlagBits::eFragment,
-  };
   // Bound in post processing step.
   DescLayout post_dl_{
       .binds =
@@ -283,6 +264,16 @@ class Renderer {
     std::vector<DynamicBuf> verts;
   } voronoi_;
 
+  struct Scene {
+    Pass pass;
+    std::vector<DynamicBuf> globals;
+    DescLayout* global;
+    DescLayout* material;
+    Pipeline* draw;
+
+    void update(const DrawState& ds, const FrameState& fs);
+  } scene_;
+
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
 #else
@@ -290,6 +281,13 @@ class Renderer {
 #endif  // DEBUG
 };
 
+// TODO: Move to separate file buffers.h.
+template <class T>
+void updateDynamicBuf(
+    vk::CommandBuffer cmd, DynamicBuf& dbuf, std::span<T> data,
+    vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access);
+
+// TODO: Move to separate file. Maybe descriptors.h?
 template <class T>
 static vk::VertexInputBindingDescription getBindingDesc() {
   return {
