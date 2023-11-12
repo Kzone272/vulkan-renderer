@@ -40,14 +40,14 @@ union BoolsInt {
 
 // General data than can be tied to ImGui controls.
 struct DebugData {
-  float f1 = 0.707;
-  float f2 = 0.5;
-  float f3 = 2;
-  float f4 = 60;
+  float f1 = 0;
+  float f2 = 0;
+  float f3 = 0;
+  float f4 = 0;
   BoolsInt i1 = {};
   BoolsInt i2 = {};
   BoolsInt i3 = {};
-  BoolsInt i4 = {.b = {.b2 = true}};
+  BoolsInt i4 = {};
 };
 
 enum class ModelId {
@@ -103,7 +103,16 @@ struct FrameState {
   mat4 model;
   mat4 view;
   mat4 proj;
-  DebugData post;
+  DebugData drawing{
+      .f1 = 0.5,
+  };
+  DebugData post{
+      .f1 = 0.707,
+      .f2 = 0.5,
+      .f3 = 2,
+      .f4 = 60,
+      .i4 = {.b = {.b2 = true}},
+  };
   bool update_drawing = false;
   std::vector<Vertex2d> voronoi_cells;
   bool update_voronoi = false;

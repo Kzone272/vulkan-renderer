@@ -61,6 +61,15 @@ std::vector<vk::DescriptorBufferInfo*> uboInfos(
   return infos;
 }
 
+std::vector<vk::ImageView> views(
+    const std::vector<vk::UniqueImageView>& unique_views) {
+  std::vector<vk::ImageView> views;
+  for (auto& view : unique_views) {
+    views.push_back(*view);
+  }
+  return views;
+}
+
 }  // namespace
 
 void Renderer::init(FrameState* frame_state) {
@@ -135,15 +144,11 @@ void Renderer::initVulkan() {
   createShaders();
   // VulkanState should now fully defined.
 
-  createScene();
-
-  createInFlightBuffers();
-  createDescSets();
-  createFbos();
-  createGraphicsPipelines();
-
   createDrawing();
   createVoronoi();
+  createScene();
+  createPost();
+  createSwap();
 }
 
 void Renderer::initImgui() {
@@ -155,9 +160,9 @@ void Renderer::initImgui() {
       .DescriptorPool = *imgui_desc_pool_,
       .MinImageCount = MAX_FRAMES_IN_FLIGHT,
       .ImageCount = MAX_FRAMES_IN_FLIGHT,
-      .MSAASamples = (VkSampleCountFlagBits)swap_fbo_.samples,
+      .MSAASamples = (VkSampleCountFlagBits)swap_.pass.fbo.samples,
   };
-  ImGui_ImplVulkan_Init(&init_info, *swap_fbo_.rp);
+  ImGui_ImplVulkan_Init(&init_info, *swap_.pass.fbo.rp);
 
   auto cmd_buf = beginSingleTimeCommands();
   ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
@@ -167,15 +172,6 @@ void Renderer::initImgui() {
 
 void Renderer::imguiNewFrame() {
   ImGui_ImplVulkan_NewFrame();
-}
-
-void Renderer::updateUboData() {
-  auto stages = vk::PipelineStageFlagBits::eVertexShader |
-                vk::PipelineStageFlagBits::eFragmentShader;
-  updateDynamicBuf(
-      ds_.cmd, in_flight_.post[ds_.frame],
-      std::span<DebugData>(&frame_state_->post, 1), stages,
-      vk::AccessFlagBits::eUniformRead);
 }
 
 void Renderer::drawFrame() {
@@ -207,8 +203,11 @@ void Renderer::drawFrame() {
   vk::CommandBufferBeginInfo begin_info{};
   std::ignore = ds_.cmd.begin(begin_info);
 
+  if (frame_state_->update_drawing) {
+    drawing_.update(ds_, frame_state_->drawing);
+  }
   scene_.update(ds_, *frame_state_);
-  updateUboData();
+  post_.update(ds_, frame_state_->post);
   recordCommandBuffer();
 
   vk::SubmitInfo submit_info{};
@@ -614,27 +613,6 @@ void Renderer::createShaders() {
   voronoi_frag_ = createShaderModule("shaders/voronoi.frag.spv");
 }
 
-void Renderer::createGraphicsPipelines() {
-  // Post processing pipeline
-  post_pl_ = {
-      .vert_shader = *fullscreen_vert_,
-      .frag_shader = *post_frag_,
-      .desc_layouts = {&post_dl_, &scene_.pass.fbo.output_set},
-      .vert_in = {},
-      .cull_mode = vk::CullModeFlagBits::eBack,
-  };
-  initPipeline(*device_, post_fbo_, post_pl_);
-
-  swap_pl_ = {
-      .vert_shader = *fullscreen_vert_,
-      .frag_shader = *sample_frag_,
-      .desc_layouts = {&sampler_dl_},
-      .vert_in = {},
-      .cull_mode = vk::CullModeFlagBits::eBack,
-  };
-  initPipeline(*device_, swap_fbo_, swap_pl_);
-}
-
 vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
   auto code = readFile(filename);
   vk::ShaderModuleCreateInfo ci{
@@ -668,10 +646,22 @@ void Renderer::createDrawing() {
 
   initPass(pass);
 
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    drawing_.debugs.push_back(createDynamicBuffer(
+        sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
+  }
+
   // TODO: Generalize so this can be part of initPass()
   std::vector<vk::WriteDescriptorSet> writes;
-  drawing_.inputs->updateUboBind(0, uboInfos(in_flight_.post), writes);
+  drawing_.inputs->updateUboBind(0, uboInfos(drawing_.debugs), writes);
   device_->updateDescriptorSets(writes, nullptr);
+}
+
+void Renderer::Drawing::update(const DrawState& ds, const DebugData& debug) {
+  updateDynamicBuf(
+      ds.cmd, debugs[ds.frame], std::span<const DebugData>(&debug, 1),
+      vk::PipelineStageFlagBits::eFragmentShader,
+      vk::AccessFlagBits::eUniformRead);
 }
 
 void Renderer::initPass(Pass& pass) {
@@ -773,10 +763,9 @@ void Renderer::createScene() {
 
   initPass(pass);
 
-  vk::DeviceSize global_size = sizeof(GlobalData);
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     scene_.globals.push_back(createDynamicBuffer(
-        global_size, vk::BufferUsageFlagBits::eUniformBuffer));
+        sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
@@ -805,6 +794,79 @@ void Renderer::Scene::update(const DrawState& ds, const FrameState& fs) {
   updateDynamicBuf(
       ds.cmd, globals[ds.frame], std::span<GlobalData>(&data, 1), stages,
       vk::AccessFlagBits::eUniformRead);
+}
+
+void Renderer::createPost() {
+  auto& pass = post_.pass;
+  pass.fbo = {
+      .size = swapchain_extent_,
+      .color_fmts = {color_fmt_},
+      .output_sampler = *linear_sampler_,
+      .desc_count = MAX_FRAMES_IN_FLIGHT,
+  };
+
+  post_.inputs = pass.makeDescLayout();
+  *post_.inputs = {
+      .binds =
+          {{.type = vk::DescriptorType::eUniformBuffer},
+           {.type = vk::DescriptorType::eUniformBuffer}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+
+  post_.draw = pass.makePipeline();
+  *post_.draw = {
+      .vert_shader = *fullscreen_vert_,
+      .frag_shader = *post_frag_,
+      .desc_layouts = {post_.inputs, &scene_.pass.fbo.output_set},
+      .vert_in = {},
+  };
+
+  initPass(pass);
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    post_.debugs.push_back(createDynamicBuffer(
+        sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
+  }
+
+  std::vector<vk::WriteDescriptorSet> writes;
+  post_.inputs->updateUboBind(0, uboInfos(scene_.globals), writes);
+  post_.inputs->updateUboBind(1, uboInfos(post_.debugs), writes);
+  device_->updateDescriptorSets(writes, nullptr);
+}
+
+void Renderer::Post::update(const DrawState& ds, const DebugData& debug) {
+  auto stages = vk::PipelineStageFlagBits::eVertexShader |
+                vk::PipelineStageFlagBits::eFragmentShader;
+  updateDynamicBuf(
+      ds.cmd, debugs[ds.frame], std::span<const DebugData>(&debug, 1), stages,
+      vk::AccessFlagBits::eUniformRead);
+}
+
+void Renderer::createSwap() {
+  auto& pass = swap_.pass;
+
+  pass.fbo = {
+      .size = swapchain_extent_,
+      .swap = true,
+      .swap_format = swapchain_format_,
+      .swap_views = views(swapchain_views_),
+  };
+
+  swap_.sampler = pass.makeDescLayout();
+  *swap_.sampler = {
+      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+
+  swap_.draw = pass.makePipeline();
+  *swap_.draw = {
+      .vert_shader = *fullscreen_vert_,
+      .frag_shader = *sample_frag_,
+      .desc_layouts = {swap_.sampler},
+      .vert_in = {},
+  };
+
+  initPass(pass);
 }
 
 void Renderer::createCommandPool() {
@@ -1130,28 +1192,6 @@ void Renderer::createSamplers() {
   nearest_sampler_ = device_->createSamplerUnique(ci).value;
 }
 
-void Renderer::createFbos() {
-  post_fbo_ = {
-      .size = swapchain_extent_,
-      .color_fmts = {color_fmt_},
-      .output_sampler = *linear_sampler_,
-      .desc_count = MAX_FRAMES_IN_FLIGHT,
-  };
-  post_fbo_.init(vs_);
-
-  std::vector<vk::ImageView> swap_views;
-  for (auto& view : swapchain_views_) {
-    swap_views.push_back(*view);
-  }
-  swap_fbo_ = {
-      .size = swapchain_extent_,
-      .swap = true,
-      .swap_format = swapchain_format_,
-      .swap_views = swap_views,
-  };
-  swap_fbo_.init(vs_);
-}
-
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
   auto material = std::make_unique<Material>();
   auto* ptr = material.get();
@@ -1261,15 +1301,6 @@ void Renderer::stageIndices(
   stageBuffer(
       size, (void*)indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,
       model.ind_buf, model.ind_buf_mem);
-}
-
-void Renderer::createInFlightBuffers() {
-  vk::DeviceSize post_size = sizeof(DebugData);
-
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    in_flight_.post.push_back(createDynamicBuffer(
-        post_size, vk::BufferUsageFlagBits::eUniformBuffer));
-  }
 }
 
 // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
@@ -1400,19 +1431,6 @@ void Renderer::createImguiDescriptorPool() {
   };
   pool_ci.setPoolSizes(pool_sizes);
   imgui_desc_pool_ = device_->createDescriptorPoolUnique(pool_ci).value;
-}
-
-void Renderer::createDescSets() {
-  post_dl_.init(vs_);
-  sampler_dl_.init(vs_);  // Doesn't need sets allocated.
-
-  post_dl_.alloc(vs_, MAX_FRAMES_IN_FLIGHT);
-
-  std::vector<vk::WriteDescriptorSet> writes;
-  post_dl_.updateUboBind(0, uboInfos(scene_.globals), writes);
-  post_dl_.updateUboBind(1, uboInfos(in_flight_.post), writes);
-
-  device_->updateDescriptorSets(writes, nullptr);
 }
 
 void Renderer::createCommandBuffers() {
@@ -1559,14 +1577,14 @@ void Renderer::renderScene() {
 }
 
 void Renderer::renderPost() {
-  beginRp(post_fbo_, 0);
+  beginRp(post_.pass.fbo, 0);
 
-  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_pl_.pipeline);
+  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_.draw->pipeline);
   ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 0,
-      post_dl_.sets[ds_.frame], nullptr);
+      vk::PipelineBindPoint::eGraphics, *post_.draw->layout, 0,
+      post_.inputs->sets[ds_.frame], nullptr);
   ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *post_pl_.layout, 1,
+      vk::PipelineBindPoint::eGraphics, *post_.draw->layout, 1,
       scene_.pass.fbo.output_set.sets[ds_.frame], nullptr);
   ds_.cmd.draw(3, 1, 0, 0);
 
@@ -1574,12 +1592,12 @@ void Renderer::renderPost() {
 }
 
 void Renderer::renderSwap() {
-  beginRp(swap_fbo_, ds_.img_ind);
+  beginRp(swap_.pass.fbo, ds_.img_ind);
 
-  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_pl_.pipeline);
+  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_.draw->pipeline);
   ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *swap_pl_.layout, 0,
-      post_fbo_.output_set.sets[ds_.frame], nullptr);
+      vk::PipelineBindPoint::eGraphics, *swap_.draw->layout, 0,
+      post_.pass.fbo.output_set.sets[ds_.frame], nullptr);
   ds_.cmd.draw(3, 1, 0, 0);
 
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
@@ -1625,14 +1643,11 @@ void Renderer::recreateSwapchain() {
   createSwapchain();
 
   scene_.pass.fbo.resize(vs_, swapchain_extent_);
-  post_fbo_.resize(vs_, swapchain_extent_);
+  post_.pass.fbo.resize(vs_, swapchain_extent_);
 
-  swap_fbo_.swap_format = swapchain_format_;
-  swap_fbo_.swap_views.clear();
-  for (auto& view : swapchain_views_) {
-    swap_fbo_.swap_views.push_back(*view);
-  }
-  swap_fbo_.resize(vs_, swapchain_extent_);
+  swap_.pass.fbo.swap_format = swapchain_format_;
+  swap_.pass.fbo.swap_views = views(swapchain_views_);
+  swap_.pass.fbo.resize(vs_, swapchain_extent_);
 
   window_resized_ = false;
 }

@@ -4,7 +4,6 @@ Short-term ideas:
 - Finish Pass struct
   - Allocates the Ubos for the layouts
 - Simplify adding new shaders. Probably stored in a map keyed by filename.
-- Separate DebugData's for different shaders, and for App.
 - Add shadow mapping for some lights.
 - Improve outline filter AA by rendering edges with MSAA.
 - Choose voronoi points with poisson disk sampling.

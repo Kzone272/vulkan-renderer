@@ -12,7 +12,7 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
   vec3 col = vec3(0);
-  if (length(fragUv - vec2(0.5)) < debug.f2) {
+  if (length(fragUv - vec2(0.5)) < debug.f1) {
     col = vec3(1,0,0);
   }
 

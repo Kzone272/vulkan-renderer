@@ -80,7 +80,6 @@ class Renderer {
 
   void initVulkan();
   void initImgui();
-  void updateUboData();
   void drawFrame();
   void createInstance();
   std::vector<const char*> getRequiredExtensions();
@@ -111,15 +110,15 @@ class Renderer {
       const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
       vk::FormatFeatureFlags features);
 
-  void createFbos();
   vk::UniqueShaderModule createShaderModule(std::string filename);
   void createShaders();
-  void createGraphicsPipelines();
 
   void initPass(Pass& pass);
   void createDrawing();
   void createVoronoi();
   void createScene();
+  void createPost();
+  void createSwap();
 
   void createSamplers();
   void initSdlImage();
@@ -141,7 +140,6 @@ class Renderer {
   void stageVertices(const std::vector<Vertex>& vertices, Model& model);
   void stageIndices(const std::vector<uint32_t>& indices, Model& model);
 
-  void createInFlightBuffers();
   // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
   // from the staging_buf to dst_buf.
   void stageBuffer(
@@ -159,7 +157,6 @@ class Renderer {
 
   void createDescriptorPool();
   void createImguiDescriptorPool();
-  void createDescSets();
 
   void beginRp(const Fbo& fbo, int fb_ind);
   void renderDrawing();
@@ -209,10 +206,6 @@ class Renderer {
   vk::UniqueShaderModule sample_frag_;
   vk::UniqueShaderModule voronoi_vert_;
   vk::UniqueShaderModule voronoi_frag_;
-  Fbo post_fbo_;
-  Fbo swap_fbo_;
-  Pipeline post_pl_;
-  Pipeline swap_pl_;
   vk::UniqueCommandPool cmd_pool_;
   std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
   std::vector<vk::UniqueSemaphore> img_sems_;
@@ -231,31 +224,18 @@ class Renderer {
     uint32_t img_ind = 0;
   } ds_;
 
-  struct InFlightState {
-    std::vector<DynamicBuf> post;
-  } in_flight_;
-
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
   std::vector<std::unique_ptr<Material>> loaded_materials_;
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
 
-  // Bound in post processing step.
-  DescLayout post_dl_{
-      .binds =
-          {{.type = vk::DescriptorType::eUniformBuffer},
-           {.type = vk::DescriptorType::eUniformBuffer}},
-      .stages = vk::ShaderStageFlagBits::eFragment,
-  };
-  DescLayout sampler_dl_{
-      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
-      .stages = vk::ShaderStageFlagBits::eFragment,
-  };
-
   struct Drawing {
     Pass pass;
     Pipeline* draw;
+    std::vector<DynamicBuf> debugs;
     DescLayout* inputs;
+
+    void update(const DrawState& ds, const DebugData& debug);
   } drawing_;
 
   struct Voronoi {
@@ -273,6 +253,21 @@ class Renderer {
 
     void update(const DrawState& ds, const FrameState& fs);
   } scene_;
+
+  struct Post {
+    Pass pass;
+    std::vector<DynamicBuf> debugs;
+    DescLayout* inputs;
+    Pipeline* draw;
+
+    void update(const DrawState& ds, const DebugData& debug);
+  } post_;
+
+  struct Swap {
+    Pass pass;
+    DescLayout* sampler;
+    Pipeline* draw;
+  } swap_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

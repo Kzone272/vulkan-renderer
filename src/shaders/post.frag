@@ -44,7 +44,7 @@ void main() {
   vec3 color = scene.rgb;
   if (desat) {
     float grey = greyscale(scene.rgb);
-    color = mix(vec3(grey), scene.rgb, debug.f1);
+    color = mix(vec3(grey), scene.rgb, debug.f2);
   } else if (debug.i1 == 1) {
     color = vec3(norm.x, norm.y, -norm.z);
   } else if (debug.i1 == 2) {
