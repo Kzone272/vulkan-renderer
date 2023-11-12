@@ -13,7 +13,7 @@ struct Fbo {
   bool resolve = false;
   std::optional<vk::Format> depth_fmt;
   vk::Sampler output_sampler;
-  int desc_count = 0;
+  uint32_t desc_count = 0;
   bool swap = false;
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;

@@ -113,7 +113,6 @@ class Renderer {
   vk::UniqueShaderModule createShaderModule(std::string filename);
   void createShaders();
 
-  void initPass(Pass& pass);
   void createDrawing();
   void createVoronoi();
   void createScene();
@@ -172,7 +171,7 @@ class Renderer {
 
   // The members in this struct should never change after handing it out, or
   // problems are likely to occur.
-  VulkanState vs_;
+  VulkanState vs_{.kMaxFramesInFlight = 2};
 
   vk::UniqueInstance instance_;
   vk::DispatchLoaderDynamic dldi_;

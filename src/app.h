@@ -835,7 +835,7 @@ class HelloTriangleApp {
   struct UiState {
     std::string fps;
     bool gooch = false;
-    int floor = (int)Floor::Drawing;
+    int floor = (int)Floor::Viking;
   } ui_;
 
   struct AnimationState {

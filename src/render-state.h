@@ -7,6 +7,7 @@ struct VulkanState {
   vk::DescriptorPool desc_pool;
   vk::PhysicalDeviceProperties device_props;
   vk::PhysicalDeviceMemoryProperties mem_props;
+  const uint32_t kMaxFramesInFlight;
 };
 
 struct DrawState {

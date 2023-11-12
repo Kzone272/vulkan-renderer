@@ -33,8 +33,6 @@
 
 namespace {
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"};
 const std::vector<const char*> device_extensions = {
@@ -159,8 +157,8 @@ void Renderer::initImgui() {
       .Device = *device_,
       .Queue = gfx_q_,
       .DescriptorPool = *imgui_desc_pool_,
-      .MinImageCount = MAX_FRAMES_IN_FLIGHT,
-      .ImageCount = MAX_FRAMES_IN_FLIGHT,
+      .MinImageCount = vs_.kMaxFramesInFlight,
+      .ImageCount = vs_.kMaxFramesInFlight,
       .MSAASamples = (VkSampleCountFlagBits)swap_.pass.fbo.samples,
   };
   ImGui_ImplVulkan_Init(&init_info, *swap_.pass.fbo.rp);
@@ -180,7 +178,7 @@ void Renderer::drawFrame() {
     recreateSwapchain();
   }
 
-  ds_.frame = frame_state_->frame_num % MAX_FRAMES_IN_FLIGHT;
+  ds_.frame = frame_state_->frame_num % vs_.kMaxFramesInFlight;
   ds_.cmd = *cmd_bufs_[ds_.frame];
 
   std::ignore = device_->waitForFences(
@@ -633,7 +631,7 @@ void Renderer::createDrawing() {
       .size = {512, 512},
       .color_fmts = {color_fmt_},
       .output_sampler = *linear_sampler_,
-      .desc_count = MAX_FRAMES_IN_FLIGHT,
+      .desc_count = vs_.kMaxFramesInFlight,
   };
 
   drawing_.inputs = pass.makeDescLayout();
@@ -649,14 +647,14 @@ void Renderer::createDrawing() {
       .desc_layouts = {drawing_.inputs},
   };
 
-  initPass(pass);
+  pass.init(vs_);
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     drawing_.debugs.push_back(createDynamicBuffer(
         sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
-  // TODO: Generalize so this can be part of initPass()
+  // TODO: Generalize so this can be part of pass.init()
   std::vector<vk::WriteDescriptorSet> writes;
   drawing_.inputs->updateUboBind(0, uboInfos(drawing_.debugs), writes);
   device_->updateDescriptorSets(writes, nullptr);
@@ -667,19 +665,6 @@ void Renderer::Drawing::update(const DrawState& ds, const DebugData& debug) {
       ds.cmd, debugs[ds.frame], std::span<const DebugData>(&debug, 1),
       vk::PipelineStageFlagBits::eFragmentShader,
       vk::AccessFlagBits::eUniformRead);
-}
-
-void Renderer::initPass(Pass& pass) {
-  pass.fbo.init(vs_);
-
-  for (auto& lo : pass.los) {
-    lo->init(vs_);
-    lo->alloc(vs_, MAX_FRAMES_IN_FLIGHT);
-  }
-
-  for (auto& pl : pass.pls) {
-    initPipeline(*device_, pass.fbo, *pl);
-  }
 }
 
 void Renderer::createVoronoi() {
@@ -707,12 +692,12 @@ void Renderer::createVoronoi() {
 
   // Support up to 100 voronoi cells for now.
   vk::DeviceSize size = 100 * sizeof(Vertex2d);
-  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  for (int i = 0; i < vs_.kMaxFramesInFlight; i++) {
     voronoi_.verts.push_back(
         createDynamicBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer));
   }
 
-  initPass(voronoi_.pass);
+  voronoi_.pass.init(vs_);
 }
 
 void Renderer::createScene() {
@@ -725,7 +710,7 @@ void Renderer::createScene() {
       // .resolve = true,
       .depth_fmt = findDepthFormat(),
       .output_sampler = *linear_sampler_,
-      .desc_count = MAX_FRAMES_IN_FLIGHT,
+      .desc_count = vs_.kMaxFramesInFlight,
   };
 
   // Bound per frame.
@@ -766,9 +751,9 @@ void Renderer::createScene() {
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
 
-  initPass(pass);
+  pass.init(vs_);
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     scene_.globals.push_back(createDynamicBuffer(
         sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
@@ -811,7 +796,7 @@ void Renderer::createPost() {
       .size = swapchain_extent_,
       .color_fmts = {color_fmt_},
       .output_sampler = *linear_sampler_,
-      .desc_count = MAX_FRAMES_IN_FLIGHT,
+      .desc_count = vs_.kMaxFramesInFlight,
   };
 
   post_.inputs = pass.makeDescLayout();
@@ -830,9 +815,9 @@ void Renderer::createPost() {
       .vert_in = {},
   };
 
-  initPass(pass);
+  pass.init(vs_);
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     post_.debugs.push_back(createDynamicBuffer(
         sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
@@ -879,7 +864,7 @@ void Renderer::createSwap() {
       .vert_in = {},
   };
 
-  initPass(pass);
+  pass.init(vs_);
 }
 
 void Renderer::createCommandPool() {
@@ -1450,7 +1435,7 @@ void Renderer::createCommandBuffers() {
   vk::CommandBufferAllocateInfo alloc_info{
       .commandPool = *cmd_pool_,
       .level = vk::CommandBufferLevel::ePrimary,
-      .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+      .commandBufferCount = vs_.kMaxFramesInFlight,
   };
   cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
 }
@@ -1607,10 +1592,10 @@ void Renderer::createSyncObjects() {
   vk::SemaphoreCreateInfo sem_ci{};
   vk::FenceCreateInfo fence_ci{.flags = vk::FenceCreateFlagBits::eSignaled};
 
-  img_sems_.resize(MAX_FRAMES_IN_FLIGHT);
-  render_sems_.resize(MAX_FRAMES_IN_FLIGHT);
-  in_flight_fences_.resize(MAX_FRAMES_IN_FLIGHT);
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  img_sems_.resize(vs_.kMaxFramesInFlight);
+  render_sems_.resize(vs_.kMaxFramesInFlight);
+  in_flight_fences_.resize(vs_.kMaxFramesInFlight);
+  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
     img_sems_[i] = device_->createSemaphoreUnique(sem_ci).value;
     render_sems_[i] = device_->createSemaphoreUnique(sem_ci).value;
     in_flight_fences_[i] = device_->createFenceUnique(fence_ci).value;

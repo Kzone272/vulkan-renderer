@@ -30,6 +30,7 @@ add_executable(main
   fbo.h
   fbo.cc
   pass.h
+  pass.cc
   render-state.h
 )
 
