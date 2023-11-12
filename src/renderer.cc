@@ -207,8 +207,12 @@ void Renderer::drawFrame() {
   if (frame_state_->update_drawing) {
     drawing_.update(ds_, frame_state_->drawing);
   }
+  if (frame_state_->update_voronoi) {
+    voronoi_.update(ds_, frame_state_->voronoi_cells);
+  }
   scene_.update(ds_, *frame_state_);
   post_.update(ds_, frame_state_->post);
+
   recordCommandBuffer();
 
   vk::SubmitInfo submit_info{};
@@ -774,6 +778,10 @@ void Renderer::createScene() {
   device_->updateDescriptorSets(writes, nullptr);
 }
 
+DescLayout* Renderer::Scene::outputSet() {
+  return &pass.fbo.output_set;
+}
+
 void Renderer::Scene::update(const DrawState& ds, const FrameState& fs) {
   GlobalData data;
   data.view = fs.view;
@@ -818,7 +826,7 @@ void Renderer::createPost() {
   *post_.draw = {
       .vert_shader = *fullscreen_vert_,
       .frag_shader = *post_frag_,
-      .desc_layouts = {post_.inputs, &scene_.pass.fbo.output_set},
+      .desc_layouts = {post_.inputs, scene_.outputSet()},
       .vert_in = {},
   };
 
@@ -833,6 +841,10 @@ void Renderer::createPost() {
   post_.inputs->updateUboBind(0, uboInfos(scene_.globals), writes);
   post_.inputs->updateUboBind(1, uboInfos(post_.debugs), writes);
   device_->updateDescriptorSets(writes, nullptr);
+}
+
+DescLayout* Renderer::Post::outputSet() {
+  return &pass.fbo.output_set;
 }
 
 void Renderer::Post::update(const DrawState& ds, const DebugData& debug) {
@@ -1443,16 +1455,15 @@ void Renderer::createCommandBuffers() {
   cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
 }
 
-void Renderer::renderDrawing() {
-  drawing_.pass.fbo.beginRp(ds_);
-  ds_.cmd.bindPipeline(
-      vk::PipelineBindPoint::eGraphics, *drawing_.draw->pipeline);
-  ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *drawing_.draw->layout, 0,
-      drawing_.inputs->sets[ds_.frame], nullptr);
+void Renderer::Drawing::render(const DrawState& ds) {
+  pass.fbo.beginRp(ds);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw->layout, 0,
+      inputs->sets[ds.frame], nullptr);
 
-  ds_.cmd.draw(3, 1, 0, 0);
-  ds_.cmd.endRenderPass();
+  ds.cmd.draw(3, 1, 0, 0);
+  ds.cmd.endRenderPass();
 }
 
 template <class T>
@@ -1481,21 +1492,23 @@ void updateDynamicBuf(
       nullptr);
 }
 
-void Renderer::renderVoronoi() {
-  std::span<Vertex2d> span = frame_state_->voronoi_cells;
+void Renderer::Voronoi::update(
+    const DrawState& ds, const std::vector<Vertex2d>& cells) {
+  num_cells = cells.size();
+  std::span<const Vertex2d> span = cells;
   updateDynamicBuf(
-      ds_.cmd, voronoi_.verts[ds_.frame], span,
-      vk::PipelineStageFlagBits::eVertexInput,
+      ds.cmd, verts[ds.frame], span, vk::PipelineStageFlagBits::eVertexInput,
       vk::AccessFlagBits::eVertexAttributeRead);
+}
 
-  voronoi_.pass.fbo.beginRp(ds_);
+void Renderer::Voronoi::render(const DrawState& ds) {
+  pass.fbo.beginRp(ds);
 
-  ds_.cmd.bindPipeline(
-      vk::PipelineBindPoint::eGraphics, *voronoi_.draw->pipeline);
-  ds_.cmd.bindVertexBuffers(0, *voronoi_.verts[ds_.frame].device.buf, {0});
-  ds_.cmd.draw(6, frame_state_->voronoi_cells.size(), 0, 0);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindVertexBuffers(0, *verts[ds.frame].device.buf, {0});
+  ds.cmd.draw(6, num_cells, 0, 0);
 
-  ds_.cmd.endRenderPass();
+  ds.cmd.endRenderPass();
 }
 
 void Renderer::renderScene() {
@@ -1549,45 +1562,43 @@ void Renderer::renderScene() {
   ds_.cmd.endRenderPass();
 }
 
-void Renderer::renderPost() {
-  post_.pass.fbo.beginRp(ds_);
+void Renderer::Post::render(const DrawState& ds, vk::DescriptorSet image_set) {
+  pass.fbo.beginRp(ds);
 
-  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_.draw->pipeline);
-  ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *post_.draw->layout, 0,
-      post_.inputs->sets[ds_.frame], nullptr);
-  ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *post_.draw->layout, 1,
-      scene_.pass.fbo.output_set.sets[ds_.frame], nullptr);
-  ds_.cmd.draw(3, 1, 0, 0);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw->layout, 0,
+      inputs->sets[ds.frame], nullptr);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw->layout, 1, image_set, nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
 
-  ds_.cmd.endRenderPass();
+  ds.cmd.endRenderPass();
 }
 
-void Renderer::renderSwap() {
-  swap_.pass.fbo.beginRp(ds_);
+void Renderer::Swap::render(const DrawState& ds, vk::DescriptorSet image_set) {
+  pass.fbo.beginRp(ds);
 
-  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_.draw->pipeline);
-  ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *swap_.draw->layout, 0,
-      post_.pass.fbo.output_set.sets[ds_.frame], nullptr);
-  ds_.cmd.draw(3, 1, 0, 0);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw->layout, 0, image_set, nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
 
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
+  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds.cmd);
 
-  ds_.cmd.endRenderPass();
+  ds.cmd.endRenderPass();
 }
 
 void Renderer::recordCommandBuffer() {
   if (frame_state_->update_voronoi) {
-    renderVoronoi();
+    voronoi_.render(ds_);
   }
   if (frame_state_->update_drawing) {
-    renderDrawing();
+    drawing_.render(ds_);
   }
   renderScene();
-  renderPost();
-  renderSwap();
+  post_.render(ds_, scene_.outputSet()->sets[ds_.frame]);
+  swap_.render(ds_, post_.outputSet()->sets[ds_.frame]);
 
   std::ignore = ds_.cmd.end();
 }

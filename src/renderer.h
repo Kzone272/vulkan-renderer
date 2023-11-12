@@ -158,11 +158,7 @@ class Renderer {
   void createDescriptorPool();
   void createImguiDescriptorPool();
 
-  void renderDrawing();
-  void renderVoronoi();
   void renderScene();
-  void renderPost();
-  void renderSwap();
 
   void recordCommandBuffer();
   void createSyncObjects();
@@ -230,12 +226,17 @@ class Renderer {
     DescLayout* inputs;
 
     void update(const DrawState& ds, const DebugData& debug);
+    void render(const DrawState& ds);
   } drawing_;
 
   struct Voronoi {
     Pass pass;
     Pipeline* draw;
     std::vector<DynamicBuf> verts;
+    size_t num_cells = 0;
+
+    void update(const DrawState& ds, const std::vector<Vertex2d>& cells);
+    void render(const DrawState& ds);
   } voronoi_;
 
   struct Scene {
@@ -245,6 +246,7 @@ class Renderer {
     DescLayout* material;
     Pipeline* draw;
 
+    DescLayout* outputSet();
     void update(const DrawState& ds, const FrameState& fs);
   } scene_;
 
@@ -254,13 +256,17 @@ class Renderer {
     DescLayout* inputs;
     Pipeline* draw;
 
+    DescLayout* outputSet();
     void update(const DrawState& ds, const DebugData& debug);
+    void render(const DrawState& ds, vk::DescriptorSet image_set);
   } post_;
 
   struct Swap {
     Pass pass;
     DescLayout* sampler;
     Pipeline* draw;
+
+    void render(const DrawState& ds, vk::DescriptorSet image_set);
   } swap_;
 
 #ifdef DEBUG
