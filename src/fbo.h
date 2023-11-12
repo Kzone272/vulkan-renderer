@@ -4,6 +4,8 @@
 #include "images.h"
 #include "vulkan-include.h"
 
+struct DrawState;
+
 struct Fbo {
   // Inputs
   vk::Extent2D size;
@@ -27,6 +29,7 @@ struct Fbo {
 
   void init(const VulkanState& vs);
   void resize(const VulkanState& vs, vk::Extent2D new_size);
+  void beginRp(const DrawState& ds) const;
 
   void initImages(const VulkanState& vs);
   void initDescs(const VulkanState& vs);

@@ -1,5 +1,7 @@
 #include "fbo.h"
 
+#include "renderer.h"
+
 void Fbo::init(const VulkanState& vs) {
   initImages(vs);
   initDescs(vs);
@@ -14,6 +16,33 @@ void Fbo::resize(const VulkanState& vs, vk::Extent2D new_size) {
   initImages(vs);
   updateDescs(vs);
   initFb(vs);
+}
+
+void Fbo::beginRp(const DrawState& ds) const {
+  vk::Viewport viewport{
+      .x = 0.0f,
+      .y = 0.0f,
+      .width = static_cast<float>(size.width),
+      .height = static_cast<float>(size.height),
+      .minDepth = 0.0f,
+      .maxDepth = 1.0f,
+  };
+  vk::Rect2D scissor{
+      .offset = {0, 0},
+      .extent = size,
+  };
+  ds.cmd.setViewport(0, viewport);
+  ds.cmd.setScissor(0, scissor);
+
+  vk::RenderPassBeginInfo rp_info{
+      .renderPass = *rp,
+      .framebuffer = *fbs[swap ? ds.img_ind : 0],
+      .renderArea = {
+          .offset = {0, 0},
+          .extent = size,
+      }};
+  rp_info.setClearValues(clears);
+  ds.cmd.beginRenderPass(rp_info, vk::SubpassContents::eInline);
 }
 
 void Fbo::resetImages() {

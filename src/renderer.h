@@ -40,6 +40,12 @@ struct Model {
   Material* material;
 };
 
+struct DrawState {
+  vk::CommandBuffer cmd = {};
+  int frame = -1;
+  uint32_t img_ind = 0;
+};
+
 struct SDL_Window;
 struct SDL_Surface;
 
@@ -158,7 +164,6 @@ class Renderer {
   void createDescriptorPool();
   void createImguiDescriptorPool();
 
-  void beginRp(const Fbo& fbo, int fb_ind);
   void renderDrawing();
   void renderVoronoi();
   void renderScene();
@@ -217,12 +222,7 @@ class Renderer {
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
   FrameState* frame_state_ = nullptr;
-
-  struct DrawState {
-    vk::CommandBuffer cmd = {};
-    int frame = -1;
-    uint32_t img_ind = 0;
-  } ds_;
+  DrawState ds_{};
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
   std::vector<std::unique_ptr<Material>> loaded_materials_;

@@ -1442,35 +1442,8 @@ void Renderer::createCommandBuffers() {
   cmd_bufs_ = device_->allocateCommandBuffersUnique(alloc_info).value;
 }
 
-void Renderer::beginRp(const Fbo& fbo, int fb_ind) {
-  vk::Viewport viewport{
-      .x = 0.0f,
-      .y = 0.0f,
-      .width = static_cast<float>(fbo.size.width),
-      .height = static_cast<float>(fbo.size.height),
-      .minDepth = 0.0f,
-      .maxDepth = 1.0f,
-  };
-  vk::Rect2D scissor{
-      .offset = {0, 0},
-      .extent = fbo.size,
-  };
-  ds_.cmd.setViewport(0, viewport);
-  ds_.cmd.setScissor(0, scissor);
-
-  vk::RenderPassBeginInfo rp_info{
-      .renderPass = *fbo.rp,
-      .framebuffer = *fbo.fbs[fb_ind],
-      .renderArea = {
-          .offset = {0, 0},
-          .extent = fbo.size,
-      }};
-  rp_info.setClearValues(fbo.clears);
-  ds_.cmd.beginRenderPass(rp_info, vk::SubpassContents::eInline);
-}
-
 void Renderer::renderDrawing() {
-  beginRp(drawing_.pass.fbo, 0);
+  drawing_.pass.fbo.beginRp(ds_);
   ds_.cmd.bindPipeline(
       vk::PipelineBindPoint::eGraphics, *drawing_.draw->pipeline);
   ds_.cmd.bindDescriptorSets(
@@ -1514,7 +1487,7 @@ void Renderer::renderVoronoi() {
       vk::PipelineStageFlagBits::eVertexInput,
       vk::AccessFlagBits::eVertexAttributeRead);
 
-  beginRp(voronoi_.pass.fbo, 0);
+  voronoi_.pass.fbo.beginRp(ds_);
 
   ds_.cmd.bindPipeline(
       vk::PipelineBindPoint::eGraphics, *voronoi_.draw->pipeline);
@@ -1525,10 +1498,9 @@ void Renderer::renderVoronoi() {
 }
 
 void Renderer::renderScene() {
-  beginRp(scene_.pass.fbo, 0);
+  scene_.pass.fbo.beginRp(ds_);
 
   auto& draw = *scene_.draw;
-
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw.pipeline);
   ds_.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *draw.layout, 0,
@@ -1577,7 +1549,7 @@ void Renderer::renderScene() {
 }
 
 void Renderer::renderPost() {
-  beginRp(post_.pass.fbo, 0);
+  post_.pass.fbo.beginRp(ds_);
 
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *post_.draw->pipeline);
   ds_.cmd.bindDescriptorSets(
@@ -1592,7 +1564,7 @@ void Renderer::renderPost() {
 }
 
 void Renderer::renderSwap() {
-  beginRp(swap_.pass.fbo, ds_.img_ind);
+  swap_.pass.fbo.beginRp(ds_);
 
   ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *swap_.draw->pipeline);
   ds_.cmd.bindDescriptorSets(
