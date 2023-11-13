@@ -1,10 +1,9 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Move all Pass related code out of Renderer
-  - init()
 - Speed up build.
-  - Make sure multithreaded building is working. I may have disabled it?
+  - Add RenderInterface to move renderer.h out of app.h
+  - make app.cc
 - Simplify creating Ubo DynamicBufs and attaching to descriptors.
   - Not totally clear what that interface should look like.
 - Simplify adding new shaders. Probably stored in a map keyed by filename.
