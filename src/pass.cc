@@ -60,8 +60,8 @@ void Scene::init(const VulkanState& vs) {
 
   draw = pass.makePipeline();
   *draw = {
-      .vert_shader = vs.shaders.get("shader.vert.spv"),
-      .frag_shader = vs.shaders.get("shader.frag.spv"),
+      .vert_shader = vs.shaders.get("scene.vert.spv"),
+      .frag_shader = vs.shaders.get("scene.frag.spv"),
       .desc_layouts = {global, material},
       .push_ranges = {scene_push},
       .vert_in = vertex_in,

@@ -1,8 +1,8 @@
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 
 file(GLOB shader_files
-  shader.vert
-  shader.frag
+  scene.vert
+  scene.frag
   fullscreen.vert
   post.frag
   sample.frag
