@@ -142,13 +142,14 @@ void Renderer::initVulkan() {
   createImguiDescriptorPool();
   createSyncObjects();
   createShaders();
+  findDepthFormat();
   // VulkanState should now fully defined.
 
-  createDrawing();
-  createVoronoi();
-  createScene();
-  createPost();
-  createSwap();
+  drawing_.init(vs_);
+  voronoi_.init(vs_);
+  scene_.init(vs_);
+  post_.init(vs_, scene_.outputSet(), uboInfos(scene_.globals));
+  swap_.init(vs_);
 }
 
 void Renderer::initImgui() {
@@ -558,9 +559,9 @@ vk::Extent2D Renderer::chooseSwapExtent(
 
 void Renderer::createSwapchain() {
   auto format = chooseSwapSurfaceFormat(swapchain_support_.formats);
-  swapchain_format_ = format.format;
+  vs_.swap_format = format.format;
   auto present_mode = chooseSwapPresentMode(swapchain_support_.present_modes);
-  swapchain_extent_ = chooseSwapExtent(swapchain_support_.caps);
+  vs_.swap_size = chooseSwapExtent(swapchain_support_.caps);
 
   uint32_t image_count = swapchain_support_.caps.minImageCount + 1;
   if (swapchain_support_.caps.maxImageCount > 0) {
@@ -570,9 +571,9 @@ void Renderer::createSwapchain() {
   vk::SwapchainCreateInfoKHR swapchain_ci{
       .surface = *surface_,
       .minImageCount = image_count,
-      .imageFormat = swapchain_format_,
+      .imageFormat = vs_.swap_format,
       .imageColorSpace = format.colorSpace,
-      .imageExtent = swapchain_extent_,
+      .imageExtent = vs_.swap_size,
       .imageArrayLayers = 1,
       .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
       .preTransform = swapchain_support_.caps.currentTransform,
@@ -597,13 +598,14 @@ void Renderer::createSwapchain() {
   swapchain_views_.resize(swapchain_images.size());
   for (size_t i = 0; i < swapchain_images.size(); i++) {
     swapchain_views_[i] = createImageView(
-        vs_, swapchain_images[i], swapchain_format_, 1,
+        vs_, swapchain_images[i], vs_.swap_format, 1,
         vk::ImageAspectFlagBits::eColor);
   }
+  vs_.swap_views = views(swapchain_views_);
 
   printf(
       "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
-      swapchain_format_, swapchain_extent_.width, swapchain_extent_.height);
+      vs_.swap_format, vs_.swap_size.width, vs_.swap_size.height);
 }
 
 void Renderer::createShaders() {
@@ -619,39 +621,38 @@ vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
   return device_->createShaderModuleUnique(ci).value;
 }
 
-void Renderer::createDrawing() {
-  auto& pass = drawing_.pass;
+void Renderer::Drawing::init(const VulkanState& vs) {
   pass.fbo = {
       .size = {512, 512},
-      .color_fmts = {color_fmt_},
-      .output_sampler = *linear_sampler_,
-      .desc_count = vs_.kMaxFramesInFlight,
+      .color_fmts = {vk::Format::eB8G8R8A8Unorm},
+      .output_sampler = vs.linear_sampler,
+      .desc_count = vs.kMaxFramesInFlight,
   };
 
-  drawing_.inputs = pass.makeDescLayout();
-  *drawing_.inputs = {
+  inputs = pass.makeDescLayout();
+  *inputs = {
       .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  drawing_.draw = drawing_.pass.makePipeline();
-  *drawing_.draw = {
-      .vert_shader = vs_.shaders.get("fullscreen.vert.spv"),
-      .frag_shader = vs_.shaders.get("circle.frag.spv"),
-      .desc_layouts = {drawing_.inputs},
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("circle.frag.spv"),
+      .desc_layouts = {inputs},
   };
 
-  pass.init(vs_);
+  pass.init(vs);
 
-  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
-    drawing_.debugs.push_back(createDynamicBuffer(
-        vs_, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
+  for (size_t i = 0; i < vs.kMaxFramesInFlight; i++) {
+    debugs.push_back(createDynamicBuffer(
+        vs, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   // TODO: Generalize so this can be part of pass.init()
   std::vector<vk::WriteDescriptorSet> writes;
-  drawing_.inputs->updateUboBind(0, uboInfos(drawing_.debugs), writes);
-  device_->updateDescriptorSets(writes, nullptr);
+  inputs->updateUboBind(0, uboInfos(debugs), writes);
+  vs.device.updateDescriptorSets(writes, nullptr);
 }
 
 void Renderer::Drawing::update(const DrawState& ds, const DebugData& debug) {
@@ -661,13 +662,12 @@ void Renderer::Drawing::update(const DrawState& ds, const DebugData& debug) {
       vk::AccessFlagBits::eUniformRead);
 }
 
-void Renderer::createVoronoi() {
-  auto& pass = voronoi_.pass;
+void Renderer::Voronoi::init(const VulkanState& vs) {
   pass.fbo = {
       .size = {512, 512},
-      .color_fmts = {color_fmt_},
-      .depth_fmt = findDepthFormat(),
-      .output_sampler = *linear_sampler_,
+      .color_fmts = {vk::Format::eB8G8R8A8Unorm},
+      .depth_fmt = vs.depth_format,
+      .output_sampler = vs.linear_sampler,
   };
 
   vk::PipelineVertexInputStateCreateInfo vert_in{};
@@ -677,47 +677,47 @@ void Renderer::createVoronoi() {
   auto vert_attrs = getAttrDescs<Vertex2d>();
   vert_in.setVertexAttributeDescriptions(vert_attrs);
 
-  voronoi_.draw = pass.makePipeline();
-  *voronoi_.draw = {
-      .vert_shader = vs_.shaders.get("voronoi.vert.spv"),
-      .frag_shader = vs_.shaders.get("voronoi.frag.spv"),
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("voronoi.vert.spv"),
+      .frag_shader = vs.shaders.get("voronoi.frag.spv"),
       .vert_in = vert_in,
   };
 
   // Support up to 100 voronoi cells for now.
   vk::DeviceSize size = 100 * sizeof(Vertex2d);
-  for (int i = 0; i < vs_.kMaxFramesInFlight; i++) {
-    voronoi_.verts.push_back(
-        createDynamicBuffer(vs_, size, vk::BufferUsageFlagBits::eVertexBuffer));
+  for (int i = 0; i < vs.kMaxFramesInFlight; i++) {
+    verts.push_back(
+        createDynamicBuffer(vs, size, vk::BufferUsageFlagBits::eVertexBuffer));
   }
 
-  voronoi_.pass.init(vs_);
+  pass.init(vs);
 }
 
-void Renderer::createScene() {
-  auto& pass = scene_.pass;
+void Renderer::Scene::init(const VulkanState& vs) {
   pass.fbo = {
-      .size = swapchain_extent_,
-      .color_fmts = {color_fmt_, vk::Format::eR32G32B32A32Sfloat},
+      .size = vs.swap_size,
+      .color_fmts =
+          {vk::Format::eB8G8R8A8Unorm, vk::Format::eR32G32B32A32Sfloat},
       // Disable msaa for now because it makes outline filter worse
       // .samples = msaa_samples_,
       // .resolve = true,
-      .depth_fmt = findDepthFormat(),
-      .output_sampler = *linear_sampler_,
-      .desc_count = vs_.kMaxFramesInFlight,
+      .depth_fmt = vs.depth_format,
+      .output_sampler = vs.linear_sampler,
+      .desc_count = vs.kMaxFramesInFlight,
   };
 
   // Bound per frame.
-  scene_.global = pass.makeDescLayout();
-  *scene_.global = {
+  global = pass.makeDescLayout();
+  *global = {
       .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
       .stages =
           vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
   };
   // Bound per material
   // TODO: Don't allocate any here. These sets are allocated per material.
-  scene_.material = pass.makeDescLayout();
-  *scene_.material = {
+  material = pass.makeDescLayout();
+  *material = {
       .binds =
           {{.type = vk::DescriptorType::eCombinedImageSampler},
            {.type = vk::DescriptorType::eUniformBuffer}},
@@ -735,26 +735,26 @@ void Renderer::createScene() {
   vertex_in.setVertexBindingDescriptions(vert_binding);
   vertex_in.setVertexAttributeDescriptions(vert_attrs);
 
-  scene_.draw = pass.makePipeline();
-  *scene_.draw = {
-      .vert_shader = vs_.shaders.get("shader.vert.spv"),
-      .frag_shader = vs_.shaders.get("shader.frag.spv"),
-      .desc_layouts = {scene_.global, scene_.material},
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("shader.vert.spv"),
+      .frag_shader = vs.shaders.get("shader.frag.spv"),
+      .desc_layouts = {global, material},
       .push_ranges = {scene_push},
       .vert_in = vertex_in,
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
 
-  pass.init(vs_);
+  pass.init(vs);
 
-  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
-    scene_.globals.push_back(createDynamicBuffer(
-        vs_, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
+  for (size_t i = 0; i < vs.kMaxFramesInFlight; i++) {
+    globals.push_back(createDynamicBuffer(
+        vs, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
-  scene_.global->updateUboBind(0, uboInfos(scene_.globals), writes);
-  device_->updateDescriptorSets(writes, nullptr);
+  global->updateUboBind(0, uboInfos(globals), writes);
+  vs.device.updateDescriptorSets(writes, nullptr);
 }
 
 DescLayout* Renderer::Scene::outputSet() {
@@ -784,42 +784,43 @@ void Renderer::Scene::update(const DrawState& ds, const FrameState& fs) {
       vk::AccessFlagBits::eUniformRead);
 }
 
-void Renderer::createPost() {
-  auto& pass = post_.pass;
+void Renderer::Post::init(
+    const VulkanState& vs, DescLayout* image_set,
+    const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
   pass.fbo = {
-      .size = swapchain_extent_,
-      .color_fmts = {color_fmt_},
-      .output_sampler = *linear_sampler_,
-      .desc_count = vs_.kMaxFramesInFlight,
+      .size = vs.swap_size,
+      .color_fmts = {vk::Format::eB8G8R8A8Unorm},
+      .output_sampler = vs.linear_sampler,
+      .desc_count = vs.kMaxFramesInFlight,
   };
 
-  post_.inputs = pass.makeDescLayout();
-  *post_.inputs = {
+  inputs = pass.makeDescLayout();
+  *inputs = {
       .binds =
           {{.type = vk::DescriptorType::eUniformBuffer},
            {.type = vk::DescriptorType::eUniformBuffer}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  post_.draw = pass.makePipeline();
-  *post_.draw = {
-      .vert_shader = vs_.shaders.get("fullscreen.vert.spv"),
-      .frag_shader = vs_.shaders.get("post.frag.spv"),
-      .desc_layouts = {post_.inputs, scene_.outputSet()},
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("post.frag.spv"),
+      .desc_layouts = {inputs, image_set},
       .vert_in = {},
   };
 
-  pass.init(vs_);
+  pass.init(vs);
 
-  for (size_t i = 0; i < vs_.kMaxFramesInFlight; i++) {
-    post_.debugs.push_back(createDynamicBuffer(
-        vs_, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
+  for (size_t i = 0; i < vs.kMaxFramesInFlight; i++) {
+    debugs.push_back(createDynamicBuffer(
+        vs, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
-  post_.inputs->updateUboBind(0, uboInfos(scene_.globals), writes);
-  post_.inputs->updateUboBind(1, uboInfos(post_.debugs), writes);
-  device_->updateDescriptorSets(writes, nullptr);
+  inputs->updateUboBind(0, scene_globals, writes);
+  inputs->updateUboBind(1, uboInfos(debugs), writes);
+  vs.device.updateDescriptorSets(writes, nullptr);
 }
 
 DescLayout* Renderer::Post::outputSet() {
@@ -834,31 +835,29 @@ void Renderer::Post::update(const DrawState& ds, const DebugData& debug) {
       vk::AccessFlagBits::eUniformRead);
 }
 
-void Renderer::createSwap() {
-  auto& pass = swap_.pass;
-
+void Renderer::Swap::init(const VulkanState& vs) {
   pass.fbo = {
-      .size = swapchain_extent_,
+      .size = vs.swap_size,
       .swap = true,
-      .swap_format = swapchain_format_,
-      .swap_views = views(swapchain_views_),
+      .swap_format = vs.swap_format,
+      .swap_views = vs.swap_views,
   };
 
-  swap_.sampler = pass.makeDescLayout();
-  *swap_.sampler = {
+  sampler = pass.makeDescLayout();
+  *sampler = {
       .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  swap_.draw = pass.makePipeline();
-  *swap_.draw = {
-      .vert_shader = vs_.shaders.get("fullscreen.vert.spv"),
-      .frag_shader = vs_.shaders.get("sample.frag.spv"),
-      .desc_layouts = {swap_.sampler},
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("sample.frag.spv"),
+      .desc_layouts = {sampler},
       .vert_in = {},
   };
 
-  pass.init(vs_);
+  pass.init(vs);
 }
 
 void Renderer::createCommandPool() {
@@ -869,8 +868,8 @@ void Renderer::createCommandPool() {
   cmd_pool_ = device_->createCommandPoolUnique(ci).value;
 }
 
-vk::Format Renderer::findDepthFormat() {
-  return findSupportedFormat(
+void Renderer::findDepthFormat() {
+  vs_.depth_format = findSupportedFormat(
       {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint,
        vk::Format::eD24UnormS8Uint},
       vk::ImageTiling::eOptimal,
@@ -1178,6 +1177,8 @@ void Renderer::createSamplers() {
       .unnormalizedCoordinates = VK_FALSE,
   };
   linear_sampler_ = device_->createSamplerUnique(ci).value;
+  vs_.linear_sampler = *linear_sampler_;
+
   ci.magFilter = vk::Filter::eNearest;
   ci.minFilter = vk::Filter::eNearest;
   ci.anisotropyEnable = VK_FALSE;
@@ -1558,12 +1559,12 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
 
-  scene_.pass.fbo.resize(vs_, swapchain_extent_);
-  post_.pass.fbo.resize(vs_, swapchain_extent_);
+  scene_.pass.fbo.resize(vs_, vs_.swap_size);
+  post_.pass.fbo.resize(vs_, vs_.swap_size);
 
-  swap_.pass.fbo.swap_format = swapchain_format_;
-  swap_.pass.fbo.swap_views = views(swapchain_views_);
-  swap_.pass.fbo.resize(vs_, swapchain_extent_);
+  swap_.pass.fbo.swap_format = vs_.swap_format;
+  swap_.pass.fbo.swap_views = vs_.swap_views;
+  swap_.pass.fbo.resize(vs_, vs_.swap_size);
 
   window_resized_ = false;
 }

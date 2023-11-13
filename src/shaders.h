@@ -28,7 +28,7 @@ class Shaders {
   Shaders& operator=(const Shaders& shaders) = delete;
 
   void create(const VulkanState& vs);
-  vk::ShaderModule get(std::string filename);
+  vk::ShaderModule get(std::string filename) const;
   void clear();
 
  private:

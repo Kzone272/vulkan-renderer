@@ -93,7 +93,7 @@ class Renderer {
   void createCommandPool();
   void createCommandBuffers();
 
-  vk::Format findDepthFormat();
+  void findDepthFormat();
   bool hasStencilComponent(vk::Format format);
   vk::Format findSupportedFormat(
       const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
@@ -101,12 +101,6 @@ class Renderer {
 
   vk::UniqueShaderModule createShaderModule(std::string filename);
   void createShaders();
-
-  void createDrawing();
-  void createVoronoi();
-  void createScene();
-  void createPost();
-  void createSwap();
 
   void createSamplers();
   void initSdlImage();
@@ -165,9 +159,6 @@ class Renderer {
   vk::Queue present_q_;
   SwapchainSupportDetails swapchain_support_;
   vk::UniqueSwapchainKHR swapchain_;
-  vk::Format color_fmt_ = vk::Format::eB8G8R8A8Unorm;
-  vk::Format swapchain_format_;
-  vk::Extent2D swapchain_extent_;
   std::vector<vk::UniqueImageView> swapchain_views_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
@@ -198,6 +189,7 @@ class Renderer {
     std::vector<DynamicBuf> debugs;
     DescLayout* inputs;
 
+    void init(const VulkanState& vs);
     void update(const DrawState& ds, const DebugData& debug);
     void render(const DrawState& ds);
   } drawing_;
@@ -208,6 +200,7 @@ class Renderer {
     std::vector<DynamicBuf> verts;
     size_t num_cells = 0;
 
+    void init(const VulkanState& vs);
     void update(const DrawState& ds, const std::vector<Vertex2d>& cells);
     void render(const DrawState& ds);
   } voronoi_;
@@ -219,6 +212,7 @@ class Renderer {
     DescLayout* material;
     Pipeline* draw;
 
+    void init(const VulkanState& vs);
     DescLayout* outputSet();
     void update(const DrawState& ds, const FrameState& fs);
   } scene_;
@@ -229,6 +223,10 @@ class Renderer {
     DescLayout* inputs;
     Pipeline* draw;
 
+    void init(
+        const VulkanState& vs, DescLayout* image_set,
+        // TODO: This is gross. This should probably be a Ubo owned by Post.
+        const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
     DescLayout* outputSet();
     void update(const DrawState& ds, const DebugData& debug);
     void render(const DrawState& ds, vk::DescriptorSet image_set);
@@ -239,6 +237,7 @@ class Renderer {
     DescLayout* sampler;
     Pipeline* draw;
 
+    void init(const VulkanState& vs);
     void render(const DrawState& ds, vk::DescriptorSet image_set);
   } swap_;
 

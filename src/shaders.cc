@@ -11,7 +11,7 @@ void Shaders::create(const VulkanState& vs) {
   }
 }
 
-vk::ShaderModule Shaders::get(std::string filename) {
+vk::ShaderModule Shaders::get(std::string filename) const {
   ASSERT(kShaders.contains(filename));
   return *shaders_.find(filename)->second;
 }
