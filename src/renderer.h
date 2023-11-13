@@ -11,23 +11,8 @@
 #include "pass.h"
 #include "pipelines.h"
 #include "render-objects.h"
+#include "scene-data.h"
 #include "vulkan-include.h"
-
-struct Material {
-  Texture* diffuse;
-  Buffer ubo;
-  vk::DescriptorSet desc_set;
-};
-
-struct Model {
-  vk::UniqueBuffer vert_buf;
-  vk::UniqueDeviceMemory vert_buf_mem;
-  vk::UniqueBuffer ind_buf;
-  vk::UniqueDeviceMemory ind_buf_mem;
-  uint32_t index_count;
-  uint32_t vertex_count;
-  Material* material;
-};
 
 struct SDL_Window;
 struct SDL_Surface;
@@ -183,66 +168,11 @@ class Renderer {
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
 
-  struct Drawing {
-    Pass pass;
-    Pipeline* draw;
-    std::vector<DynamicBuf> debugs;
-    DescLayout* inputs;
-
-    void init(const VulkanState& vs);
-    void update(const DrawState& ds, const DebugData& debug);
-    void render(const DrawState& ds);
-  } drawing_;
-
-  struct Voronoi {
-    Pass pass;
-    Pipeline* draw;
-    std::vector<DynamicBuf> verts;
-    size_t num_cells = 0;
-
-    void init(const VulkanState& vs);
-    void update(const DrawState& ds, const std::vector<Vertex2d>& cells);
-    void render(const DrawState& ds);
-  } voronoi_;
-
-  struct Scene {
-    Pass pass;
-    std::vector<DynamicBuf> globals;
-    DescLayout* global;
-    DescLayout* material;
-    Pipeline* draw;
-
-    void init(const VulkanState& vs);
-    DescLayout* outputSet();
-    void update(const DrawState& ds, const FrameState& fs);
-    void render(
-        const DrawState& ds, std::vector<SceneObject>& objects,
-        const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
-  } scene_;
-
-  struct Post {
-    Pass pass;
-    std::vector<DynamicBuf> debugs;
-    DescLayout* inputs;
-    Pipeline* draw;
-
-    void init(
-        const VulkanState& vs, DescLayout* image_set,
-        // TODO: This is gross. This should probably be a Ubo owned by Post.
-        const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
-    DescLayout* outputSet();
-    void update(const DrawState& ds, const DebugData& debug);
-    void render(const DrawState& ds, vk::DescriptorSet image_set);
-  } post_;
-
-  struct Swap {
-    Pass pass;
-    DescLayout* sampler;
-    Pipeline* draw;
-
-    void init(const VulkanState& vs);
-    void render(const DrawState& ds, vk::DescriptorSet image_set);
-  } swap_;
+  Drawing drawing_;
+  Voronoi voronoi_;
+  Scene scene_;
+  Post post_;
+  Swap swap_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;
@@ -250,73 +180,3 @@ class Renderer {
   const bool enable_validation_layers_ = false;
 #endif  // DEBUG
 };
-
-// TODO: Move to separate file buffers.h.
-template <class T>
-void updateDynamicBuf(
-    vk::CommandBuffer cmd, DynamicBuf& dbuf, std::span<T> data,
-    vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access);
-
-// TODO: Move to separate file. Maybe descriptors.h?
-template <class T>
-static vk::VertexInputBindingDescription getBindingDesc() {
-  return {
-      .binding = 0,
-      .stride = sizeof(T),
-      .inputRate = vk::VertexInputRate::eVertex,
-  };
-}
-
-template <class T>
-static std::vector<vk::VertexInputAttributeDescription> getAttrDescs();
-
-template <>
-static std::vector<vk::VertexInputAttributeDescription> getAttrDescs<Vertex>() {
-  std::vector<vk::VertexInputAttributeDescription> attrs = {
-      {
-          .location = 0,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex, pos),
-      },
-      {
-          .location = 1,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex, normal),
-      },
-      {
-          .location = 2,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex, color),
-      },
-      {
-          .location = 3,
-          .binding = 0,
-          .format = vk::Format::eR32G32Sfloat,  // vec2
-          .offset = offsetof(Vertex, uv),
-      },
-  };
-  return attrs;
-}
-
-template <>
-static std::vector<vk::VertexInputAttributeDescription>
-getAttrDescs<Vertex2d>() {
-  std::vector<vk::VertexInputAttributeDescription> attrs = {
-      {
-          .location = 0,
-          .binding = 0,
-          .format = vk::Format::eR32G32Sfloat,  // vec2
-          .offset = offsetof(Vertex2d, pos),
-      },
-      {
-          .location = 1,
-          .binding = 0,
-          .format = vk::Format::eR32G32B32Sfloat,  // vec3
-          .offset = offsetof(Vertex2d, color),
-      },
-  };
-  return attrs;
-}

@@ -46,6 +46,15 @@ DynamicBuf createDynamicBuffer(
   return std::move(dbuf);
 }
 
+std::vector<vk::DescriptorBufferInfo*> uboInfos(
+    std::vector<DynamicBuf>& dbufs) {
+  std::vector<vk::DescriptorBufferInfo*> infos;
+  for (auto& dbuf : dbufs) {
+    infos.push_back(&dbuf.device.info);
+  }
+  return infos;
+}
+
 uint32_t findMemoryType(
     const VulkanState& vs, uint32_t type_filter,
     vk::MemoryPropertyFlags props) {

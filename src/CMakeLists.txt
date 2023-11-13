@@ -36,6 +36,7 @@ add_executable(main
   buffers.cc
   shaders.h
   shaders.cc
+  scene-data.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)
