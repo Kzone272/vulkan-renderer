@@ -215,6 +215,9 @@ class Renderer {
     void init(const VulkanState& vs);
     DescLayout* outputSet();
     void update(const DrawState& ds, const FrameState& fs);
+    void render(
+        const DrawState& ds, std::vector<SceneObject>& objects,
+        const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
   } scene_;
 
   struct Post {

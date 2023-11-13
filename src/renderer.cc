@@ -1444,55 +1444,56 @@ void Renderer::Voronoi::render(const DrawState& ds) {
   ds.cmd.endRenderPass();
 }
 
-void Renderer::renderScene() {
-  scene_.pass.fbo.beginRp(ds_);
+void Renderer::Scene::render(
+    const DrawState& ds, std::vector<SceneObject>& objects,
+    const std::map<ModelId, std::unique_ptr<Model>>& loaded_models) {
+  pass.fbo.beginRp(ds);
 
-  auto& draw = *scene_.draw;
-  ds_.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw.pipeline);
-  ds_.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *draw.layout, 0,
-      scene_.global->sets[ds_.frame], nullptr);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw->layout, 0,
+      global->sets[ds.frame], nullptr);
 
   // TODO: Sort by material, then by model.
-  std::sort(
-      frame_state_->objects.begin(), frame_state_->objects.end(),
-      [](auto& left, auto& right) { return left.model < right.model; });
+  std::sort(objects.begin(), objects.end(), [](auto& left, auto& right) {
+    return left.model < right.model;
+  });
 
   ModelId curr_model_id = ModelId::None;
   Material* curr_material = nullptr;
-  for (auto& obj : frame_state_->objects) {
-    auto it = loaded_models_.find(obj.model);
-    ASSERT(it != loaded_models_.end());
+  for (auto& obj : objects) {
+    auto it = loaded_models.find(obj.model);
+    ASSERT(it != loaded_models.end());
     auto* model = it->second.get();
 
     if (curr_material != model->material) {
       curr_material = model->material;
-      ds_.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *draw.layout, 1,
+      ds.cmd.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, *draw->layout, 1,
           model->material->desc_set, nullptr);
     }
 
     if (curr_model_id != obj.model) {
       curr_model_id = obj.model;
       vk::DeviceSize offsets[] = {0};
-      ds_.cmd.bindVertexBuffers(0, *model->vert_buf, offsets);
+      ds.cmd.bindVertexBuffers(0, *model->vert_buf, offsets);
       if (model->index_count) {
-        ds_.cmd.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
+        ds.cmd.bindIndexBuffer(*model->ind_buf, 0, vk::IndexType::eUint32);
       }
     }
 
     PushData push_data{obj.transform};
-    ds_.cmd.pushConstants<PushData>(
-        *draw.layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
+    ds.cmd.pushConstants<PushData>(
+        *draw->layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
 
     if (model->index_count) {
-      ds_.cmd.drawIndexed(model->index_count, 1, 0, 0, 0);
+      ds.cmd.drawIndexed(model->index_count, 1, 0, 0, 0);
     } else {
-      ds_.cmd.draw(model->vertex_count, 1, 0, 0);
+      ds.cmd.draw(model->vertex_count, 1, 0, 0);
     }
   }
 
-  ds_.cmd.endRenderPass();
+  ds.cmd.endRenderPass();
 }
 
 void Renderer::Post::render(const DrawState& ds, vk::DescriptorSet image_set) {
@@ -1529,7 +1530,7 @@ void Renderer::recordCommandBuffer() {
   if (frame_state_->update_drawing) {
     drawing_.render(ds_);
   }
-  renderScene();
+  scene_.render(ds_, frame_state_->objects, loaded_models_);
   post_.render(ds_, scene_.outputSet()->sets[ds_.frame]);
   swap_.render(ds_, post_.outputSet()->sets[ds_.frame]);
 
