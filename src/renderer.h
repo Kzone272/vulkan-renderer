@@ -39,10 +39,10 @@ class Renderer {
     width_ = width;
     height_ = height;
   }
+  ~Renderer();
 
   void init(FrameState* frame_state);
   void drawFrame(FrameState* frame_state);
-  void cleanup();
   void resizeWindow(uint32_t width, uint32_t height);
   MaterialId useMaterial(const MaterialInfo& mat_info);
   void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id);
@@ -152,10 +152,6 @@ class Renderer {
   uint32_t width_ = 100;
   uint32_t height_ = 100;
 
-  // The members in this struct should never change after handing it out, or
-  // problems are likely to occur.
-  VulkanState vs_{.kMaxFramesInFlight = 2};
-
   vk::UniqueInstance instance_;
   vk::DispatchLoaderDynamic dldi_;
   vk::UniqueSurfaceKHR surface_;
@@ -175,14 +171,6 @@ class Renderer {
   std::vector<vk::UniqueImageView> swapchain_views_;
   vk::UniqueDescriptorPool desc_pool_;
   vk::UniqueDescriptorPool imgui_desc_pool_;
-  vk::UniqueShaderModule scene_vert_;
-  vk::UniqueShaderModule scene_frag_;
-  vk::UniqueShaderModule fullscreen_vert_;
-  vk::UniqueShaderModule post_frag_;
-  vk::UniqueShaderModule circle_frag_;
-  vk::UniqueShaderModule sample_frag_;
-  vk::UniqueShaderModule voronoi_vert_;
-  vk::UniqueShaderModule voronoi_frag_;
   vk::UniqueCommandPool cmd_pool_;
   std::vector<vk::UniqueCommandBuffer> cmd_bufs_;
   std::vector<vk::UniqueSemaphore> img_sems_;
@@ -190,8 +178,11 @@ class Renderer {
   std::vector<vk::UniqueFence> in_flight_fences_;
   vk::UniqueSampler linear_sampler_;
   vk::UniqueSampler nearest_sampler_;
-
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
+
+  // The members in this struct should never change after handing it out, or
+  // problems are likely to occur.
+  VulkanState vs_{.kMaxFramesInFlight = 2};
 
   FrameState* frame_state_ = nullptr;
   DrawState ds_{};

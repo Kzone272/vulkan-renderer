@@ -34,6 +34,8 @@ add_executable(main
   render-state.h
   buffers.h
   buffers.cc
+  shaders.h
+  shaders.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

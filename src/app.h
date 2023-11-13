@@ -785,12 +785,11 @@ class HelloTriangleApp {
   }
 
   void cleanup() {
-    renderer_->cleanup();
+    renderer_.reset();
 
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 
-    renderer_.reset();
     SDL_DestroyWindow(window_);
     SDL_Quit();
   }

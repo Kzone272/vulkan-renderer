@@ -1,5 +1,7 @@
 #pragma once
 
+#include "shaders.h"
+
 // This will be owned by Renderer, but passed to other classes after all
 // properties are set.
 struct VulkanState {
@@ -7,6 +9,7 @@ struct VulkanState {
   vk::DescriptorPool desc_pool;
   vk::PhysicalDeviceProperties device_props;
   vk::PhysicalDeviceMemoryProperties mem_props;
+  Shaders shaders;
   const uint32_t kMaxFramesInFlight;
 };
 

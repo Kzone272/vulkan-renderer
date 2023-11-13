@@ -83,8 +83,9 @@ void Renderer::drawFrame(FrameState* frame_state) {
   drawFrame();
 }
 
-void Renderer::cleanup() {
+Renderer::~Renderer() {
   std::ignore = device_->waitIdle();
+
   ImGui_ImplVulkan_Shutdown();
 }
 
@@ -606,14 +607,7 @@ void Renderer::createSwapchain() {
 }
 
 void Renderer::createShaders() {
-  scene_vert_ = createShaderModule("shaders/shader.vert.spv");
-  scene_frag_ = createShaderModule("shaders/shader.frag.spv");
-  fullscreen_vert_ = createShaderModule("shaders/fullscreen.vert.spv");
-  post_frag_ = createShaderModule("shaders/post.frag.spv");
-  circle_frag_ = createShaderModule("shaders/circle.frag.spv");
-  sample_frag_ = createShaderModule("shaders/sample.frag.spv");
-  voronoi_vert_ = createShaderModule("shaders/voronoi.vert.spv");
-  voronoi_frag_ = createShaderModule("shaders/voronoi.frag.spv");
+  vs_.shaders.create(vs_);
 }
 
 vk::UniqueShaderModule Renderer::createShaderModule(std::string filename) {
@@ -642,8 +636,8 @@ void Renderer::createDrawing() {
 
   drawing_.draw = drawing_.pass.makePipeline();
   *drawing_.draw = {
-      .vert_shader = *fullscreen_vert_,
-      .frag_shader = *circle_frag_,
+      .vert_shader = vs_.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs_.shaders.get("circle.frag.spv"),
       .desc_layouts = {drawing_.inputs},
   };
 
@@ -685,8 +679,8 @@ void Renderer::createVoronoi() {
 
   voronoi_.draw = pass.makePipeline();
   *voronoi_.draw = {
-      .vert_shader = *voronoi_vert_,
-      .frag_shader = *voronoi_frag_,
+      .vert_shader = vs_.shaders.get("voronoi.vert.spv"),
+      .frag_shader = vs_.shaders.get("voronoi.frag.spv"),
       .vert_in = vert_in,
   };
 
@@ -743,8 +737,8 @@ void Renderer::createScene() {
 
   scene_.draw = pass.makePipeline();
   *scene_.draw = {
-      .vert_shader = *scene_vert_,
-      .frag_shader = *scene_frag_,
+      .vert_shader = vs_.shaders.get("shader.vert.spv"),
+      .frag_shader = vs_.shaders.get("shader.frag.spv"),
       .desc_layouts = {scene_.global, scene_.material},
       .push_ranges = {scene_push},
       .vert_in = vertex_in,
@@ -809,8 +803,8 @@ void Renderer::createPost() {
 
   post_.draw = pass.makePipeline();
   *post_.draw = {
-      .vert_shader = *fullscreen_vert_,
-      .frag_shader = *post_frag_,
+      .vert_shader = vs_.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs_.shaders.get("post.frag.spv"),
       .desc_layouts = {post_.inputs, scene_.outputSet()},
       .vert_in = {},
   };
@@ -858,8 +852,8 @@ void Renderer::createSwap() {
 
   swap_.draw = pass.makePipeline();
   *swap_.draw = {
-      .vert_shader = *fullscreen_vert_,
-      .frag_shader = *sample_frag_,
+      .vert_shader = vs_.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs_.shaders.get("sample.frag.spv"),
       .desc_layouts = {swap_.sampler},
       .vert_in = {},
   };
