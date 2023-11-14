@@ -28,6 +28,9 @@ struct DescLayout {
   void updateSamplerBind(
       uint32_t index, vk::DescriptorImageInfo* info,
       std::vector<vk::WriteDescriptorSet>& writes);
+  void updateSamplersBind(
+      uint32_t index, const std::vector<vk::DescriptorImageInfo>& infos,
+      std::vector<vk::WriteDescriptorSet>& writes);
 };
 
 typedef std::variant<vk::DescriptorImageInfo*, vk::DescriptorBufferInfo*>

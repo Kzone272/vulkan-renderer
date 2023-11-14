@@ -12,8 +12,7 @@ layout(set = 0, binding = 0) uniform GlobalBlock {
 layout(set = 0, binding = 1) uniform DebugBlock {
   DebugData debug;
 };
-layout(set = 1, binding = 0) uniform sampler2D sceneSampler;
-layout(set = 1, binding = 1) uniform sampler2D normDepthSampler;
+layout(set = 1, binding = 0) uniform sampler2D normDepthSampler;
 
 layout(location = 0) out vec4 outColor;
 
@@ -33,7 +32,6 @@ void main() {
   bool b3 = bool(debug.i4 & 0xFF0000);
   bool b4 = bool(debug.i4 & 0xFF000000);
 
-  vec4 scene = texture(sceneSampler, fragUv);
   vec4 normDepth = texture(normDepthSampler, fragUv);
   vec3 norm = normDepth.xyz;
   float z = normDepth.w;
@@ -41,16 +39,16 @@ void main() {
   vec2 clipXy = vec2(gl_FragCoord.xy / size * 2) - 1;
   vec4 vpos = getViewPos(vec3(clipXy, z));
   
-  vec3 color = scene.rgb;
+  vec3 edgecol = vec3(0);
+  vec4 color = vec4(edgecol, 0);
   if (desat) {
-    float grey = greyscale(scene.rgb);
-    color = mix(vec3(grey), scene.rgb, debug.f2);
+    float grey = greyscale(norm);
+    color = vec4(mix(vec3(grey), norm, debug.f2), 1);
   } else if (debug.i1 == 1) {
-    color = vec3(norm.x, norm.y, -norm.z);
+    color = vec4(norm * vec3(1, 1, -1), 1);
   } else if (debug.i1 == 2) {
-    color = vec3(fract(vpos.z / 500));
+    color = vec4(vec3(fract(vpos.z / 500)), 1);
   }
-
 
   float depth_thresh = debug.f3;
 
@@ -94,15 +92,14 @@ void main() {
     }
     
     float softw = 0.25;
-    float alpha = smoothstep(debug.f1 - softw, debug.f1 + softw, edge_d);
-
+    float alpha = 1 - smoothstep(debug.f1 - softw, debug.f1 + softw, edge_d);
     if (b3) {
-      alpha = is_edge ? 0 : 1;
+      alpha = is_edge ? 1 : 0;
     }
     
-    vec3 edgecol = vec3(0);
-    color = mix(edgecol, color, alpha);
+    color.rgb = mix(color.rgb, edgecol, alpha);
+    color.a = max(color.a, alpha);
   }
 
-  outColor = vec4(color, 1.0);
+  outColor = color;
 }

@@ -51,6 +51,7 @@ void Fbo::resetImages() {
 }
 
 void Fbo::initImages(const VulkanState& vs) {
+  vk::Sampler sampler = output_sampler ? output_sampler : vs.linear_sampler;
   for (auto& format : color_fmts) {
     Texture color{
         .size = size,
@@ -63,7 +64,7 @@ void Fbo::initImages(const VulkanState& vs) {
     createImage(
         vs, color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
-        vk::ImageAspectFlagBits::eColor, output_sampler);
+        vk::ImageAspectFlagBits::eColor, sampler);
     colors.push_back(std::move(color));
 
     if (resolve && !swap) {
@@ -77,7 +78,7 @@ void Fbo::initImages(const VulkanState& vs) {
           vk::ImageUsageFlagBits::eColorAttachment |
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
-          vk::ImageAspectFlagBits::eColor, output_sampler);
+          vk::ImageAspectFlagBits::eColor, sampler);
       resolves.push_back(std::move(resolve));
     }
   }
@@ -97,39 +98,52 @@ void Fbo::initImages(const VulkanState& vs) {
 }
 
 void Fbo::initDescs(const VulkanState& vs) {
-  if (desc_count == 0) {
+  if (!make_output_set) {
     return;
   }
 
   output_set = {
-      .binds =
-          {color_fmts.size(),
-           Binding{.type = vk::DescriptorType::eCombinedImageSampler}},
+      .binds = {Binding{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
   output_set.init(vs);
-  output_set.alloc(vs, desc_count);
+  output_set.alloc(vs, color_fmts.size());
   updateDescs(vs);
 }
 
 void Fbo::updateDescs(const VulkanState& vs) {
-  if (desc_count == 0) {
+  if (!make_output_set) {
     return;
   }
 
-  std::vector<vk::WriteDescriptorSet> writes;
-
   auto& outputs = resolve ? resolves : colors;
+  std::vector<vk::WriteDescriptorSet> writes;
   for (int i = 0; i < outputs.size(); i++) {
-    output_set.updateSamplerBind(i, &outputs[i].info, writes);
+    updateDescSet(output_set.sets[i], output_set, {&outputs[i].info}, writes);
   }
-
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
 void Fbo::initRp(const VulkanState& vs) {
-  vk::ClearValue color_clear{{0.f, 0.f, 0.f, 1.f}};
-  vk::ClearValue depth_clear{{1.f, 0}};
+  int n_col_atts = swap ? 1 : color_fmts.size();
+  bool do_clear = !clear_colors.empty();
+  if (do_clear) {
+    // If specifying clear_colors, there must be one specified for each color
+    // attachment.
+    DASSERT(clear_colors.size() == n_col_atts);
+  }
+
+  // Push clears for color attachments.
+  for (int i = 0; i < n_col_atts; i++) {
+    clears.push_back(
+        do_clear ? vk::ClearValue{clear_colors[i]} : vk::ClearValue{});
+  }
+  // Push unused clears for resolve attachments.
+  if (resolve) {
+    for (int i = 0; i < n_col_atts; i++) {
+      clears.push_back(vk::ClearValue{});
+    }
+  }
 
   std::vector<vk::AttachmentDescription> atts;
   std::vector<vk::AttachmentReference> color_refs;
@@ -142,7 +156,8 @@ void Fbo::initRp(const VulkanState& vs) {
     atts.push_back({
         .format = format,
         .samples = samples,
-        .loadOp = vk::AttachmentLoadOp::eClear,
+        .loadOp = do_clear ? vk::AttachmentLoadOp::eClear
+                           : vk::AttachmentLoadOp::eDontCare,
         .storeOp = vk::AttachmentStoreOp::eStore,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
@@ -150,49 +165,25 @@ void Fbo::initRp(const VulkanState& vs) {
         .finalLayout = resolve ? vk::ImageLayout::eColorAttachmentOptimal
                                : vk::ImageLayout::eShaderReadOnlyOptimal,
     });
-    clears.push_back(color_clear);
   }
 
-  if (resolve) {
+  if (resolve && !swap) {
     for (auto& format : color_fmts) {
-      if (!swap) {
-        resolve_refs.push_back({
-            .attachment = static_cast<uint32_t>(atts.size()),
-            .layout = vk::ImageLayout::eColorAttachmentOptimal,
-        });
-        atts.push_back({
-            .format = format,
-            .samples = vk::SampleCountFlagBits::e1,
-            .loadOp = vk::AttachmentLoadOp::eDontCare,
-            .storeOp = vk::AttachmentStoreOp::eStore,
-            .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-            .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-            .initialLayout = vk::ImageLayout::eUndefined,
-            .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-        });
-      }
-      // Clear not used for resolves.
-      clears.push_back({});
+      resolve_refs.push_back({
+          .attachment = static_cast<uint32_t>(atts.size()),
+          .layout = vk::ImageLayout::eColorAttachmentOptimal,
+      });
+      atts.push_back({
+          .format = format,
+          .samples = vk::SampleCountFlagBits::e1,
+          .loadOp = vk::AttachmentLoadOp::eDontCare,
+          .storeOp = vk::AttachmentStoreOp::eStore,
+          .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+          .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+          .initialLayout = vk::ImageLayout::eUndefined,
+          .finalLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      });
     }
-  }
-
-  // This won't be used when not depth testing.
-  vk::AttachmentReference depth_ref{
-      .attachment = static_cast<uint32_t>(atts.size()),
-      .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-  };
-  if (depth_fmt) {
-    atts.push_back({
-        .format = depth.format,
-        .samples = depth.samples,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eDontCare,
-        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
-        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
-        .initialLayout = vk::ImageLayout::eUndefined,
-        .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-    });
-    clears.push_back(depth_clear);
   }
 
   if (swap) {
@@ -215,7 +206,25 @@ void Fbo::initRp(const VulkanState& vs) {
         .initialLayout = vk::ImageLayout::eUndefined,
         .finalLayout = vk::ImageLayout::ePresentSrcKHR,
     });
-    clears.push_back({});
+  }
+
+  // This won't be used when not depth testing.
+  vk::AttachmentReference depth_ref{
+      .attachment = static_cast<uint32_t>(atts.size()),
+      .layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+  };
+  if (depth_fmt) {
+    atts.push_back({
+        .format = depth.format,
+        .samples = depth.samples,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+        .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+        .initialLayout = vk::ImageLayout::eUndefined,
+        .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+    });
+    clears.push_back({{1.f, 0}});
   }
 
   vk::SubpassDescription subpass{

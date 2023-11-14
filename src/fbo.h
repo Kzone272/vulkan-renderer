@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "descriptors.h"
 #include "images.h"
 #include "render-state.h"
@@ -9,11 +11,12 @@ struct Fbo {
   // Inputs
   vk::Extent2D size;
   std::vector<vk::Format> color_fmts;
+  std::vector<vk::ClearColorValue> clear_colors;
   vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
   bool resolve = false;
   std::optional<vk::Format> depth_fmt;
-  vk::Sampler output_sampler;
-  uint32_t desc_count = 0;
+  bool make_output_set = false;
+  vk::Sampler output_sampler = {};
   bool swap = false;
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;

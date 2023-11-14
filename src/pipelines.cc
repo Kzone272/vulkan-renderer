@@ -55,8 +55,8 @@ void initPipeline(vk::Device device, const Fbo& fbo, Pipeline& pl) {
       .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
       .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
       .colorBlendOp = vk::BlendOp::eAdd,
-      .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-      .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+      .srcAlphaBlendFactor = vk::BlendFactor::eSrcAlpha,
+      .dstAlphaBlendFactor = vk::BlendFactor::eDstAlpha,
       .alphaBlendOp = vk::BlendOp::eAdd,
       .colorWriteMask =
           vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |

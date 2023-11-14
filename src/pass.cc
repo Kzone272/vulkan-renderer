@@ -22,12 +22,13 @@ void Scene::init(const VulkanState& vs) {
       .size = vs.swap_size,
       .color_fmts =
           {vk::Format::eB8G8R8A8Unorm, vk::Format::eR32G32B32A32Sfloat},
+      // Opaque Black, (Away Vector, FarZ)
+      .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 1.f}},
       // Disable msaa for now because it makes outline filter worse
       // .samples = msaa_samples_,
       // .resolve = true,
       .depth_fmt = vs.depth_format,
-      .output_sampler = vs.linear_sampler,
-      .desc_count = vs.kMaxFramesInFlight,
+      .make_output_set = true,
   };
 
   // Bound per frame.
@@ -161,8 +162,7 @@ void Post::init(
   pass.fbo = {
       .size = vs.swap_size,
       .color_fmts = {vk::Format::eB8G8R8A8Unorm},
-      .output_sampler = vs.linear_sampler,
-      .desc_count = vs.kMaxFramesInFlight,
+      .make_output_set = true,
   };
 
   inputs = pass.makeDescLayout();
@@ -236,15 +236,18 @@ void Swap::init(const VulkanState& vs) {
       .frag_shader = vs.shaders.get("sample.frag.spv"),
       .desc_layouts = {sampler},
       .vert_in = {},
+      .enable_blending = true,
   };
 
   pass.init(vs);
 }
 
-void Swap::startRender(const DrawState& ds, vk::DescriptorSet image_set) {
+void Swap::startRender(const DrawState& ds) {
   pass.fbo.beginRp(ds);
-
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+}
+
+void Swap::drawBuffer(const DrawState& ds, vk::DescriptorSet image_set) {
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *draw->layout, 0, image_set, nullptr);
   ds.cmd.draw(3, 1, 0, 0);
@@ -254,8 +257,6 @@ void Drawing::init(const VulkanState& vs) {
   pass.fbo = {
       .size = {512, 512},
       .color_fmts = {vk::Format::eB8G8R8A8Unorm},
-      .output_sampler = vs.linear_sampler,
-      .desc_count = vs.kMaxFramesInFlight,
   };
 
   inputs = pass.makeDescLayout();
@@ -307,7 +308,6 @@ void Voronoi::init(const VulkanState& vs) {
       .size = {512, 512},
       .color_fmts = {vk::Format::eB8G8R8A8Unorm},
       .depth_fmt = vs.depth_format,
-      .output_sampler = vs.linear_sampler,
   };
 
   vk::PipelineVertexInputStateCreateInfo vert_in{};

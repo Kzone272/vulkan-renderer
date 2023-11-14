@@ -125,3 +125,17 @@ void DescLayout::updateSamplerBind(
     writes.push_back(samplerWrite(set, bind, info));
   }
 }
+
+void DescLayout::updateSamplersBind(
+    uint32_t index, const std::vector<vk::DescriptorImageInfo>& infos,
+    std::vector<vk::WriteDescriptorSet>& writes) {
+  auto& bind = binds[index];
+  DASSERT(bind.type == vk::DescriptorType::eCombinedImageSampler);
+  DASSERT(bind.count == infos.size());
+
+  for (auto& set : sets) {
+    auto write = bindWrite(set, bind);
+    write.setImageInfo(infos);
+    writes.push_back(write);
+  }
+}

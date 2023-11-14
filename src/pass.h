@@ -72,7 +72,8 @@ struct Swap {
   void init(const VulkanState& vs);
   // This doesn't end the render pass so Renderer can draw whatever else it
   // wants before ending it.
-  void startRender(const DrawState& ds, vk::DescriptorSet image_set);
+  void startRender(const DrawState& ds);
+  void drawBuffer(const DrawState& ds, vk::DescriptorSet image_set);
 };
 
 struct Drawing {

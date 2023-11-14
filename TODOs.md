@@ -1,7 +1,11 @@
 Things I Should Do Soon:
 
 Short-term ideas:
-- Speed up build.
+- fbo.output_set isn't useful if the input set wants more than a single sampler
+  - What I really need is to provide a set of ImageViews/infos to an input
+    pipeline for it to create the sets with it's layout.
+    - This is actually pretty similar to what making Materials would need.
+- Speed up build
   - Add RenderInterface to move renderer.h out of app.h
   - make app.cc
 - Simplify creating Ubo DynamicBufs and attaching to descriptors.

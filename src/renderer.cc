@@ -1148,9 +1148,11 @@ void Renderer::recordCommandBuffer() {
     drawing_.render(ds_);
   }
   scene_.render(ds_, frame_state_->objects, loaded_models_);
-  post_.render(ds_, scene_.outputSet()->sets[ds_.frame]);
-  swap_.startRender(ds_, post_.outputSet()->sets[ds_.frame]);
+  post_.render(ds_, scene_.outputSet()->sets[1]);
 
+  swap_.startRender(ds_);
+  swap_.drawBuffer(ds_, scene_.outputSet()->sets[0]);
+  swap_.drawBuffer(ds_, post_.outputSet()->sets[0]);
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
   ds_.cmd.endRenderPass();
 
