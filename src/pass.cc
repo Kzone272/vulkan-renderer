@@ -24,9 +24,7 @@ void Scene::init(const VulkanState& vs) {
           {vk::Format::eB8G8R8A8Unorm, vk::Format::eR32G32B32A32Sfloat},
       // Opaque Black, (Away Vector, FarZ)
       .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 1.f}},
-      // Disable msaa for now because it makes outline filter worse
-      // .samples = msaa_samples_,
-      // .resolve = true,
+      .samples = vk::SampleCountFlagBits::e4,
       .depth_fmt = vs.depth_format,
       .make_output_set = true,
   };
@@ -348,6 +346,40 @@ void Voronoi::render(const DrawState& ds) {
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
   ds.cmd.bindVertexBuffers(0, *verts[ds.frame].device.buf, {0});
   ds.cmd.draw(6, num_cells, 0, 0);
+
+  ds.cmd.endRenderPass();
+}
+
+void Resolve::init(const VulkanState& vs) {
+  pass.fbo = {
+      .size = vs.swap_size,
+      .color_fmts = {vk::Format::eB8G8R8A8Unorm},
+      .make_output_set = true,
+  };
+
+  sampler = pass.makeDescLayout();
+  *sampler = {
+      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
+      .stages = vk::ShaderStageFlagBits::eFragment,
+  };
+
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("resolve.frag.spv"),
+      .desc_layouts = {sampler},
+  };
+
+  pass.init(vs);
+}
+
+void Resolve::render(const DrawState& ds, vk::DescriptorSet image_set) {
+  pass.fbo.beginRp(ds);
+
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw->layout, 0, image_set, nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
 
   ds.cmd.endRenderPass();
 }

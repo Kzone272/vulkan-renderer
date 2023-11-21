@@ -9,6 +9,7 @@ file(GLOB shader_files
   circle.frag
   voronoi.vert
   voronoi.frag
+  resolve.frag
 )
 
 set(shader_binary_dir "${PROJECT_BINARY_DIR}/shaders")

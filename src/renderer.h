@@ -173,6 +173,7 @@ class Renderer {
   Scene scene_;
   Post post_;
   Swap swap_;
+  Resolve resolve_;
 
 #ifdef DEBUG
   const bool enable_validation_layers_ = true;

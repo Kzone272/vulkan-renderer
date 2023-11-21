@@ -682,7 +682,7 @@ class HelloTriangleApp {
     if (ImGui::BeginTabItem("Movement")) {
       if (ImGui::Combo(
               "Movement Presets", &move_preset_,
-              "Normal\0Tightrope\0Preppy\0Snow\0Feminine\0Crouch\0Flanders")) {
+              "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
         if (move_preset_ == 0) {
           moveDefault(move);
         } else if (move_preset_ == 1) {
@@ -692,7 +692,7 @@ class HelloTriangleApp {
         } else if (move_preset_ == 3) {
           moveSnow(move);
         } else if (move_preset_ == 4) {
-          moveFeminine(move);
+          moveRunway(move);
         } else if (move_preset_ == 5) {
           moveCrouch(move);
         } else if (move_preset_ == 6) {
@@ -726,7 +726,7 @@ class HelloTriangleApp {
       SkellySizes& sizes = *skelly_.getSkellySizes();
       if (ImGui::Combo(
               "Size Presets", &size_preset_,
-              "Normal\0Tall\0Big\0Dwarf\0Chimp")) {
+              "Default\0Tall\0Big\0Dwarf\0Chimp")) {
         if (size_preset_ == 0) {
           sizeDefault(sizes);
         } else if (size_preset_ == 1) {

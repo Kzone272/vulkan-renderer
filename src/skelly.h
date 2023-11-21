@@ -812,7 +812,7 @@ void moveSnow(MoveOptions& move) {
   move.hand_height_pct = 0.65;
   move.hands_forward = 15;
 }
-void moveFeminine(MoveOptions& move) {
+void moveRunway(MoveOptions& move) {
   move = MoveOptions{};
   move.stance_w = 5;
   move.lean = 0;

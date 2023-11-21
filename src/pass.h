@@ -97,3 +97,15 @@ struct Voronoi {
   void update(const DrawState& ds, const std::vector<Vertex2d>& cells);
   void render(const DrawState& ds);
 };
+
+struct Resolve {
+  Pass pass;
+  DescLayout* sampler;
+  Pipeline* draw;
+
+  void init(const VulkanState& vs);
+  DescLayout* outputSet() {
+    return &pass.fbo.output_set;
+  }
+  void render(const DrawState& ds, vk::DescriptorSet image_set);
+};
