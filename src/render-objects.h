@@ -112,9 +112,9 @@ struct FrameState {
   DebugData drawing{
       .f1 = 0.5,
   };
-  bool draw_edges = true;
   DebugView debug_view = DebugView::None;
-  DebugData post{
+  bool draw_edges = true;
+  DebugData edges{
       .f1 = 0.707,
       .f3 = 2,
       .f4 = 60,

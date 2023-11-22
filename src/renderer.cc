@@ -139,7 +139,7 @@ void Renderer::initVulkan() {
   drawing_.init(vs_);
   voronoi_.init(vs_);
   scene_.init(vs_);
-  post_.init(vs_, scene_.outputSet(), uboInfos(scene_.globals));
+  edges_.init(vs_, scene_.outputSet(), uboInfos(scene_.globals));
   swap_.init(vs_);
   resolve_.init(vs_);
 }
@@ -203,7 +203,7 @@ void Renderer::drawFrame() {
     voronoi_.update(ds_, frame_state_->voronoi_cells);
   }
   scene_.update(ds_, *frame_state_);
-  post_.update(ds_, frame_state_->post);
+  edges_.update(ds_, frame_state_->edges);
 
   recordCommandBuffer();
 
@@ -1151,7 +1151,7 @@ void Renderer::recordCommandBuffer() {
   scene_.render(ds_, frame_state_->objects, loaded_models_);
 
   if (frame_state_->draw_edges) {
-    post_.render(ds_, scene_.outputSet()->sets[1]);
+    edges_.render(ds_, scene_.outputSet()->sets[1]);
   }
 
   if (frame_state_->debug_view == DebugView::None) {
@@ -1171,7 +1171,7 @@ void Renderer::recordCommandBuffer() {
     }
 
     if (frame_state_->draw_edges) {
-      swap_.drawImage(ds_, post_.outputSet()->sets[0]);
+      swap_.drawImage(ds_, edges_.outputSet()->sets[0]);
     }
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
@@ -1205,7 +1205,7 @@ void Renderer::recreateSwapchain() {
   createSwapchain();
 
   scene_.pass.fbo.resize(vs_, vs_.swap_size);
-  post_.pass.fbo.resize(vs_, vs_.swap_size);
+  edges_.pass.fbo.resize(vs_, vs_.swap_size);
   resolve_.pass.fbo.resize(vs_, vs_.swap_size);
 
   swap_.pass.fbo.swap_format = vs_.swap_format;

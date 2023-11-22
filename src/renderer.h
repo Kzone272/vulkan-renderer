@@ -171,7 +171,7 @@ class Renderer {
   Drawing drawing_;
   Voronoi voronoi_;
   Scene scene_;
-  Post post_;
+  Edges edges_;
   Swap swap_;
   Resolve resolve_;
 

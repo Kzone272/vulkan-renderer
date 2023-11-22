@@ -47,7 +47,7 @@ struct Scene {
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
 };
 
-struct Post {
+struct Edges {
   Pass pass;
   std::vector<DynamicBuf> debugs;
   DescLayout* inputs;
@@ -55,7 +55,7 @@ struct Post {
 
   void init(
       const VulkanState& vs, DescLayout* image_set,
-      // TODO: This is gross. This should probably be a Ubo owned by Post.
+      // TODO: This is gross. This should probably be a Ubo owned by Edges.
       const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;

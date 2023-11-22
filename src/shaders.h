@@ -10,7 +10,7 @@ const std::set<std::string> kShaders{
     "scene.vert.spv",
     "scene.frag.spv",
     "fullscreen.vert.spv",
-    "post.frag.spv",
+    "edges.frag.spv",
     "circle.frag.spv",
     "sample.frag.spv",
     "voronoi.vert.spv",

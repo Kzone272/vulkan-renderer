@@ -617,14 +617,6 @@ class HelloTriangleApp {
     ImGui::Begin("Misc Controls");
 
     ImGui::BeginTabBar("Misc Tabs");
-    if (ImGui::BeginTabItem("Post Fx")) {
-      ImGuiDebugData(frame_state_.post);
-      ImGui::EndTabItem();
-    }
-    if (ImGui::BeginTabItem("Drawing")) {
-      frame_state_.update_drawing |= ImGuiDebugData(frame_state_.drawing);
-      ImGui::EndTabItem();
-    }
     if (ImGui::BeginTabItem("General")) {
       if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
         setGooch(ui_.gooch);
@@ -635,6 +627,14 @@ class HelloTriangleApp {
       }
       ImGui::Checkbox("Edges", &frame_state_.draw_edges);
       ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Edges")) {
+      ImGuiDebugData(frame_state_.edges);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Drawing")) {
+      frame_state_.update_drawing |= ImGuiDebugData(frame_state_.drawing);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Camera")) {

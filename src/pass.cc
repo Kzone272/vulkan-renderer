@@ -154,7 +154,7 @@ void Scene::render(
   ds.cmd.endRenderPass();
 }
 
-void Post::init(
+void Edges::init(
     const VulkanState& vs, DescLayout* image_set,
     const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
   pass.fbo = {
@@ -174,7 +174,7 @@ void Post::init(
   draw = pass.makePipeline();
   *draw = {
       .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
-      .frag_shader = vs.shaders.get("post.frag.spv"),
+      .frag_shader = vs.shaders.get("edges.frag.spv"),
       .desc_layouts = {inputs, image_set},
       .vert_in = {},
   };
@@ -192,7 +192,7 @@ void Post::init(
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
-void Post::update(const DrawState& ds, const DebugData& debug) {
+void Edges::update(const DrawState& ds, const DebugData& debug) {
   auto stages = vk::PipelineStageFlagBits::eVertexShader |
                 vk::PipelineStageFlagBits::eFragmentShader;
   updateDynamicBuf(
@@ -200,7 +200,7 @@ void Post::update(const DrawState& ds, const DebugData& debug) {
       vk::AccessFlagBits::eUniformRead);
 }
 
-void Post::render(const DrawState& ds, vk::DescriptorSet image_set) {
+void Edges::render(const DrawState& ds, vk::DescriptorSet image_set) {
   pass.fbo.beginRp(ds);
 
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);

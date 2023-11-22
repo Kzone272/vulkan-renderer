@@ -4,7 +4,7 @@ file(GLOB shader_files
   scene.vert
   scene.frag
   fullscreen.vert
-  post.frag
+  edges.frag
   sample.frag
   circle.frag
   voronoi.vert
