@@ -1149,14 +1149,34 @@ void Renderer::recordCommandBuffer() {
     drawing_.render(ds_);
   }
   scene_.render(ds_, frame_state_->objects, loaded_models_);
-  post_.render(ds_, scene_.outputSet()->sets[1]);
-  resolve_.render(ds_, scene_.outputSet()->sets[0]);
 
-  swap_.startRender(ds_);
-  swap_.drawBuffer(ds_, resolve_.outputSet()->sets[0]);
-  swap_.drawBuffer(ds_, post_.outputSet()->sets[0]);
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
-  ds_.cmd.endRenderPass();
+  if (frame_state_->draw_edges) {
+    post_.render(ds_, scene_.outputSet()->sets[1]);
+  }
+
+  if (frame_state_->debug_view == DebugView::None) {
+    resolve_.render(ds_, scene_.outputSet()->sets[0]);
+  }
+
+  {
+    swap_.startRender(ds_);
+
+    if (frame_state_->debug_view == DebugView::None) {
+      swap_.drawImage(ds_, resolve_.outputSet()->sets[0]);
+    } else if (frame_state_->debug_view == DebugView::Normals) {
+      swap_.drawNormals(ds_, scene_.outputSet()->sets[1]);
+    } else if (frame_state_->debug_view == DebugView::Depth) {
+      swap_.drawDepth(
+          ds_, scene_.outputSet()->sets[1], glm::inverse(frame_state_->proj));
+    }
+
+    if (frame_state_->draw_edges) {
+      swap_.drawImage(ds_, post_.outputSet()->sets[0]);
+    }
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
+    ds_.cmd.endRenderPass();
+  }
 
   std::ignore = ds_.cmd.end();
 }

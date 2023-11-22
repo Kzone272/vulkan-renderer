@@ -633,6 +633,8 @@ class HelloTriangleApp {
         MaterialId floor = floor_mats_[ui_.floor];
         renderer_->setModelMaterial(ModelId::Floor, floor);
       }
+      ImGui::Checkbox("Edges", &frame_state_.draw_edges);
+      ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Camera")) {

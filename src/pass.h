@@ -68,12 +68,17 @@ struct Swap {
   Pass pass;
   DescLayout* sampler;
   Pipeline* draw;
+  Pipeline* normals_draw;
+  Pipeline* depth_draw;
 
   void init(const VulkanState& vs);
   // This doesn't end the render pass so Renderer can draw whatever else it
   // wants before ending it.
   void startRender(const DrawState& ds);
-  void drawBuffer(const DrawState& ds, vk::DescriptorSet image_set);
+  void drawImage(const DrawState& ds, vk::DescriptorSet image_set);
+  void drawNormals(const DrawState& ds, vk::DescriptorSet image_set);
+  void drawDepth(
+      const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj);
 };
 
 struct Drawing {

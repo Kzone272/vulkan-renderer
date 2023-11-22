@@ -233,8 +233,27 @@ void Swap::init(const VulkanState& vs) {
       .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
       .frag_shader = vs.shaders.get("sample.frag.spv"),
       .desc_layouts = {sampler},
-      .vert_in = {},
       .enable_blending = true,
+  };
+
+  normals_draw = pass.makePipeline();
+  *normals_draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("normals.frag.spv"),
+      .desc_layouts = {sampler},
+  };
+
+  vk::PushConstantRange depth_push{
+      .stageFlags = vk::ShaderStageFlagBits::eFragment,
+      .offset = 0,
+      .size = sizeof(glm::mat4),
+  };
+  depth_draw = pass.makePipeline();
+  *depth_draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("depth.frag.spv"),
+      .desc_layouts = {sampler},
+      .push_ranges = {depth_push},
   };
 
   pass.init(vs);
@@ -242,12 +261,32 @@ void Swap::init(const VulkanState& vs) {
 
 void Swap::startRender(const DrawState& ds) {
   pass.fbo.beginRp(ds);
-  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
 }
 
-void Swap::drawBuffer(const DrawState& ds, vk::DescriptorSet image_set) {
+void Swap::drawImage(const DrawState& ds, vk::DescriptorSet image_set) {
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *draw->layout, 0, image_set, nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+}
+
+void Swap::drawNormals(const DrawState& ds, vk::DescriptorSet image_set) {
+  ds.cmd.bindPipeline(
+      vk::PipelineBindPoint::eGraphics, *normals_draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *normals_draw->layout, 0, image_set,
+      nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+}
+
+void Swap::drawDepth(
+    const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj) {
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *depth_draw->pipeline);
+  ds.cmd.pushConstants<mat4>(
+      *depth_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, inv_proj);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *depth_draw->layout, 0, image_set,
+      nullptr);
   ds.cmd.draw(3, 1, 0, 0);
 }
 

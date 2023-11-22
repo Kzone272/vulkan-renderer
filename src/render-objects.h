@@ -96,6 +96,12 @@ struct Vertex2d {
   vec3 color = {0, 0, 0};
 };
 
+enum class DebugView {
+  None,
+  Normals,
+  Depth,
+};
+
 struct FrameState {
   uint64_t frame_num = 0;
   std::vector<SceneObject> objects;
@@ -106,12 +112,12 @@ struct FrameState {
   DebugData drawing{
       .f1 = 0.5,
   };
+  bool draw_edges = true;
+  DebugView debug_view = DebugView::None;
   DebugData post{
       .f1 = 0.707,
-      .f2 = 0.5,
       .f3 = 2,
       .f4 = 60,
-      .i4 = {.b = {.b2 = true}},
   };
   bool update_drawing = false;
   std::vector<Vertex2d> voronoi_cells;

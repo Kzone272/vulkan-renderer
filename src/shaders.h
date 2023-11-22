@@ -16,6 +16,8 @@ const std::set<std::string> kShaders{
     "voronoi.vert.spv",
     "voronoi.frag.spv",
     "resolve.frag.spv",
+    "normals.frag.spv",
+    "depth.frag.spv",
     // clang-format on
 };
 

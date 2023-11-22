@@ -15,12 +15,6 @@ layout(set = 1, binding = 0) uniform sampler2DMS normDepthSampler;
 
 layout(location = 0) out vec4 outColor;
 
-vec4 getViewPos(vec3 cpos) {
-  vec4 ndc = vec4(cpos, 1);
-  vec4 vpos = global.inv_proj * ndc;
-  vpos /= vpos.w;
-  return vpos;
-}
 
 bool edgeBetween(vec3 aNorm, vec3 aPos, vec3 bNorm, vec3 bPos) {
   float cosang = abs(dot(aNorm, bNorm));
@@ -44,7 +38,7 @@ vec4 getEdgeColor(int msaaSample) {
   float z = normDepth.w;
 
   vec2 clipXy = vec2(fragUv * 2) - 1;
-  vec4 vpos = getViewPos(vec3(clipXy, z));
+  vec4 vpos = getViewPos(vec3(clipXy, z), global.inv_proj);
 
   vec3 edgeCol = vec3(0);
   vec4 color = vec4(edgeCol, 0);
@@ -69,7 +63,9 @@ vec4 getEdgeColor(int msaaSample) {
   float edge_d = length(nUvs[0]) + sqrt(2)/2;
   for (int i = 0; i < nUvs.length(); i++) {
     vec4 samp = texelFetch(normDepthSampler, iUv + nUvs[i], msaaSample);
-    vec4 sampVpos = getViewPos(vec3(clipXy + 2 * pixel * nUvs[i], samp.w));
+    vec4 sampVpos = getViewPos(
+        vec3(clipXy + 2 * pixel * nUvs[i], samp.w),
+        global.inv_proj);
 
     if (edgeBetween(norm, vpos.xyz, samp.xyz, sampVpos.xyz)) {
       if (b3) {
@@ -94,34 +90,12 @@ vec4 getEdgeColor(int msaaSample) {
 }
 
 void main() {
-  const bool desat = bool(debug.i4 & 0xFF);
-  const bool draw_edges = bool(debug.i4 & 0xFF00);
-
-  vec2 size = textureSize(normDepthSampler);
-  vec4 normDepth = texelFetch(normDepthSampler, ivec2(size * fragUv), 0);
-  vec4 color = vec4(0);
-  if (desat) {
-    float grey = greyscale(normDepth.rgb);
-    color = vec4(mix(vec3(grey), normDepth.rgb, debug.f2), 1);
-  } else if (debug.i1 == 1) {
-    color = vec4(normDepth.rgb * vec3(1, 1, -1), 1);
-  } else if (debug.i1 == 2) {
-    vec2 clipXy = vec2(fragUv * 2) - 1;
-    vec4 vpos = getViewPos(vec3(clipXy, normDepth.a));
-    color = vec4(vec3(fract(vpos.z / 500)), 1);
+  vec4 edgeAcc = vec4(0);
+  const int nSamples = textureSamples(normDepthSampler);
+  for (int i = 0; i < nSamples; i++) {
+    edgeAcc += getEdgeColor(i);
   }
+  edgeAcc /= nSamples;
 
-  if (draw_edges) {
-    vec4 edgeAcc = vec4(0);
-    const int nSamples = textureSamples(normDepthSampler);
-    for (int i = 0; i < nSamples; i++) {
-      edgeAcc += getEdgeColor(i);
-    }
-    edgeAcc /= nSamples;
-
-    outColor.rgb = mix(color.rgb, edgeAcc.rgb, edgeAcc.a);
-    outColor.a = max(color.a, edgeAcc.a);
-  } else {
-    outColor = color;
-  }
+  outColor = edgeAcc;
 }
