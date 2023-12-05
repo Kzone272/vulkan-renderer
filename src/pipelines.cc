@@ -47,7 +47,8 @@ void initPipeline(vk::Device device, const Fbo& fbo, Pipeline& pl) {
 
   vk::PipelineMultisampleStateCreateInfo multisampling{
       .rasterizationSamples = fbo.samples,
-      .sampleShadingEnable = VK_FALSE,
+      .sampleShadingEnable = pl.sample_shading,
+      .minSampleShading = pl.sample_shading ? 1.f : 0.f,
   };
 
   vk::PipelineColorBlendAttachmentState color_blend_att{

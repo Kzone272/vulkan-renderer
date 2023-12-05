@@ -17,14 +17,14 @@ void Pass::init(const VulkanState& vs) {
   }
 }
 
-void Scene::init(const VulkanState& vs) {
+void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   pass.fbo = {
       .size = vs.swap_size,
       .color_fmts =
           {vk::Format::eB8G8R8A8Unorm, vk::Format::eR32G32B32A32Sfloat},
       // Opaque Black, (Away Vector, FarZ)
       .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 1.f}},
-      .samples = vk::SampleCountFlagBits::e4,
+      .samples = samples,
       .depth_fmt = vs.depth_format,
       .make_output_set = true,
   };
@@ -155,7 +155,7 @@ void Scene::render(
 }
 
 void Edges::init(
-    const VulkanState& vs, DescLayout* image_set,
+    const VulkanState& vs, DescLayout* scene_output, DescLayout* sample_points,
     const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
   pass.fbo = {
       .size = vs.swap_size,
@@ -175,9 +175,10 @@ void Edges::init(
   *draw = {
       .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
       .frag_shader = vs.shaders.get("edges.frag.spv"),
-      .desc_layouts = {inputs, image_set},
+      .desc_layouts = {inputs, scene_output, sample_points},
       .vert_in = {},
   };
+  sample_points_ = sample_points;
 
   pass.init(vs);
 
@@ -200,15 +201,14 @@ void Edges::update(const DrawState& ds, const DebugData& debug) {
       vk::AccessFlagBits::eUniformRead);
 }
 
-void Edges::render(const DrawState& ds, vk::DescriptorSet image_set) {
+void Edges::render(const DrawState& ds, vk::DescriptorSet norm_depth_set) {
   pass.fbo.beginRp(ds);
 
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *draw->layout, 0,
-      inputs->sets[ds.frame], nullptr);
-  ds.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *draw->layout, 1, image_set, nullptr);
+      {inputs->sets[ds.frame], norm_depth_set, sample_points_->sets[0]},
+      nullptr);
   ds.cmd.draw(3, 1, 0, 0);
 
   ds.cmd.endRenderPass();
@@ -418,6 +418,33 @@ void Resolve::render(const DrawState& ds, vk::DescriptorSet image_set) {
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *draw->layout, 0, image_set, nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+
+  ds.cmd.endRenderPass();
+}
+
+void SampleQuery::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
+  pass.fbo = {
+      .size = {1, 1},
+      .color_fmts = {vk::Format::eR32G32Sfloat},
+      .samples = samples,
+      .make_output_set = true,
+  };
+
+  draw = pass.makePipeline();
+  *draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("sample-query.frag.spv"),
+      .sample_shading = true,
+  };
+
+  pass.init(vs);
+}
+
+void SampleQuery::render(const DrawState& ds) {
+  pass.fbo.beginRp(ds);
+
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
   ds.cmd.draw(3, 1, 0, 0);
 
   ds.cmd.endRenderPass();

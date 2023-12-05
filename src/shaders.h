@@ -18,6 +18,7 @@ const std::set<std::string> kShaders{
     "resolve.frag.spv",
     "normals.frag.spv",
     "depth.frag.spv",
+    "sample-query.frag.spv",
     // clang-format on
 };
 

@@ -136,10 +136,13 @@ void Renderer::initVulkan() {
   findDepthFormat();
   // VulkanState should now fully defined.
 
+  sample_query_.init(vs_, scene_samples_);
   drawing_.init(vs_);
   voronoi_.init(vs_);
-  scene_.init(vs_);
-  edges_.init(vs_, scene_.outputSet(), uboInfos(scene_.globals));
+  scene_.init(vs_, scene_samples_);
+  edges_.init(
+      vs_, scene_.outputSet(), sample_query_.outputSet(),
+      uboInfos(scene_.globals));
   swap_.init(vs_);
   resolve_.init(vs_);
 }
@@ -386,6 +389,10 @@ void Renderer::pickPhysicalDevice() {
     if (!features.samplerAnisotropy) {
       continue;
     }
+    // Required to query subsample positions.
+    if (!features.sampleRateShading) {
+      continue;
+    }
 
     physical_device_ = device;
     q_indices_ = indices;
@@ -494,7 +501,10 @@ void Renderer::createLogicalDevice() {
     });
   }
 
-  vk::PhysicalDeviceFeatures device_features{.samplerAnisotropy = VK_TRUE};
+  vk::PhysicalDeviceFeatures device_features{
+      .sampleRateShading = VK_TRUE,
+      .samplerAnisotropy = VK_TRUE,
+  };
 
   vk::DeviceCreateInfo device_ci{.pEnabledFeatures = &device_features};
   device_ci.setPEnabledExtensionNames(device_extensions);
@@ -1142,6 +1152,10 @@ void Renderer::createCommandBuffers() {
 }
 
 void Renderer::recordCommandBuffer() {
+  if (frame_state_->frame_num == 0) {
+    sample_query_.render(ds_);
+  }
+
   if (frame_state_->update_voronoi) {
     voronoi_.render(ds_);
   }

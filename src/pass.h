@@ -37,7 +37,7 @@ struct Scene {
   DescLayout* material;
   Pipeline* draw;
 
-  void init(const VulkanState& vs);
+  void init(const VulkanState& vs, vk::SampleCountFlagBits samples);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
@@ -51,17 +51,19 @@ struct Edges {
   Pass pass;
   std::vector<DynamicBuf> debugs;
   DescLayout* inputs;
+  DescLayout* sample_points_;
   Pipeline* draw;
 
   void init(
-      const VulkanState& vs, DescLayout* image_set,
+      const VulkanState& vs, DescLayout* scene_output,
+      DescLayout* sample_points,
       // TODO: This is gross. This should probably be a Ubo owned by Edges.
       const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
   void update(const DrawState& ds, const DebugData& debug);
-  void render(const DrawState& ds, vk::DescriptorSet image_set);
+  void render(const DrawState& ds, vk::DescriptorSet norm_depth_set);
 };
 
 struct Swap {
@@ -113,4 +115,16 @@ struct Resolve {
     return &pass.fbo.output_set;
   }
   void render(const DrawState& ds, vk::DescriptorSet image_set);
+};
+
+// Gets the positions of MSAA subsamples.
+struct SampleQuery {
+  Pass pass;
+  Pipeline* draw;
+
+  void init(const VulkanState& vs, vk::SampleCountFlagBits samples);
+  DescLayout* outputSet() {
+    return &pass.fbo.output_set;
+  }
+  void render(const DrawState& ds);
 };

@@ -12,6 +12,7 @@ layout(set = 0, binding = 1) uniform DebugBlock {
   DebugData debug;
 };
 layout(set = 1, binding = 0) uniform sampler2DMS normDepthSampler;
+layout(set = 2, binding = 0) uniform sampler2DMS samplePoints;
 
 layout(location = 0) out vec4 outColor;
 
@@ -26,76 +27,99 @@ bool edgeBetween(vec3 aNorm, vec3 aPos, vec3 bNorm, vec3 bPos) {
   return cosang < angle_thresh || plane_d > depth_thresh;
 }
 
-vec4 getEdgeColor(int msaaSample) {
-  bool b3 = bool(debug.i4 & 0xFF0000);
-  
-  vec2 size = textureSize(normDepthSampler);
-  vec2 pixel = 1 / size;
-
-  ivec2 iUv = ivec2(size * fragUv);
-  vec4 normDepth = texelFetch(normDepthSampler, iUv, msaaSample);
-  vec3 norm = normDepth.xyz;
-  float z = normDepth.w;
-
-  vec2 clipXy = vec2(fragUv * 2) - 1;
-  vec4 vpos = getViewPos(vec3(clipXy, z), global.inv_proj);
-
-  vec3 edgeCol = vec3(0);
-  vec4 color = vec4(edgeCol, 0);
-
-  // Larger grid size allows for wider outlines, but it's slower
-  const int search = 1;
-  const int grid = 2 * search + 1;
-  const int num = grid * grid - 1;
-  int ind = 0;
-  ivec2 nUvs[num];
-  for (int i = -search; i <= search; i++) {
-    for (int j = -search; j <= search; j++) {
-      if (i == 0 && j == 0) {
-        continue;
-      }
-      nUvs[ind] = ivec2(i, j);
-      ind++;
-    }
-  }
-
-  bool is_edge = false;
-  float edge_d = length(nUvs[0]) + sqrt(2)/2;
-  for (int i = 0; i < nUvs.length(); i++) {
-    vec4 samp = texelFetch(normDepthSampler, iUv + nUvs[i], msaaSample);
-    vec4 sampVpos = getViewPos(
-        vec3(clipXy + 2 * pixel * nUvs[i], samp.w),
-        global.inv_proj);
-
-    if (edgeBetween(norm, vpos.xyz, samp.xyz, sampVpos.xyz)) {
-      if (b3) {
-        is_edge = true;
-        break;
-      } else {
-        vec2 ndist = nUvs[i] / 2.f;
-        edge_d = min(edge_d, length(ndist));
-      }
-    }
-  }
-  
+vec4 sdfColor(float edge_d) {
+  const vec3 edgeCol = vec3(0);
   float softw = 0.25;
-  float alpha = 1 - smoothstep(debug.f1 - softw, debug.f1 + softw, edge_d);
-  if (b3) {
-    alpha = is_edge ? 1 : 0;
-  }
-  
-  color.a = alpha;
-
-  return color;
+  float alpha = 1 - smoothstep(debug.f1 - softw, debug.f1, edge_d);
+  return vec4(edgeCol, alpha);
 }
 
 void main() {
-  vec4 edgeAcc = vec4(0);
-  const int nSamples = textureSamples(normDepthSampler);
-  for (int i = 0; i < nSamples; i++) {
-    edgeAcc += getEdgeColor(i);
-  }
-  edgeAcc /= nSamples;
+  ivec2 iSize = textureSize(normDepthSampler);
+  vec2 size = vec2(iSize);
+  vec2 fPx = size * fragUv;
 
-  outColor = edgeAcc;
+  const int nSamples = 4; // TODO: Make this configurable
+  vec2 subsamps[nSamples];
+  for (int i = 0; i < nSamples; i++) {
+    subsamps[i] = texelFetch(samplePoints, ivec2(0), i).xy;
+  }
+
+  // Neighbours compared.
+  ivec2 nbs[] = {
+    ivec2(0, 0),
+    ivec2(0, -1),
+    ivec2(-1, 0),
+  };
+
+  const int numNbs = nbs.length();
+  const int num = numNbs * nSamples;
+  bool valid[num];
+  vec4 norms[num];
+  vec3 worlds[num];
+  vec2 uvs[num];
+  ivec2 iUv = ivec2(fPx);
+  for (int i = 0; i < numNbs; i++) {
+    vec2 clipXy = vec2(fragUv * 2) - 1;
+    for (int j = 0; j < nSamples; j++) {
+      const int ind = i * nSamples + j;
+      ivec2 nbUv = iUv + nbs[i];
+      if (nbUv.x < 0 || nbUv.x >= iSize.x ||
+          nbUv.y < 0 || nbUv.y >= iSize.y) {
+        valid[ind] = false;
+        uvs[ind] = vec2(1, 0); // signal error
+        continue;
+      }
+
+      vec4 samp = texelFetch(normDepthSampler, nbUv, j);
+      valid[ind] = true;
+      norms[ind] = samp;
+      uvs[ind] = (vec2(iUv) + subsamps[j]);
+      worlds[ind] = getViewPos(
+          vec3(clipXy + 2.f * nbs[i] / size, samp.w), global.inv_proj).xyz;
+    }
+  }
+
+  int nEdges = 0;
+  vec2 edge_p_acc = vec2(0);
+  for (int i = 0; i < nSamples; i++) {
+    bool is_edge = false;
+    float min_d2 = 1000000000;
+    vec2 min_edge_p;
+
+    for (int j = 0; j < num; j++) {
+      if (j == i) {
+        continue;
+      }
+      if (!valid[i] || !valid[j]) {
+        // One sample is out of bounds.
+        continue;
+      }
+      if (norms[i] == norms[j]) {
+        // Exact same value from a different subsample of the same pixel.
+        continue;
+      }
+      if (edgeBetween(norms[i].xyz, worlds[i], norms[j].xyz, worlds[j])) {
+        vec2 delta = uvs[j] - uvs[i];
+        float d2 = dot(delta, delta);
+        if (d2 < min_d2) {
+          is_edge = true;
+          min_d2 = d2;
+          min_edge_p = (uvs[i] + uvs[j]) / 2.f;
+        }
+      }
+    }
+    if (is_edge) {
+      nEdges++;
+      edge_p_acc += min_edge_p;
+    }
+  }
+  edge_p_acc /= nEdges;
+
+  if (nEdges > 0) {
+    float edge_d = length(fPx - edge_p_acc);
+    outColor = sdfColor(edge_d);
+  } else {
+    outColor = vec4(0);
+  }
 }

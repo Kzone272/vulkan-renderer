@@ -14,6 +14,7 @@ struct Pipeline {
   vk::PipelineVertexInputStateCreateInfo vert_in = {};
   vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
   bool enable_blending = false;
+  bool sample_shading = false;
   // Outputs
   vk::UniquePipeline pipeline;
   vk::UniquePipelineLayout layout;

@@ -12,6 +12,7 @@ file(GLOB shader_files
   resolve.frag
   normals.frag
   depth.frag
+  sample-query.frag
 )
 
 set(shader_binary_dir "${PROJECT_BINARY_DIR}/shaders")

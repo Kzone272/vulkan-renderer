@@ -767,7 +767,7 @@ class HelloTriangleApp {
 
   bool ImGuiDebugData(DebugData& debug) {
     bool changed = false;
-    changed |= ImGui::SliderInt("i1", (int*)&debug.i1.i, 0, 4);
+    changed |= ImGui::SliderInt("i1", (int*)&debug.i1.i, 0, 10);
     changed |= ImGui::SliderInt("i2", (int*)&debug.i2.i, 0, 4);
     changed |= ImGui::SliderInt("i3", (int*)&debug.i3.i, 0, 4);
     changed |= ImGui::Checkbox("i4.b1", &debug.i4.b.b1);
@@ -777,8 +777,8 @@ class HelloTriangleApp {
     changed |= ImGui::Checkbox("i4.b3", &debug.i4.b.b3);
     ImGui::SameLine();
     changed |= ImGui::Checkbox("i4.b4", &debug.i4.b.b4);
-    changed |= ImGui::SliderFloat("f1", &debug.f1, 0, 10);
-    changed |= ImGui::SliderFloat("f2", &debug.f2, 0, 1) &&
+    changed |= ImGui::SliderFloat("f1", &debug.f1, 0, 4);
+    changed |= ImGui::SliderFloat("f2", &debug.f2, 0, 3) &&
                (Floor)ui_.floor == Floor::Drawing;
     changed |= ImGui::SliderFloat(
         "f3", &debug.f3, 0, 10000, "%.5f", ImGuiSliderFlags_Logarithmic);
