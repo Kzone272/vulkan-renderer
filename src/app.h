@@ -81,7 +81,7 @@ class HelloTriangleApp {
 
     uint32_t window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
     window_ = SDL_CreateWindow(
-        "Vulkan Tutorial", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        "Vulkan Renderer", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WIDTH, HEIGHT, window_flags);
     if (!window_) {
       std::string error{SDL_GetError()};

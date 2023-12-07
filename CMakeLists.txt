@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.25)
 
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 
-project(VulkanTutorial
+project(VulkanRenderer
   VERSION 1.0
-  DESCRIPTION "Vulkan Tutorial learning project"
+  DESCRIPTION "Vulkan Renderer learning project"
   LANGUAGES CXX
 )
 

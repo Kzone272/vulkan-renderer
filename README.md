@@ -1,12 +1,13 @@
-Vulkan Tutorial
+Vulkan Renderer
 ==================
 
-Trying to learn some Vulkan by following along with vulkan-tutorial.com
+Trying to learn some Vulkan, and implement some cool renering techniques while I'm at it.
+I started by following along with vulkan-tutorial.com and have diverged from there.
 
 Video of procedural walk cycle: https://youtu.be/BLujpnxdd7o
 
 *Latest screenshot:*
-![](screenshot5.png)
+![](screenshot6.png)
 
 ### Building
 
