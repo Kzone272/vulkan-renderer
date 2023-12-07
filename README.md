@@ -4,7 +4,7 @@ Vulkan Renderer
 Trying to learn some Vulkan, and implement some cool renering techniques while I'm at it.
 I started by following along with vulkan-tutorial.com and have diverged from there.
 
-Video of procedural walk cycle: https://youtu.be/BLujpnxdd7o
+Video of procedural walk cycle: https://youtu.be/W4CaiJ9Zog8
 
 *Latest screenshot:*
 ![](screenshot6.png)
