@@ -161,7 +161,6 @@ void Edges::init(
     const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
   pass.fbo = {
       .size = vs.swap_size,
-      // TODO: This and JF can probably be 16 bit.
       .color_fmts = {vk::Format::eR32G32Sfloat},
       .make_output_set = true,
       .output_sampler = vs.clamp_sampler,

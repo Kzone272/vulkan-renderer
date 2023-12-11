@@ -74,13 +74,12 @@ void main() {
   }
 
   int nEdges = 0;
-  vec2 edge_p_acc = vec2(0);
+  vec2 edgeAcc = vec2(0);
   for (int i = 0; i < nSamples; i++) {
-    bool is_edge = false;
-    float min_d2 = 1000000000;
-    vec2 min_edge_p;
+    vec2 subEdgeAcc = vec2(0);
+    int nSubEdges = 0;
 
-    for (int j = 0; j < num; j++) {
+    for (int j = i + nSamples; j < num; j += nSamples) {
       if (j == i) {
         continue;
       }
@@ -93,24 +92,20 @@ void main() {
         continue;
       }
       if (edgeBetween(norms[i].xyz, worlds[i], norms[j].xyz, worlds[j])) {
-        vec2 delta = uvs[j] - uvs[i];
-        float d2 = dot(delta, delta);
-        if (d2 < min_d2) {
-          is_edge = true;
-          min_d2 = d2;
-          min_edge_p = (uvs[i] + uvs[j]) / 2.f;
-        }
+        nSubEdges++;
+        subEdgeAcc += (uvs[i] + uvs[j]) / 2.f;
       }
     }
-    if (is_edge) {
+
+    if (nSubEdges > 0) {
       nEdges++;
-      edge_p_acc += min_edge_p;
+      edgeAcc += subEdgeAcc / nSubEdges;
     }
   }
-  edge_p_acc /= nEdges;
+  edgeAcc /= nEdges;
 
   if (nEdges > 0) {
-    outColor = edge_p_acc / size;
+    outColor = edgeAcc / size;
   } else {
     outColor = vec2(-1);
   }

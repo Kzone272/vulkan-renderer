@@ -628,7 +628,7 @@ class HelloTriangleApp {
       }
       ImGui::Checkbox("Edges", &frame_state_.draw_edges);
       ImGui::SliderFloat(
-          "Edge Width", &frame_state_.edge_w, 0, 100, "%.2f",
+          "Edge Width", &frame_state_.edge_w, 0, 1000, "%.2f",
           ImGuiSliderFlags_Logarithmic);
       ImGui::EndTabItem();
     }

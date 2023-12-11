@@ -16,6 +16,8 @@ void main() {
   } else {
     float dist = length(size * (samp - fragUv));
     float alpha = clamp(sdf_width - dist, 0, 1);
+    // Cool repeated outlines effect.
+    // alpha *= sin(dist) / 2 + 0.5;
     vec4 col = vec4(0, 0, 0, alpha);
     // Display jump flood beneath edges:
     // col = mix(col, vec4(samp, 0, 1), 1 - col.a);
