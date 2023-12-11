@@ -7,7 +7,7 @@ layout(location = 0) in vec2 fragUv;
 layout(set = 0, binding = 0) uniform sampler2DMS image;
 
 layout(push_constant) uniform PushBlock {
-	mat4 inv_proj;
+  mat4 inv_proj;
 };
 
 layout(location = 0) out vec4 outColor;

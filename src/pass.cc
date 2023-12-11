@@ -3,6 +3,7 @@
 #include "descriptors.h"
 #include "pipelines.h"
 #include "scene-data.h"
+#include "strings.h"
 
 void Pass::init(const VulkanState& vs) {
   fbo.init(vs);
@@ -27,6 +28,7 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
       .samples = samples,
       .depth_fmt = vs.depth_format,
       .make_output_set = true,
+      .output_sampler = vs.clamp_sampler,
   };
 
   // Bound per frame.
@@ -159,8 +161,10 @@ void Edges::init(
     const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
   pass.fbo = {
       .size = vs.swap_size,
-      .color_fmts = {vk::Format::eB8G8R8A8Unorm},
+      // TODO: This and JF can probably be 16 bit.
+      .color_fmts = {vk::Format::eR32G32Sfloat},
       .make_output_set = true,
+      .output_sampler = vs.clamp_sampler,
   };
 
   inputs = pass.makeDescLayout();
@@ -214,6 +218,75 @@ void Edges::render(const DrawState& ds, vk::DescriptorSet norm_depth_set) {
   ds.cmd.endRenderPass();
 }
 
+void JumpFlood::init(const VulkanState& vs) {
+  for (auto& pass : passes_) {
+    pass.fbo = {
+        .size = vs.swap_size,
+        .color_fmts = {vk::Format::eR32G32Sfloat},
+        .make_output_set = true,
+        .output_sampler = vs.clamp_sampler,
+    };
+
+    if (!input_lo_) {
+      input_lo_ = pass.makeDescLayout();
+      *input_lo_ = {
+          .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
+          .stages = vk::ShaderStageFlagBits::eFragment,
+      };
+    }
+    if (!draw_) {
+      vk::PushConstantRange step_push{
+          .stageFlags = vk::ShaderStageFlagBits::eFragment,
+          .offset = 0,
+          .size = sizeof(uint32_t),
+      };
+      draw_ = pass.makePipeline();
+      *draw_ = {
+          .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+          .frag_shader = vs.shaders.get("jf-step.frag.spv"),
+          .desc_layouts = {input_lo_},
+          .push_ranges = {step_push},
+      };
+    }
+
+    pass.init(vs);
+  }
+}
+
+void JumpFlood::resize(const VulkanState& vs) {
+  for (auto& pass : passes_) {
+    pass.fbo.resize(vs, vs.swap_size);
+  }
+}
+
+void JumpFlood::render(
+    const DrawState& ds, float spread, vk::DescriptorSet init_set) {
+  int steps = std::floor(std::log2(std::ceil(spread))) + 1;
+  uint32_t step_size = std::pow(2, steps - 1);
+  for (int i = 0; i < steps; i++) {
+    renderStep(ds, step_size, i == 0 ? init_set : lastOutputSet());
+    step_size /= 2;
+  }
+}
+
+void JumpFlood::renderStep(
+    const DrawState& ds, uint32_t step_size, vk::DescriptorSet image_set) {
+  passes_[next_].fbo.beginRp(ds);
+
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw_->pipeline);
+  ds.cmd.pushConstants<uint32_t>(
+      *draw_->layout, vk::ShaderStageFlagBits::eFragment, 0, step_size);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *draw_->layout, 0, {image_set},
+      nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+
+  ds.cmd.endRenderPass();
+
+  last_ = next_;
+  next_ = (last_ + 1) % passes_.size();
+}
+
 void Swap::init(const VulkanState& vs) {
   pass.fbo = {
       .size = vs.swap_size,
@@ -256,6 +329,20 @@ void Swap::init(const VulkanState& vs) {
       .push_ranges = {depth_push},
   };
 
+  vk::PushConstantRange jf_push{
+      .stageFlags = vk::ShaderStageFlagBits::eFragment,
+      .offset = 0,
+      .size = sizeof(float),
+  };
+  jf_draw = pass.makePipeline();
+  *jf_draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("jf-sdf.frag.spv"),
+      .desc_layouts = {sampler},
+      .push_ranges = {jf_push},
+      .enable_blending = true,
+  };
+
   pass.init(vs);
 }
 
@@ -286,6 +373,17 @@ void Swap::drawDepth(
       *depth_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, inv_proj);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *depth_draw->layout, 0, image_set,
+      nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+}
+
+void Swap::drawJfSdf(
+    const DrawState& ds, float width, vk::DescriptorSet image_set) {
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *jf_draw->pipeline);
+  ds.cmd.pushConstants<float>(
+      *jf_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, width);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *jf_draw->layout, 0, image_set,
       nullptr);
   ds.cmd.draw(3, 1, 0, 0);
 }

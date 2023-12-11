@@ -114,10 +114,10 @@ struct FrameState {
   };
   DebugView debug_view = DebugView::None;
   bool draw_edges = true;
+  float edge_w = 1;
   DebugData edges{
-      .f1 = 0.3,
-      .f3 = 2,
-      .f4 = 60,
+      .f3 = 1,
+      .f4 = 15,
   };
   bool update_drawing = false;
   std::vector<Vertex2d> voronoi_cells;

@@ -14,7 +14,7 @@ layout(set = 0, binding = 1) uniform DebugBlock {
 layout(set = 1, binding = 0) uniform sampler2DMS normDepthSampler;
 layout(set = 2, binding = 0) uniform sampler2DMS samplePoints;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec2 outColor;
 
 
 bool edgeBetween(vec3 aNorm, vec3 aPos, vec3 bNorm, vec3 bPos) {
@@ -25,13 +25,6 @@ bool edgeBetween(vec3 aNorm, vec3 aPos, vec3 bNorm, vec3 bPos) {
   const float angle_thresh = abs(cos(radians(debug.f4)));
 
   return cosang < angle_thresh || plane_d > depth_thresh;
-}
-
-vec4 sdfColor(float edge_d) {
-  const vec3 edgeCol = vec3(0);
-  float softw = 0.25;
-  float alpha = 1 - smoothstep(debug.f1 - softw, debug.f1, edge_d);
-  return vec4(edgeCol, alpha);
 }
 
 void main() {
@@ -117,9 +110,8 @@ void main() {
   edge_p_acc /= nEdges;
 
   if (nEdges > 0) {
-    float edge_d = length(fPx - edge_p_acc);
-    outColor = sdfColor(edge_d);
+    outColor = edge_p_acc / size;
   } else {
-    outColor = vec4(0);
+    outColor = vec2(-1);
   }
 }

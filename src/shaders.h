@@ -19,6 +19,8 @@ const std::set<std::string> kShaders{
     "normals.frag.spv",
     "depth.frag.spv",
     "sample-query.frag.spv",
+    "jf-step.frag.spv",
+    "jf-sdf.frag.spv",
     // clang-format on
 };
 

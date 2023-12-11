@@ -618,6 +618,7 @@ class HelloTriangleApp {
 
     ImGui::BeginTabBar("Misc Tabs");
     if (ImGui::BeginTabItem("General")) {
+      ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
       if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
         setGooch(ui_.gooch);
       }
@@ -626,7 +627,9 @@ class HelloTriangleApp {
         renderer_->setModelMaterial(ModelId::Floor, floor);
       }
       ImGui::Checkbox("Edges", &frame_state_.draw_edges);
-      ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
+      ImGui::SliderFloat(
+          "Edge Width", &frame_state_.edge_w, 0, 100, "%.2f",
+          ImGuiSliderFlags_Logarithmic);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Edges")) {

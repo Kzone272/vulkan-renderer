@@ -66,12 +66,32 @@ struct Edges {
   void render(const DrawState& ds, vk::DescriptorSet norm_depth_set);
 };
 
+class JumpFlood {
+ public:
+  void init(const VulkanState& vs);
+  vk::DescriptorSet lastOutputSet() {
+    return passes_[last_].fbo.output_set.sets[0];
+  }
+  void resize(const VulkanState& vs);
+  void render(const DrawState& ds, float spread, vk::DescriptorSet init_set);
+  void renderStep(
+      const DrawState& ds, uint32_t step_size, vk::DescriptorSet image_set);
+
+ private:
+  int last_ = -1;
+  int next_ = 0;
+  std::array<Pass, 2> passes_;
+  DescLayout* input_lo_ = nullptr;
+  Pipeline* draw_ = nullptr;
+};
+
 struct Swap {
   Pass pass;
   DescLayout* sampler;
   Pipeline* draw;
   Pipeline* normals_draw;
   Pipeline* depth_draw;
+  Pipeline* jf_draw;
 
   void init(const VulkanState& vs);
   // This doesn't end the render pass so Renderer can draw whatever else it
@@ -81,6 +101,8 @@ struct Swap {
   void drawNormals(const DrawState& ds, vk::DescriptorSet image_set);
   void drawDepth(
       const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj);
+  // Jump Flood Signed Distance Field
+  void drawJfSdf(const DrawState& ds, float width, vk::DescriptorSet image_set);
 };
 
 struct Drawing {

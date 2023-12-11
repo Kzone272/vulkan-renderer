@@ -152,8 +152,10 @@ class Renderer {
   std::vector<vk::UniqueSemaphore> img_sems_;
   std::vector<vk::UniqueSemaphore> render_sems_;
   std::vector<vk::UniqueFence> in_flight_fences_;
+  // TODO: Make some factory that creates and caches samplers by properties.
   vk::UniqueSampler linear_sampler_;
   vk::UniqueSampler nearest_sampler_;
+  vk::UniqueSampler clamp_sampler_;
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
   vk::SampleCountFlagBits scene_samples_ = vk::SampleCountFlagBits::e4;
 
@@ -173,6 +175,7 @@ class Renderer {
   Voronoi voronoi_;
   Scene scene_;
   Edges edges_;
+  JumpFlood jf_;
   Swap swap_;
   Resolve resolve_;
   SampleQuery sample_query_;

@@ -143,6 +143,7 @@ void Renderer::initVulkan() {
   edges_.init(
       vs_, scene_.outputSet(), sample_query_.outputSet(),
       uboInfos(scene_.globals));
+  jf_.init(vs_);
   swap_.init(vs_);
   resolve_.init(vs_);
 }
@@ -942,10 +943,18 @@ void Renderer::createSamplers() {
   linear_sampler_ = device_->createSamplerUnique(ci).value;
   vs_.linear_sampler = *linear_sampler_;
 
-  ci.magFilter = vk::Filter::eNearest;
-  ci.minFilter = vk::Filter::eNearest;
-  ci.anisotropyEnable = VK_FALSE;
-  nearest_sampler_ = device_->createSamplerUnique(ci).value;
+  auto clamp_ci = ci;
+  clamp_ci.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+  clamp_ci.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+  clamp_ci.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+  clamp_sampler_ = device_->createSamplerUnique(clamp_ci).value;
+  vs_.clamp_sampler = *clamp_sampler_;
+
+  auto nearest_ci = ci;
+  nearest_ci.magFilter = vk::Filter::eNearest;
+  nearest_ci.minFilter = vk::Filter::eNearest;
+  nearest_ci.anisotropyEnable = VK_FALSE;
+  nearest_sampler_ = device_->createSamplerUnique(nearest_ci).value;
 }
 
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
@@ -1166,6 +1175,7 @@ void Renderer::recordCommandBuffer() {
 
   if (frame_state_->draw_edges) {
     edges_.render(ds_, scene_.outputSet()->sets[1]);
+    jf_.render(ds_, frame_state_->edge_w, edges_.outputSet()->sets[0]);
   }
 
   if (frame_state_->debug_view == DebugView::None) {
@@ -1185,7 +1195,7 @@ void Renderer::recordCommandBuffer() {
     }
 
     if (frame_state_->draw_edges) {
-      swap_.drawImage(ds_, edges_.outputSet()->sets[0]);
+      swap_.drawJfSdf(ds_, frame_state_->edge_w, jf_.lastOutputSet());
     }
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
@@ -1220,6 +1230,7 @@ void Renderer::recreateSwapchain() {
 
   scene_.pass.fbo.resize(vs_, vs_.swap_size);
   edges_.pass.fbo.resize(vs_, vs_.swap_size);
+  jf_.resize(vs_);
   resolve_.pass.fbo.resize(vs_, vs_.swap_size);
 
   swap_.pass.fbo.swap_format = vs_.swap_format;
