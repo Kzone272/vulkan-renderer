@@ -12,12 +12,16 @@ void main() {
   const ivec2 size = textureSize(image, 0);
   vec2 samp = texture(image, fragUv).rg;
   if (samp == vec2(-1, -1)) {
-    outColor = vec4(0);
+    outColor = vec4(0,0,0,1);
   } else {
     float dist = length(size * (samp - fragUv));
+    
+    outColor = vec4(samp, 0, 1);
+    return;
+
     float alpha = clamp(sdf_width - dist, 0, 1);
     // Cool repeated outlines effect.
-    // alpha *= sin(dist) / 2 + 0.5;
+    // alpha *= smoothstep(-0.2, 0.2, sin(dist / 3));
     vec4 col = vec4(0, 0, 0, alpha);
     // Display jump flood beneath edges:
     // col = mix(col, vec4(samp, 0, 1), 1 - col.a);

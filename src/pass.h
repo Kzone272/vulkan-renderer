@@ -76,13 +76,18 @@ class JumpFlood {
   void render(const DrawState& ds, float spread, vk::DescriptorSet init_set);
   void renderStep(
       const DrawState& ds, uint32_t step_size, vk::DescriptorSet image_set);
+  void initVoronoi(
+      const DrawState& ds, float tweak, vk::DescriptorSet image_set);
 
  private:
+  void next();
+
   int last_ = -1;
   int next_ = 0;
   std::array<Pass, 2> passes_;
   DescLayout* input_lo_ = nullptr;
   Pipeline* draw_ = nullptr;
+  Pipeline* voronoi_seed_ = nullptr;
 };
 
 struct Swap {
@@ -92,6 +97,7 @@ struct Swap {
   Pipeline* normals_draw;
   Pipeline* depth_draw;
   Pipeline* jf_draw;
+  Pipeline* uv_sample_draw;
 
   void init(const VulkanState& vs);
   // This doesn't end the render pass so Renderer can draw whatever else it
@@ -103,6 +109,8 @@ struct Swap {
       const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj);
   // Jump Flood Signed Distance Field
   void drawJfSdf(const DrawState& ds, float width, vk::DescriptorSet image_set);
+  void drawUvSample(
+      const DrawState& ds, vk::DescriptorSet uv_image, vk::DescriptorSet image);
 };
 
 struct Drawing {
