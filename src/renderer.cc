@@ -1,5 +1,3 @@
-#pragma once
-
 #include "renderer.h"
 
 #include <SDL.h>
@@ -14,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <print>
 #include <set>
 #include <span>
 #include <vector>
@@ -28,7 +27,6 @@
 #include "pipelines.h"
 #include "render-objects.h"
 #include "render-state.h"
-#include "strings.h"
 #include "vulkan-include.h"
 
 namespace {
@@ -47,7 +45,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageTypeFlagsEXT msg_type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
     void* user_data) {
-  printf("dbg_layer: %s\n\n", callback_data->pMessage);
+  std::println("dbg_layer: {}", callback_data->pMessage);
   return VK_FALSE;
 }
 
@@ -289,9 +287,9 @@ std::vector<const char*> Renderer::getRequiredExtensions() {
   }
 
 #ifdef DEBUG
-  printf("Required instance extensions (%zu):\n", ext_names.size());
+  std::println("Required instance extensions ({}):", ext_names.size());
   for (auto& name : ext_names) {
-    printf("  %s\n", name);
+    std::println("  {}", name);
   }
 #endif
 
@@ -301,9 +299,9 @@ std::vector<const char*> Renderer::getRequiredExtensions() {
 void Renderer::printSupportedExtensions() {
   std::vector<vk::ExtensionProperties> sup_exts =
       vk::enumerateInstanceExtensionProperties().value;
-  printf("Supported instance extensions (%zd)\n", sup_exts.size());
+  std::println("Supported instance extensions ({})", sup_exts.size());
   for (auto& ext : sup_exts) {
-    printf("  %s v%d\n", ext.extensionName.data(), ext.specVersion);
+    std::println("  {} v{}", ext.extensionName.data(), ext.specVersion);
   }
 }
 
@@ -315,9 +313,9 @@ std::vector<const char*> Renderer::getValidationLayers() {
   std::vector<vk::LayerProperties> layer_props =
       vk::enumerateInstanceLayerProperties().value;
 
-  printf("Available layers (%zu):\n", layer_props.size());
+  std::println("Available layers ({}):", layer_props.size());
   for (const auto& layer_prop : layer_props) {
-    printf("  %s\n", layer_prop.layerName.data());
+    std::println("  {}", layer_prop.layerName.data());
   }
 
   for (const auto& layer : validation_layers) {
@@ -329,14 +327,14 @@ std::vector<const char*> Renderer::getValidationLayers() {
       }
     }
     if (!found) {
-      printf("Missing required validation layer: %s\n", layer);
+      std::println("Missing required validation layer: {}", layer);
       ASSERT(false);
     }
   }
 
-  printf("Required layers (%zu):\n", validation_layers.size());
+  std::println("Required layers ({}):", validation_layers.size());
   for (const auto& layer : validation_layers) {
-    printf("  %s\n", layer);
+    std::println("  {}", layer);
   }
 
   return validation_layers;
@@ -404,14 +402,14 @@ void Renderer::pickPhysicalDevice() {
   vs_.device_props = physical_device_.getProperties();
   vs_.mem_props = physical_device_.getMemoryProperties();
   msaa_samples_ = getMaxSampleCount();
-  printf("max msaa samples: %d\n", msaa_samples_);
+  std::println("max msaa samples: {}", (int)msaa_samples_);
 
 #ifdef DEBUG
-  printf("Supported formats (%zd)\n", swapchain_support_.formats.size());
+  std::println("Supported formats ({})", swapchain_support_.formats.size());
   for (const auto& format : swapchain_support_.formats) {
-    printf("  %d", format.format);
+    std::print("  {}", (int)format.format);
   }
-  printf("\n");
+  std::println("");
 #endif
 }
 
@@ -606,9 +604,9 @@ void Renderer::createSwapchain() {
   }
   vs_.swap_views = views(swapchain_views_);
 
-  printf(
-      "Created %d swapchain images, format:%d extent:%dx%d\n", image_count,
-      vs_.swap_format, vs_.swap_size.width, vs_.swap_size.height);
+  std::println(
+      "Created {} swapchain images, format:{} extent:{}x{}", image_count,
+      (int)vs_.swap_format, vs_.swap_size.width, vs_.swap_size.height);
 }
 
 void Renderer::createShaders() {
@@ -663,14 +661,14 @@ vk::Format Renderer::findSupportedFormat(
     }
   }
 
-  printf("failed to find supported format!\n");
+  std::println("Failed to find supported format!");
   ASSERT(false);
   return vk::Format::eUndefined;
 }
 
 void Renderer::initSdlImage() {
   if (!IMG_Init(IMG_INIT_JPG)) {
-    printf("%s", IMG_GetError());
+    std::println("{}", IMG_GetError());
     ASSERT(false);
   }
 }
@@ -683,8 +681,8 @@ SDL_Surface* Renderer::loadImage(std::string texture_path) {
   // defined opposite to vk::Format.
   SDL_PixelFormatEnum desired_fmt = SDL_PIXELFORMAT_ARGB8888;
   if (texture_surface->format->format != desired_fmt) {
-    printf(
-        "converting image pixel format from %s to %s\n",
+    std::println(
+        "converting image pixel format from {} to {}",
         SDL_GetPixelFormatName(texture_surface->format->format),
         SDL_GetPixelFormatName(desired_fmt));
     auto* new_surface =
@@ -789,8 +787,9 @@ void Renderer::transitionImageLayout(
     src_stage = vk::PipelineStageFlagBits::eTopOfPipe;
     dst_stage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
   } else {
-    printf(
-        "Unsupported layout transition! (%d -> %d)\n", old_layout, new_layout);
+    std::println(
+        "Unsupported layout transition! ({} -> {})", (int)old_layout,
+        (int)new_layout);
     ASSERT(false);
   }
 

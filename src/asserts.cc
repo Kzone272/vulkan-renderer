@@ -1,25 +1,23 @@
 #include "asserts.h"
 
 #include <exception>
-#include <iostream>
+#include <print>
 
 #ifdef __cpp_lib_stacktrace
 #include <stacktrace>
 #endif
 
-#include "strings.h"
-
 void ASSERTfn(bool x, std::string assertion) {
   if (!(x)) {
-    auto str = strFmt("ASSERT(%s) failed!", assertion.c_str());
-    printf("%s\n", str.c_str());
+    std::string error_str = std::format("ASSERT({}) failed!", assertion);
+    std::println("{}", error_str);
 
 #ifdef __cpp_lib_stacktrace
-    std::cout << std::stacktrace::current() << '\n';
+    std::println("{}", std::stacktrace::current().to_string());
 #else
-    printf("Can't print stacktrace :/\n");
+    std::println("Can't print stacktrace :/");
 #endif
 
-    throw std::runtime_error(str);
+    throw std::runtime_error(error_str);
   }
 }

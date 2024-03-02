@@ -1,13 +1,11 @@
-#pragma once
-
 #include "descriptors.h"
 
 #include <memory>
+#include <print>
 #include <variant>
 #include <vector>
 
 #include "asserts.h"
-#include "strings.h"
 #include "vulkan-include.h"
 
 vk::WriteDescriptorSet bindWrite(
@@ -55,7 +53,7 @@ void updateDescSet(
             set, bind, std::get<vk::DescriptorImageInfo*>(update)));
         break;
       default:
-        log("Unsupported descriptor type! {}", (int)bind.type);
+        std::println("Unsupported descriptor type! {}", (int)bind.type);
         ASSERT(false);
     }
   }

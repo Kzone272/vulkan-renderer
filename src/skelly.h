@@ -5,7 +5,6 @@
 #include "input.h"
 #include "maths.h"
 #include "object.h"
-#include "strings.h"
 #include "time-include.h"
 
 struct MoveOptions {

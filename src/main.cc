@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include <iostream>
+#include <print>
 #include <stdexcept>
 
 #include "app.h"
@@ -10,7 +10,7 @@ int main() {
   try {
     app.run();
   } catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
+    std::println(stderr, "{}", e.what());
     return EXIT_FAILURE;
   }
 

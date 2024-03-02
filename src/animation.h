@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <map>
+#include <print>
 
 #include "asserts.h"
 #include "glm-include.h"
@@ -19,7 +20,7 @@ float blend(float pct, BlendType blend) {
     return pct;
   }
 
-  printf("Unsupported blend type!\n");
+  std::println("Unsupported blend type!");
   ASSERT(false);
   return 0;
 }
@@ -64,7 +65,7 @@ Spline<T> makeSpline(SplineType type, const std::vector<T>& points) {
     };
   }
 
-  printf("Unsupported spline type!\n");
+  std::println("Unsupported spline type!");
   ASSERT(false);
   return {};
 }
@@ -149,7 +150,7 @@ T sampleSpline(const Spline<T>& spline, float u) {
     return blend(SplineType::Hermite, t, a, b, c, d);
   }
 
-  printf("Unsupported spline type!\n");
+  std::println("Unsupported spline type!");
   ASSERT(false);
   return {};
 };

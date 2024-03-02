@@ -3,7 +3,6 @@
 #include "descriptors.h"
 #include "pipelines.h"
 #include "scene-data.h"
-#include "strings.h"
 
 DescLayout* Pass::makeDescLayout() {
   los.push_back(std::make_unique<DescLayout>());

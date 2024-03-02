@@ -13,6 +13,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <print>
 #include <set>
 #include <vector>
 
@@ -84,8 +85,8 @@ class HelloTriangleApp {
         "Vulkan Renderer", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WIDTH, HEIGHT, window_flags);
     if (!window_) {
-      std::string error{SDL_GetError()};
-      printf("%s\n", error.c_str());
+      std::string error(SDL_GetError());
+      std::println("{}", error);
       ASSERT(false);
     }
     SDL_AddEventWatch(SdlEventWatcher, this);
@@ -394,7 +395,7 @@ class HelloTriangleApp {
       frame_times_.clear();
 
       int fps = frame_state_.frame_num - last_fps_frame_;
-      ui_.fps = strFmt("%.2fms avg frame (%d fps)\n", avg_time, fps);
+      ui_.fps = std::format("{:.2f}ms avg frame ({} fps)\n", avg_time, fps);
 
       next_fps_time_ = now + 1s;
       last_fps_frame_ = frame_state_.frame_num;

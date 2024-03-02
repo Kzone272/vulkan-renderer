@@ -3,6 +3,8 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
+#include <print>
+
 #include "asserts.h"
 
 Mesh loadObj(std::string obj_path) {
@@ -43,8 +45,8 @@ Mesh loadObj(std::string obj_path) {
       mesh.indices.push_back(it->second);
     }
   }
-  printf(
-      "loaded %zd vertices, %zd indices\n", mesh.vertices.size(),
+  std::println(
+      "loaded {} vertices, {} indices", mesh.vertices.size(),
       mesh.indices.size());
 
   return std::move(mesh);

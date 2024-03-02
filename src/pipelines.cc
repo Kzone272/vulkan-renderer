@@ -1,5 +1,3 @@
-#pragma once
-
 #include "pipelines.h"
 
 #include "fbo.h"

@@ -9,6 +9,7 @@ project(VulkanRenderer
 )
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/")
+set(CMAKE_COLOR_DIAGNOSTICS ON)
 
 find_package(glm 0.9.9.9 CONFIG REQUIRED)
 find_package(SDL2 2.28.0 CONFIG REQUIRED)

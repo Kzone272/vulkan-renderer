@@ -10,7 +10,6 @@ add_executable(main
   vulkan-include.h
   maths.h
   maths.cc
-  strings.h
   glm-include.h
   object.h
   render-objects.h
