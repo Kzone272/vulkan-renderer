@@ -5,6 +5,16 @@
 #include "scene-data.h"
 #include "strings.h"
 
+DescLayout* Pass::makeDescLayout() {
+  los.push_back(std::make_unique<DescLayout>());
+  return los.back().get();
+}
+
+Pipeline* Pass::makePipeline() {
+  pls.push_back(std::make_unique<Pipeline>());
+  return pls.back().get();
+}
+
 void Pass::init(const VulkanState& vs) {
   fbo.init(vs);
 
