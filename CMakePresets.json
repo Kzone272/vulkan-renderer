@@ -2,24 +2,47 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "default",
+      "name": "common",
       "binaryDir": "${sourceDir}/build",
+      "hidden": true,
       "cacheVariables": {
         "CMAKE_PREFIX_PATH":"${sourceDir}/deps/install",
         "DEPS_INCLUDE_DIR": "${sourceDir}/deps/install/include"
       }
-    }
-  ],
-  "buildPresets": [
-    {
-      "name": "debug",
-      "configurePreset": "default",
-      "configuration": "Debug"
     },
     {
-      "name": "release",
-      "configurePreset": "default",
-      "configuration": "Release"
+      "name": "Clang",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-w"
+      }
+    },
+    {
+      "name": "Ninja",
+      "hidden": true, 
+      "generator": "Ninja"
+    },
+    {
+      "name": "Debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":"Debug"
+      }
+    },
+    {
+      "name": "Release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":"Release"
+      }
+    },
+    {
+      "name": "Mac-Debug",
+      "inherits": ["common", "Ninja", "Clang", "Debug"]
+    },
+    {
+      "name": "Mac-Release",
+      "inherits": ["common", "Ninja", "Clang", "Release"]
     }
   ]
 }
