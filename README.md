@@ -23,6 +23,8 @@ cmake --preset default
 cmake --build preset debug
 ```
 
+Currently builds on MSVC >= 1937 on Windows, and Clang >= 17 on Mac.
+
 ### Dependencies
 
 These should be installed using instructions in deps/README.md, or globally installed:
