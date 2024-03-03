@@ -597,8 +597,7 @@ class Skelly {
     }
   }
 
-  template <class T>
-  bool inCycle(const Movement<T>& move, float t) {
+  bool inCycle(const auto& move, float t) {
     if (t < move.offset) {
       t += 1;
       DASSERT(t >= move.offset);
@@ -607,9 +606,8 @@ class Skelly {
     return t <= end;
   }
 
-  template <class T>
   void checkMove(
-      Movement<T>& move, Time now, bool moves_changed, float prev_t) {
+      auto& move, Time now, bool moves_changed, float prev_t) {
     if (!move.loop) {
       move.should_start = !inCycle(move, prev_t) && inCycle(move, cycle_t_);
     } else if (moves_changed) {
@@ -704,15 +702,13 @@ class Skelly {
     }
   }
 
-  template <class T>
-  void startMovement(Movement<T>& move, Time now) {
+  void startMovement(auto& move, Time now) {
     float dur = move.dur * cycle_dur_;
     Time start = getMoveStart(move, now);
     move.anim = makeAnimation(move.spline, dur, start, move.loop);
   }
 
-  template <class T>
-  Time getMoveStart(const Movement<T>& move, Time now) {
+  Time getMoveStart(auto& move, Time now) {
     float t = cycle_t_;
     if (t < move.offset) {
       t += 1;
@@ -957,8 +953,7 @@ class Skelly {
     movementUi("rstep", cycle.rstep);
   }
 
-  template <class T>
-  void movementUi(const std::string& label, Movement<T>& move) {
+  void movementUi(const std::string& label, auto& move) {
     ImGui::PushID(label.c_str());
 
     ImGui::Text("%s: Offset | Duration", label.c_str());
