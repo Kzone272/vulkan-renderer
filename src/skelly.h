@@ -449,6 +449,12 @@ class Skelly {
 
       ImGui::EndTabItem();
     }
+
+    if (ImGui::BeginTabItem("Cycle")) {
+      cycleUi(walk_);
+      ImGui::EndTabItem();
+    }
+
     ImGui::EndTabBar();
     ImGui::End();
   }
@@ -944,6 +950,51 @@ class Skelly {
     float b1 = -cosineLaw(bone1, target, bone2);
     float b2 = glm::radians(180.f) - cosineLaw(bone1, bone2, target);
     return {b1, b2};
+  }
+
+  void cycleUi(Cycle& cycle) {
+    movementUi("lstep", cycle.lstep);
+    movementUi("rstep", cycle.rstep);
+  }
+
+  template <class T>
+  void movementUi(const std::string& label, Movement<T>& move) {
+    ImGui::PushID(label.c_str());
+
+    ImGui::Text("%s: Offset | Duration", label.c_str());
+    ImGui::SameLine();
+    ImGui::Checkbox("Loop", &move.loop);
+
+    ImGui::PushID("offsetdur");
+    float vals[2] = {move.offset, move.dur};
+    if (ImGui::SliderFloat2("", vals, 0, 1)) {
+      move.offset = vals[0];
+      move.dur = vals[1];
+    }
+    ImGui::PopID(); // offsetdur
+
+    // Draw duration bar.
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 bar_size = ImVec2(ImGui::CalcItemWidth(), ImGui::GetFrameHeight());
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 p1 = ImVec2(p0.x + bar_size.x, p0.y + bar_size.y);
+    draw_list->AddRectFilled(p0, p1, IM_COL32_BLACK); // bg
+    ImVec2 p2 = ImVec2(p0.x + move.offset * bar_size.x, p0.y);
+    float t2 = move.offset + move.dur;
+    float end = remapRange(t2, 0, 1, p0.x, p1.x); // this is clamped
+    ImVec2 p3 = ImVec2(end, p1.y);
+    draw_list->AddRectFilled(p2, p3, IM_COL32_WHITE); // first chunk
+    if (t2 > 1) {
+      float t2_wrapped = t2 - 1;
+      float wrapped_end = remapRange(t2_wrapped, 0, 1, p0.x, p1.x);
+      ImVec2 p4 = ImVec2(wrapped_end, p1.y);
+      draw_list->AddRectFilled(p0, p4, IM_COL32_WHITE); // wrapped chunk
+    }
+    ImGui::PushID("bar");
+    ImGui::InvisibleButton("bar", bar_size);  // advances cursor past the rect
+    ImGui::PopID(); // bar
+
+    ImGui::PopID(); // label
   }
 
   MoveOptions options_;
