@@ -571,7 +571,7 @@ class HelloTriangleApp {
 
   void updateFollowCamera() {
     follow_cam_.focus =
-        skelly_.getPos() + vec3(0, skelly_.getSkellySizes()->leg, 0);
+        skelly_.getPos() + vec3(0, skelly_.getPelvisHeight(), 0);
     updateYawPitch(follow_cam_.yaw, follow_cam_.pitch);
     updateDist(follow_cam_.dist);
 
@@ -678,93 +678,7 @@ class HelloTriangleApp {
     ImGui::EndTabBar();
     ImGui::End();
 
-    ImGui::Begin("Skeleton");
-
-    MoveOptions& move = *skelly_.getMoveOptions();
-    ImGui::SliderFloat("Max Speed", &move.max_speed, 0, 500);
-    ImGui::Separator();
-
-    ImGui::BeginTabBar("Skeleton Tabs");
-    if (ImGui::BeginTabItem("Movement")) {
-      if (ImGui::Combo(
-              "Movement Presets", &move_preset_,
-              "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
-        if (move_preset_ == 0) {
-          moveDefault(move);
-        } else if (move_preset_ == 1) {
-          moveTightrope(move);
-        } else if (move_preset_ == 2) {
-          movePreppy(move);
-        } else if (move_preset_ == 3) {
-          moveSnow(move);
-        } else if (move_preset_ == 4) {
-          moveRunway(move);
-        } else if (move_preset_ == 5) {
-          moveCrouch(move);
-        } else if (move_preset_ == 6) {
-          moveFlanders(move);
-        }
-        skelly_.makeBones();
-      }
-
-      ImGui::SliderFloat("Vel Adjust Time", &move.adjust_time, 0, 1000);
-      ImGui::SliderFloat("Max Rot Speed", &move.max_rot_speed, 1, 360);
-      ImGui::SliderFloat("Crouch %", &move.crouch_pct, 0.01, 1.2);
-      if (ImGui::SliderFloat("Stance W", &move.stance_w, 0, 60)) {
-        skelly_.makeBones();
-      }
-      ImGui::SliderFloat("Step Height", &move.step_height, 0, 50);
-      ImGui::SliderFloat("Lean", &move.lean, -0.2, 0.2);
-      ImGui::SliderFloat("Bounce", &move.bounce, 0, 10);
-      ImGui::SliderFloat("Hip Sway", &move.hip_sway, 0, 30);
-      ImGui::SliderFloat("Hip Spin", &move.hip_spin, 0, 45);
-      ImGui::SliderFloat("Heel Lift %", &move.heel_lift_pct, 0, 2);
-      ImGui::SliderFloat("Heels Shift", &move.heel_shift, 0, 90);
-      ImGui::SliderFloat("Shoulder Spin", &move.shoulder_spin, 0, 45);
-      ImGui::SliderFloat("Arm Span %", &move.arm_span_pct, -0.2, 1);
-      ImGui::SliderFloat("Hand Height %", &move.hand_height_pct, -1, 1);
-      ImGui::SliderFloat("Hands Forward", &move.hands_forward, -50, 50);
-
-      ImGui::EndTabItem();
-    }
-
-    if (ImGui::BeginTabItem("Sizes")) {
-      SkellySizes& sizes = *skelly_.getSkellySizes();
-      if (ImGui::Combo(
-              "Size Presets", &size_preset_,
-              "Default\0Tall\0Big\0Dwarf\0Chimp")) {
-        if (size_preset_ == 0) {
-          sizeDefault(sizes);
-        } else if (size_preset_ == 1) {
-          sizeTall(sizes);
-        } else if (size_preset_ == 2) {
-          sizeBig(sizes);
-        } else if (size_preset_ == 3) {
-          sizeDwarf(sizes);
-        } else if (size_preset_ == 4) {
-          sizeChimp(sizes);
-        }
-        skelly_.makeBones();
-      }
-      ImGui::Separator();
-
-      bool changed = false;
-      changed |= ImGui::SliderFloat("Height", &sizes.height, 1, 250);
-      changed |= ImGui::SliderFloat("Leg", &sizes.leg, 1, sizes.height);
-      changed |= ImGui::SliderFloat("Femur", &sizes.femur_pct, 0.05, 1);
-      changed |= ImGui::SliderFloat("Bone W", &sizes.bone_w, 0.5, 10);
-      changed |= ImGui::SliderFloat("Pelvis W", &sizes.pelvis_w, 1, 60);
-      changed |= ImGui::SliderFloat("Shoudlers W", &sizes.shoulders_w, 1, 100);
-      changed |= ImGui::SliderFloat("Arm", &sizes.arm, 1, 150);
-      changed |= ImGui::SliderFloat("Bicep %", &sizes.bicep_pct, 0.05, 1);
-      if (changed) {
-        skelly_.makeBones();
-      }
-
-      ImGui::EndTabItem();
-    }
-    ImGui::EndTabBar();
-    ImGui::End();
+    skelly_.UpdateImgui();
 
     ImGui::Render();
   }
@@ -860,8 +774,6 @@ class HelloTriangleApp {
   Object world_;
   Object grid_;
   Skelly skelly_;
-  int move_preset_ = 0;
-  int size_preset_ = 0;
 
   std::map<ModelId, MaterialId> default_mats_;
   MaterialId gooch_mat_;
