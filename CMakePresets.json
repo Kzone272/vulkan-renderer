@@ -23,6 +23,11 @@
       "generator": "Ninja"
     },
     {
+      "name": "MSVC",
+      "hidden": true, 
+      "generator": "Visual Studio 17 2022"
+    },
+    {
       "name": "Debug",
       "hidden": true,
       "cacheVariables": {
@@ -43,6 +48,14 @@
     {
       "name": "Mac-Release",
       "inherits": ["common", "Ninja", "Clang", "Release"]
+    },
+    {
+      "name": "Windows-Debug",
+      "inherits": ["common", "MSVC", "Debug"]
+    },
+    {
+      "name": "Windows-Release",
+      "inherits": ["common", "MSVC", "Release"]
     }
   ]
 }
