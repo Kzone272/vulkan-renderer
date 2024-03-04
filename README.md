@@ -17,10 +17,14 @@ git submodule update --init
 ```
 - (optional) Build and install all deps (see deps/README.md)
 
-- From this directory, configure and build using a provided preset:
+- From this directory, configure using one of the provided presets:
 ```
-cmake --preset default
-cmake --build preset debug
+cmake --preset Windows-Debug
+cmake --preset Mac-Debug
+```
+Then build:
+```
+cmake --build build
 ```
 
 Currently builds on MSVC >= 1937 on Windows, and Clang >= 17 on Mac.
