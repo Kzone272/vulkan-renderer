@@ -5,7 +5,7 @@
 #include "app.h"
 
 int main() {
-  HelloTriangleApp app;
+  App app;
 
   try {
     app.run();

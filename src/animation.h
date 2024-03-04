@@ -8,24 +8,11 @@
 #include "glm-include.h"
 #include "maths.h"
 #include "time-include.h"
+#include "time-utils.h"
 
 enum class BlendType {
   Linear,
 };
-
-namespace anim {
-
-float blend(float pct, BlendType blend) {
-  if (blend == BlendType::Linear) {
-    return pct;
-  }
-
-  std::println("Unsupported blend type!");
-  ASSERT(false);
-  return 0;
-}
-
-}  // namespace anim
 
 enum class SplineType {
   Linear,
@@ -35,40 +22,32 @@ enum class SplineType {
 
 template <class T>
 struct Spline {
-  SplineType type;
-  std::vector<T> points;
-  int segments = 0;
+  Spline() {
+  }
+  Spline(SplineType type, const std::vector<T>& points);
+  T sample(float u);
+
+  SplineType type_;
+  std::vector<T> points_;
+  int segments_ = 0;
 };
 
 template <class T>
-Spline<T> makeSpline(SplineType type, const std::vector<T>& points) {
-  int npoints = static_cast<int>(points.size());
-  if (type == SplineType::Linear) {
-    return {
-        .type = type,
-        .points = points,
-        .segments = npoints - 1,
-    };
-  } else if (type == SplineType::Bezier) {
-    ASSERT((npoints - 1) % 3 == 0);
-    return {
-        .type = type,
-        .points = points,
-        .segments = (npoints - 1) / 3,
-    };
-  } else if (type == SplineType::Hermite) {
-    ASSERT((npoints % 2) == 0);
-    return {
-        .type = type,
-        .points = points,
-        .segments = (npoints / 2) - 1,
-    };
+struct Animation {
+  Animation() {
   }
+  Animation(
+      const Spline<T>& spline, float dur_ms, Time start, bool loop = false);
+  T sample(Time now);
 
-  std::println("Unsupported spline type!");
-  ASSERT(false);
-  return {};
-}
+  Spline<T> spline_;
+  float dur_ms_;
+  Time from_time_;
+  Time to_time_;
+  bool loop_ = false;
+};
+
+namespace {
 
 std::map<SplineType, mat4> spline_mats{
     {
@@ -107,98 +86,100 @@ T blend(
   return weight(weights, a, b, c, d);
 }
 
+}  // namespace
+
 template <class T>
-T sampleSpline(const Spline<T>& spline, float u) {
-  if (spline.type == SplineType::Linear) {
-    if (u <= 0) {
-      return spline.points[0];
-    }
-    if (u >= spline.segments) {
-      return spline.points.back();
-    }
-    const T& a = spline.points[floor(u)];
-    const T& b = spline.points[ceil(u)];
-    float t = glm::fract(u);
-    return glm::mix(a, b, t);
-  } else if (spline.type == SplineType::Bezier) {
-    if (u <= 0) {
-      return spline.points[0];
-    }
-    if (u >= spline.segments) {
-      return spline.points.back();
-    }
-    int i = floor(u) * 3;
-    const T& a = spline.points[i];
-    const T& b = spline.points[i + 1];
-    const T& c = spline.points[i + 2];
-    const T& d = spline.points[i + 3];
-    float t = glm::fract(u);
-    return blend(SplineType::Bezier, t, a, b, c, d);
-  } else if (spline.type == SplineType::Hermite) {
-    if (u <= 0) {
-      return spline.points[0];
-    }
-    if (u >= spline.segments) {
-      return spline.points[spline.points.size() - 2];
-    }
-    int i = floor(u) * 2;
-    const T& a = spline.points[i];
-    const T& b = spline.points[i + 1];
-    const T& c = spline.points[i + 2];
-    const T& d = spline.points[i + 3];
-    float t = glm::fract(u);
-    return blend(SplineType::Hermite, t, a, b, c, d);
+Spline<T>::Spline(SplineType type, const std::vector<T>& points)
+    : type_(type), points_(points) {
+  int npoints = static_cast<int>(points.size());
+  if (type == SplineType::Linear) {
+    segments_ = npoints - 1;
+  } else if (type == SplineType::Bezier) {
+    ASSERT((npoints - 1) % 3 == 0);
+    segments_ = (npoints - 1) / 3;
+  } else if (type == SplineType::Hermite) {
+    ASSERT((npoints % 2) == 0);
+    segments_ = (npoints / 2) - 1;
+  } else {
+    std::println("Unsupported spline type!");
+    ASSERT(false);
   }
-
-  std::println("Unsupported spline type!");
-  ASSERT(false);
-  return {};
-};
-
-template <class T>
-struct Animation {
-  Spline<T> spline;
-  float dur_ms;
-  Time from_time;
-  Time to_time;
-  bool loop = false;
-  // Used only for rotation animations.
-  vec3 axis;
-};
-
-template <class T>
-Animation<T> makeAnimation(
-    const Spline<T>& spline, float dur_ms, Time start, bool loop = false,
-    vec3 axis = {0, 1, 0}) {
-  Spline<T> spl = spline;
-
-  // We need to scale the velocities of Hermite splines based on duration of
-  // each segment.
-  // Notes on scaling: https://www.cubic.org/docs/hermite.htm
-  if (spl.type == SplineType::Hermite) {
-    for (int i = 1; i < spl.points.size(); i += 2) {
-      spl.points[i] *= dur_ms / spl.segments / 1000.f;
-    }
-  }
-
-  return Animation{
-      .spline = std::move(spl),
-      .dur_ms = dur_ms,
-      .from_time = start,
-      .to_time = addMs(start, dur_ms),
-      .loop = loop,
-      .axis = axis,
-  };
 }
 
 template <class T>
-static T sampleAnimation(const Animation<T>& a, Time now) {
-  float time_ms = FloatMs(now - a.from_time).count();
-  if (a.loop) {
-    time_ms = fmodClamp(time_ms, a.dur_ms);
+T Spline<T>::sample(float u) {
+  if (type_ == SplineType::Linear) {
+    if (u <= 0) {
+      return points_[0];
+    }
+    if (u >= segments_) {
+      return points_.back();
+    }
+    const T& a = points_[floor(u)];
+    const T& b = points_[ceil(u)];
+    float t = glm::fract(u);
+    return glm::mix(a, b, t);
+  } else if (type_ == SplineType::Bezier) {
+    if (u <= 0) {
+      return points_[0];
+    }
+    if (u >= segments_) {
+      return points_.back();
+    }
+    int i = floor(u) * 3;
+    const T& a = points_[i];
+    const T& b = points_[i + 1];
+    const T& c = points_[i + 2];
+    const T& d = points_[i + 3];
+    float t = glm::fract(u);
+    return blend(SplineType::Bezier, t, a, b, c, d);
+  } else if (type_ == SplineType::Hermite) {
+    if (u <= 0) {
+      return points_[0];
+    }
+    if (u >= segments_) {
+      return points_[points_.size() - 2];
+    }
+    int i = floor(u) * 2;
+    const T& a = points_[i];
+    const T& b = points_[i + 1];
+    const T& c = points_[i + 2];
+    const T& d = points_[i + 3];
+    float t = glm::fract(u);
+    return blend(SplineType::Hermite, t, a, b, c, d);
+  } else {
+    std::println("Unsupported spline type!");
+    ASSERT(false);
+    return {};
   }
-  float pct = time_ms / a.dur_ms;
-  float u = a.spline.segments * pct;
+};
 
-  return sampleSpline(a.spline, u);
+template <class T>
+Animation<T>::Animation(
+    const Spline<T>& spline, float dur_ms, Time start, bool loop)
+    : spline_(spline),
+      dur_ms_(dur_ms),
+      from_time_(start),
+      to_time_(addMs(start, dur_ms)),
+      loop_(loop) {
+  // We need to scale the velocities of Hermite splines based on duration of
+  // each segment.
+  // Notes on scaling: https://www.cubic.org/docs/hermite.htm
+  if (spline_.type_ == SplineType::Hermite) {
+    for (int i = 1; i < spline_.points_.size(); i += 2) {
+      spline_.points_[i] *= dur_ms_ / spline_.segments_ / 1000.f;
+    }
+  }
+}
+
+template <class T>
+T Animation<T>::sample(Time now) {
+  float time_ms = FloatMs(now - from_time_).count();
+  if (loop_) {
+    time_ms = fmodClamp(time_ms, dur_ms_);
+  }
+  float pct = time_ms / dur_ms_;
+  float u = spline_.segments_ * pct;
+
+  return spline_.sample(u);
 }

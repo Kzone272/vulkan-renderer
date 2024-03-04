@@ -2,21 +2,28 @@
 add_executable(main
   main.cc
   app.h
+  app.cc
   renderer.h
   renderer.cc
   asserts.h
   asserts.cc
   defines.h
+  input.h
+  input.cc
   vulkan-include.h
   maths.h
   maths.cc
   glm-include.h
   object.h
+  object.cc
   render-objects.h
   animation.h
   time-include.h
+  time-utils.h
+  time-utils.cc
   primitives.h
   skelly.h
+  skelly.cc
   descriptors.h
   descriptors.cc
   files.h
