@@ -22,6 +22,6 @@ using glm::vec3;
 using glm::vec4;
 
 template <typename T>
-std::string tostr(const T& v) {
+std::string toStr(const T& v) {
   return glm::to_string(v);
 }

@@ -226,6 +226,9 @@ void Skelly::makeBones() {
   ik_.rhand.obj =
       torso_->addChild(std::make_unique<Object>(ModelId::Control, control_t));
   ik_.rhand.obj->setPos(flip3 * wrist_pos);
+
+  mat4 root_control_t = glm::scale(vec3(10, 1, 30));
+  root_.addChild(std::make_unique<Object>(ModelId::Control, root_control_t));
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -269,12 +272,20 @@ void Skelly::handleInput(const InputState& input, Time now) {
     if (options_.adjust_time == 0) {
       vel_ = target_vel;
     } else {
-      vec3 a = vel_;
-      vec3 d = target_vel;
-      vec3 b = glm::mix(a, d, 1.f / 3.f);
-      vec3 c = d;
-      auto spline = Spline<vec3>(SplineType::Bezier, {a, b, c, d});
-      vel_curve_ = Animation<vec3>(spline, options_.adjust_time, now);
+      float acc_force = options_.max_speed / options_.adjust_time;
+      float adjust_time =
+          std::max(200.f, glm::length(target_vel - vel_) / acc_force);
+
+      vec3 acc(0);
+      vec3 curr_vel = vel_;
+      if (vel_curve_) {
+        curr_vel = vel_curve_->sample(now);
+        acc = vel_curve_->sample(now, SampleType::Velocity) /
+              vel_curve_->dur_ms_ * 1000.f;
+      }
+      auto spline = Spline<vec3>(
+          SplineType::Hermite, {curr_vel, acc, target_vel, vec3(0)});
+      vel_curve_ = Animation<vec3>(spline, adjust_time, now);
     }
   }
 }
@@ -585,9 +596,19 @@ void Skelly::updateCog(Time now) {
   vec3 pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
   pos.y += sampleMovement(walk_.bounce, now);
 
-  vec2 lean = options_.lean * vel_.xz();
-  vec3 offset = root_.toLocal() * vec4(vec3(lean.x, 0, lean.y), 0);
+  static vec3 lean_mix(0);
+  vec3 lean(0);
+  if (vel_curve_) {
+    vec3 acc =
+        vel_curve_->sample(now, SampleType::Velocity) / vel_curve_->dur_ms_;
+    lean = options_.lean * acc * 1000.f;
+  }
+
+  float alpha = 0.01;  // TODO: Value highly dependent on framerate!
+  lean_mix = (1 - alpha) * lean_mix + alpha * lean;
+  vec3 offset = root_.toLocal() * vec4(lean_mix, 0);
   pos += offset;
+
   cog_.setPos(pos);
 }
 

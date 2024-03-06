@@ -7,14 +7,14 @@
 
 struct MoveOptions {
   float max_speed = 200;
-  float adjust_time = 500;
+  float adjust_time = 500;  // milliseconds
   float max_rot_speed = 270;
   float crouch_pct = 0.95;
   float stance_w = 15;
   float foot_dist = 5;
   float step_height = 5;
-  float lean = 0;
-  float bounce = 3;
+  float lean = 0.01;
+  float bounce = 2;
   float hip_sway = 6;
   float hip_spin = 8;
   float heel_lift_pct = 0.75;

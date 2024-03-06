@@ -36,7 +36,6 @@ class Object {
   // From ancestor's space to local.
   const mat4 toLocal(Object* ancestor);
 
-
   void addPosAnim(Animation<vec3>* a);
   void clearAddAnims();
   void addRotAnim(Animation<float>* a);

@@ -384,6 +384,7 @@ void App::resetFrameState() {
   frame_state_.update_voronoi = frame_state_.frame_num == 0;
 }
 
+// TODO: Merge with updateObjects();
 void App::animate() {
   anim_.clear_val = updateClearValue();
   anim_.model_rot = updateModelRotation();
@@ -586,7 +587,7 @@ void App::updateImgui() {
 
   ImGui::Begin("Stats");
   ImGui::Text("%s", ui_.fps.c_str());
-  std::string pos_str = "Pos: " + tostr(skelly_.getPos());
+  std::string pos_str = "Pos: " + toStr(skelly_.getPos());
   ImGui::Text(pos_str.c_str());
   ImGui::End();
 
