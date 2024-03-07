@@ -748,15 +748,39 @@ void Skelly::updateLegs() {
 // TODO: Use updateTwoBoneIk() for most of this.
 void Skelly::updateLeg(
     Object& femur, Object& shin, Object& foot, Foot& ik_foot) {
-  float angle = ik_foot.angle;
-  glm::quat ankle_rot = glm::angleAxis(glm::radians(angle), vec3(1, 0, 0));
+  float toe_angle = 0;
+  // If hip is too far from ankle, compute the angle to lift the heel just
+  // enough to compensate.
+  vec3 hip = femur.toAncestor(&root_) * vec4(0, 0, 0, 1);
+  vec3 ankle_pos = ik_foot.obj->toAncestor(&root_) * vec4(sizes_.ankle, 1);
+  float hip_to_ankle = glm::length(hip - ankle_pos);
+  float max_leg = 0.97 * (sizes_.femur + sizes_.shin);
+  if (hip_to_ankle > max_leg) {
+    float hip_to_toe = glm::length(ik_foot.obj->getPos() - hip);
+    float toe_to_ankle = glm::length(sizes_.ankle);
+    float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
+    if (hip_to_toe > max_leg + toe_to_ankle) {
+      // Target for toe is too far away. Point toes at target.
+      toe_angle = flat_angle;
+    } else {
+      float lift_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
+      toe_angle = flat_angle - lift_angle;
+    }
+  }
+
+  // float angle = glm::radians(ik_foot.angle); // Ignore animated heel angle.
+  glm::quat ankle_rot = glm::angleAxis(toe_angle, vec3(1, 0, 0));
   vec3 ankle = sizes_.ankle;
   ankle = ankle_rot * ankle;
-  if (angle < 0) {
+
+  // TODO: this currently isn't possible with heel angle determined by IK. But
+  // this will become relevant again if I add an animation to land on the heel.
+  if (toe_angle < 0) {
     // Lift up foot if it would go through the ground.
     vec3 target = root_.toLocal() * vec4(ik_foot.world_target, 1);
     float above = ik_foot.obj->getPos().y - target.y;
-    float lift = glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(angle)).y;
+    float lift =
+        glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(toe_angle)).y;
     ankle.y += std::max(lift - above, 0.f);
     // TODO: Move foot back so heel doesn't slide forward
   }
