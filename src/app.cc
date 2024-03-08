@@ -328,7 +328,7 @@ void App::update() {
     updateImgui();
     handleInput();
     if (options_.animate) {
-      animate();
+      updateObjects();
     }
     updateCamera();
 
@@ -384,33 +384,6 @@ void App::resetFrameState() {
   frame_state_.update_voronoi = frame_state_.frame_num == 0;
 }
 
-// TODO: Merge with updateObjects();
-void App::animate() {
-  anim_.clear_val = updateClearValue();
-  anim_.model_rot = updateModelRotation();
-  updateObjects();
-
-  if ((Floor)ui_.floor == Floor::Voronoi) {
-    for (int i = 0; i < cell_centers_.size(); i++) {
-      frame_state_.voronoi_cells[i].pos =
-          cell_centers_[i] +
-          glm::rotate(vec2(0, 0.1), time_s_ / glm::length(cell_centers_[i]));
-    }
-    frame_state_.update_voronoi = true;
-  }
-}
-
-float App::updateClearValue() {
-  constexpr float seq_dur_ms = 5000;
-  static float seq = 0;
-  seq += time_delta_ms_ / seq_dur_ms;
-  while (seq > 1) {
-    seq -= 1;
-  }
-  // return seq < 0.5f ? seq : (1.0f - seq); // linear bounce
-  return cos(seq * 2.0f * M_PI) / 2.0f + 0.5f;
-}
-
 float App::updateModelRotation() {
   constexpr float seq_dur_ms = 4000;
   constexpr float total_rot = 360;
@@ -423,6 +396,8 @@ float App::updateModelRotation() {
 }
 
 void App::updateObjects() {
+  anim_.model_rot = updateModelRotation();
+
   for (auto* object : grid_.children()) {
     vec3 pos = object->getPos();
     pos.y = 0.f;
@@ -441,6 +416,15 @@ void App::updateObjects() {
   }
 
   skelly_.update(frame_time_, time_delta_s_);
+
+  if ((Floor)ui_.floor == Floor::Voronoi) {
+    for (int i = 0; i < cell_centers_.size(); i++) {
+      frame_state_.voronoi_cells[i].pos =
+          cell_centers_[i] +
+          glm::rotate(vec2(0, 0.1), time_s_ / glm::length(cell_centers_[i]));
+    }
+    frame_state_.update_voronoi = true;
+  }
 }
 
 void App::updateCamera() {

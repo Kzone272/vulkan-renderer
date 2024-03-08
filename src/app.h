@@ -58,8 +58,6 @@ class App {
   void checkFps(Time now);
 
   void resetFrameState();
-  void animate();
-  float updateClearValue();
   float updateModelRotation();
   void updateObjects();
 
