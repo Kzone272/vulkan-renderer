@@ -36,7 +36,6 @@ void moveSnow(MoveOptions& move) {
   move.max_speed = 100;
   move.crouch_pct = 0.9;
   move.step_height = 50;
-  move.lean = 0.15;
   move.arm_span_pct = 0.25;
   move.hand_height_pct = 0.65;
   move.hands_forward = 15;
@@ -44,7 +43,6 @@ void moveSnow(MoveOptions& move) {
 void moveRunway(MoveOptions& move) {
   move = MoveOptions{};
   move.stance_w = 5;
-  move.lean = 0;
   move.hip_sway = 12;
   move.hip_spin = 10;
   move.shoulder_spin = 12;
@@ -58,7 +56,6 @@ void moveCrouch(MoveOptions& move) {
   move.crouch_pct = 0.65;
   move.stance_w = 35;
   move.step_height = 15;
-  move.lean = 0;
   move.arm_span_pct = 0.2;
   move.hand_height_pct = 0.5;
   move.hands_forward = 15;
@@ -114,6 +111,7 @@ Skelly::Skelly() {
   root_.setPos(vec3(200, 0, 200));
   makeBones();
   updateMovements();
+  lean_so_ = std::make_unique<SecondOrder<vec3>>(options_.lean_params, vec3{0});
 }
 
 void Skelly::makeBones() {
@@ -295,7 +293,7 @@ void Skelly::update(Time now, float delta_s) {
   // Root animate used for awkward jump animation I should probably delete.
   root_.animate(now);
   updateCycle(now, delta_s);
-  updateCog(now);
+  updateCog(now, delta_s);
   updatePelvis(now);
   updateFeet(now);
   updateLegs();
@@ -352,7 +350,7 @@ void Skelly::UpdateImgui() {
       makeBones();
     }
     ImGui::SliderFloat("Step Height", &options_.step_height, 0, 50);
-    ImGui::SliderFloat("Lean", &options_.lean, -0.2, 0.2);
+    ImGui::SliderFloat("Lean", &options_.lean, 0, 200);
     ImGui::SliderFloat("Bounce", &options_.bounce, 0, 10);
     ImGui::SliderFloat("Hip Sway", &options_.hip_sway, 0, 30);
     ImGui::SliderFloat("Hip Spin", &options_.hip_spin, 0, 45);
@@ -362,6 +360,11 @@ void Skelly::UpdateImgui() {
     ImGui::SliderFloat("Arm Span %", &options_.arm_span_pct, -0.2, 1);
     ImGui::SliderFloat("Hand Height %", &options_.hand_height_pct, -1, 1);
     ImGui::SliderFloat("Hands Forward", &options_.hands_forward, -50, 50);
+
+    if (ImGui::SliderFloat3(
+            "Lean SO", (float*)&options_.lean_params, 0.001, 20, "%.5f")) {
+      lean_so_->updateParams(options_.lean_params);
+    }
 
     ImGui::EndTabItem();
   }
@@ -592,21 +595,24 @@ float Skelly::sampleMovement(Movement<float>& move, Time now) {
   return 0;
 }
 
-void Skelly::updateCog(Time now) {
+void Skelly::updateCog(Time now, float delta_s) {
   vec3 pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
   pos.y += sampleMovement(walk_.bounce, now);
 
-  static vec3 lean_mix(0);
-  vec3 lean(0);
+  vec3 lean_target(0);
   if (vel_curve_) {
     vec3 acc =
         vel_curve_->sample(now, SampleType::Velocity) / vel_curve_->dur_ms_;
-    lean = options_.lean * acc * 1000.f;
+    lean_target = options_.lean * acc;
+  }
+  vec3 lean;
+  if (delta_s == 0) {
+    lean = lean_target;
+  } else {
+    lean = lean_so_->update(delta_s, lean_target);
   }
 
-  float alpha = 0.01;  // TODO: Value highly dependent on framerate!
-  lean_mix = (1 - alpha) * lean_mix + alpha * lean;
-  vec3 offset = root_.toLocal() * vec4(lean_mix, 0);
+  vec3 offset = root_.toLocal() * vec4(lean, 0);
   pos += offset;
 
   cog_.setPos(pos);

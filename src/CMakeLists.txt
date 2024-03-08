@@ -43,6 +43,7 @@ add_executable(main
   shaders.h
   shaders.cc
   scene-data.h
+  second-order.h
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

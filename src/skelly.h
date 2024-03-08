@@ -3,6 +3,7 @@
 #include "glm-include.h"
 #include "input.h"
 #include "object.h"
+#include "second-order.h"
 #include "time-include.h"
 
 struct MoveOptions {
@@ -13,7 +14,7 @@ struct MoveOptions {
   float stance_w = 15;
   float foot_dist = 5;
   float step_height = 5;
-  float lean = 0.01;
+  float lean = 20;
   float bounce = 2;
   float hip_sway = 6;
   float hip_spin = 8;
@@ -25,6 +26,7 @@ struct MoveOptions {
   float hands_forward = 0;
   // The option has very bad step placement when turning. Consider deleting.
   bool animate_in_world = false;
+  vec3 lean_params = {10, 5, 0};
 };
 
 struct SkellySizes {
@@ -170,7 +172,7 @@ class Skelly {
   vec3 sampleMovement(Movement<vec3>& move, Time now);
   float sampleMovement(Movement<float>& move, Time now);
 
-  void updateCog(Time now);
+  void updateCog(Time now, float delta_s);
   void updatePelvis(Time now);
   void updateFeet(Time now);
   void updateHeel(Time now, Foot& foot, Movement<float>& move);
@@ -221,4 +223,6 @@ class Skelly {
   vec3 vel_{0};
   float target_speed_ = 0;
   bool target_speed_changed_ = false;
+
+  std::unique_ptr<SecondOrder<vec3>> lean_so_;
 };
