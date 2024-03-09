@@ -46,7 +46,7 @@ struct BipedRig {
   BipedRig& operator=(const BipedRig& other) = delete;
 
   void makeBones(const SkellySizes& sizes, const MoveOptions& move_);
-  void plantFoot(Foot& foot, const MoveOptions& move);
+  void plantFoot(Foot& foot);
 
   Object root_;
   Object* cog_;

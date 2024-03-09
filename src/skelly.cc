@@ -557,17 +557,11 @@ void Skelly::updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
   if (move.anim) {
     if (now > move.anim->to_time_) {
       vec3 plant_pos = move.anim->sample(move.anim->to_time_);
-      if (options_.animate_in_world) {
-        plant_pos = rig_.root_.toLocal() * vec4(plant_pos, 1);
-      }
       foot.obj->setPos(plant_pos);
       move.anim.reset();
-      rig_.plantFoot(foot, options_);
+      rig_.plantFoot(foot);
     } else {
       vec3 swing_pos = sampleMovement(move, now);
-      if (options_.animate_in_world) {
-        swing_pos = rig_.root_.toLocal() * vec4(swing_pos, 1);
-      }
       foot.obj->setPos(swing_pos);
     }
   }
@@ -579,43 +573,17 @@ void Skelly::swingFoot(Foot& foot, Time now, Movement<vec3>& move) {
 
   vec3 start = foot.obj->getPos();
   mat4 to_world = rig_.root_.toWorld();
-  if (options_.animate_in_world) {
-    start = to_world * vec4(start, 1);
-  }
 
-  vec3 end;
-  if (options_.animate_in_world) {
-    vec3 offset = to_world * vec4(foot.offset, 0);
-    vec3 target_v = vel_;
-    if (vel_curve_) {
-      target_v += vel_curve_->sample(addMs(now, move.dur));
-      target_v /= 2;
-    }
-    vec3 step{0};
-    if (glm::length(target_v) > 0.1) {
-      float step_l = std::min(sizes_.leg * 1.4f, glm::length(target_v));
-      step = step_l * glm::normalize(target_v);
-    }
-    vec3 going = (move.dur / 1000.f) * target_v;
-    foot.world_target = getPos() + going + step + offset;
-    end = foot.world_target;
-  } else {
-    float forward = std::min(sizes_.leg * 0.3f, target_speed_ / 3);
-    end = vec3(0, 0, forward) + foot.offset;
-    foot.world_target = to_world * vec4(end, 1);
-  }
+  float forward = std::min(sizes_.leg * 0.3f, target_speed_ / 3);
+  vec3 end = vec3(0, 0, forward) + foot.offset;
+  foot.world_target = to_world * vec4(end, 1);
 
   vec3 mid_pos = (start + end) / 2.f + vec3(0, options_.step_height, 0);
 
   vec3 path = end - start;
   vec3 swing_vel = 1.25f * path / (move.dur * cycle_dur_ / 1000);
-  vec3 no_vel = vec3(0, 0, 0);
-  vec3 toe_drop = vec3(0, -options_.step_height / 2, 0);
-  // Subtract root motion when animating in local space
-  if (!options_.animate_in_world) {
-    no_vel.z -= target_speed_;
-    toe_drop.z -= target_speed_;
-  }
+  vec3 no_vel = vec3(0, 0, -target_speed_);
+  vec3 toe_drop = vec3(0, -options_.step_height / 2, -target_speed_);
 
   move.spline = Spline<vec3>(
       SplineType::Hermite, {start, no_vel, mid_pos, swing_vel, end, toe_drop});

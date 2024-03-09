@@ -25,8 +25,6 @@ struct MoveOptions {
   float arm_span_pct = 0.1;
   float hand_height_pct = 0.95;
   float hands_forward = 0;
-  // The option has very bad step placement when turning. Consider deleting.
-  bool animate_in_world = false;
   vec3 lean_params = {10, 5, 0};
 };
 

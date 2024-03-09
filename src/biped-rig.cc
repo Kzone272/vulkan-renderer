@@ -10,10 +10,7 @@ void initFoot(BipedRig& rig, Foot& foot, vec3 offset, const MoveOptions& move) {
       rig.root_.addChild(Object(ModelId::Control, control_t));
   foot.offset = offset;
   foot.obj->setPos(foot.offset);
-  if (move.animate_in_world) {
-    foot.world_target = rig.root_.toWorld() * vec4(foot.obj->getPos(), 1);
-  }
-  rig.plantFoot(foot, move);
+  rig.plantFoot(foot);
 }
 
 }
@@ -111,12 +108,10 @@ void BipedRig::makeBones(const SkellySizes& sizes, const MoveOptions& move) {
   root_.addChild(Object(ModelId::Control, root_control_t));
 }
 
-void BipedRig::plantFoot(Foot& foot, const MoveOptions& move) {
+void BipedRig::plantFoot(Foot& foot) {
   foot.planted = true;
   foot.in_swing = false;
-  if (!move.animate_in_world) {
-    foot.world_target = root_.toWorld() * vec4(foot.obj->getPos(), 1);
-  }
+  foot.world_target = root_.toWorld() * vec4(foot.obj->getPos(), 1);
   mat4 to_world = foot.obj->toWorld();
   foot.world_rot = glm::quat_cast(to_world);
 }
