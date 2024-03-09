@@ -198,15 +198,15 @@ class Skelly {
   SkellySizes sizes_;
 
   Object root_;
-  Object cog_;
+  Object* cog_;
   Object* pelvis_;
   Object* torso_;
-  Object lbicep_;
-  Object lforearm_;
-  Object lhand_;
-  Object rbicep_;
-  Object rforearm_;
-  Object rhand_;
+  Object* lbicep_;
+  Object* lforearm_;
+  Object* lhand_;
+  Object* rbicep_;
+  Object* rforearm_;
+  Object* rhand_;
   Object* head_;
   Object* lfemur_;
   Object* lshin_;

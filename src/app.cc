@@ -99,12 +99,12 @@ void App::setupWorld() {
   world_.addChild(skelly_.getObj());
   world_.addChild(&grid_);
   remakeGrid(options_.grid_size);
-  world_.addChild(std::make_unique<Object>(ModelId::Floor));
+  world_.addChild(Object(ModelId::Floor));
 
-  auto* car = world_.addChild(std::make_unique<Object>(ModelId::Pony));
+  auto* car = world_.addChild(Object(ModelId::Pony));
   car->setPos(vec3(-300, -1, 0));
 
-  auto* room = world_.addChild(std::make_unique<Object>(ModelId::Viking));
+  auto* room = world_.addChild(Object(ModelId::Viking));
   room->setPos(vec3(300, 1, 300));
 
   loadMaterials();
@@ -207,9 +207,8 @@ void App::remakeGrid(int grid) {
     for (int j = 0; j < grid; j++) {
       ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       mat4 model_t = glm::scale(vec3(100));
-      auto obj = std::make_unique<Object>(id, model_t);
+      auto* obj = grid_.addChild(Object(id, model_t));
       obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
-      grid_.addChild(std::move(obj));
     }
   }
 }

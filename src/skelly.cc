@@ -127,60 +127,56 @@ void Skelly::makeBones() {
 
   root_.clearChildren();
 
-  cog_ = Object(ModelId::Control, glm::scale(vec3(5)));
-  root_.addChild(&cog_);
-  cog_.setPos(vec3(0, sizes_.pelvis_y, 0));
+  cog_ = root_.addChild(Object(ModelId::Control, glm::scale(vec3(5))));
+  cog_->setPos(vec3(0, sizes_.pelvis_y, 0));
 
   mat4 pelvis_t = glm::scale(vec3(sizes_.pelvis_w, -sizes_.pelvis_h, 15));
-  pelvis_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, pelvis_t));
+  pelvis_ = cog_->addChild(Object(ModelId::Bone, pelvis_t));
   pelvis_->setPos(vec3(0, 0, 0));
 
   mat4 torso_t = glm::scale(vec3(sizes_.shoulders_w, -15, 15));
-  torso_ = cog_.addChild(std::make_unique<Object>(ModelId::Bone, torso_t));
+  torso_ = cog_->addChild(Object(ModelId::Bone, torso_t));
   torso_->setPos(vec3(0, sizes_.shoulders_y, 0));
 
   vec3 bicep_pos = {-(sizes_.shoulders_w / 2 + 3), -5, 0};
   mat4 arm_rot = glm::toMat4(glm::angleAxis(glm::radians(90.f), vec3(0, 0, 1)));
   mat4 bicep_t =
       glm::scale(vec3(sizes_.bicep, sizes_.bone_w, sizes_.bone_w)) * arm_rot;
-  lbicep_ = Object(ModelId::Bone, bicep_t);
-  torso_->addChild(&lbicep_);
-  lbicep_.setPos(bicep_pos);
-  lbicep_.setRot(glm::angleAxis(glm::radians(70.f), vec3(0, 0, 1)));
+  lbicep_ = torso_->addChild(Object(ModelId::Bone, bicep_t));
+  lbicep_->setPos(bicep_pos);
+  lbicep_->setRot(glm::angleAxis(glm::radians(70.f), vec3(0, 0, 1)));
 
   vec3 forearm_pos = {-sizes_.bicep, 0, 0};
   mat4 forearm_t =
       glm::scale(vec3(sizes_.forearm, sizes_.bone_w, sizes_.bone_w)) * arm_rot;
-  lforearm_ = Object(ModelId::Bone, forearm_t);
-  lbicep_.addChild(&lforearm_);
-  lforearm_.setPos(forearm_pos);
-  lforearm_.setRot(glm::angleAxis(glm::radians(45.f), vec3(0, 1, 0)));
+  lforearm_ = lbicep_->addChild(Object(ModelId::Bone, forearm_t));
+  lforearm_->setPos(forearm_pos);
+  lforearm_->setRot(glm::angleAxis(glm::radians(45.f), vec3(0, 1, 0)));
 
   vec3 hand_pos = {-sizes_.forearm, 0, 0};
   mat4 hand_t = glm::scale(vec3(sizes_.hand_l, 7, 9)) * arm_rot;
-  lhand_ = Object(ModelId::Bone, hand_t);
-  lforearm_.addChild(&lhand_);
-  lhand_.setPos(hand_pos);
+  lhand_ = lforearm_->addChild(Object(ModelId::Bone, hand_t));
+  lhand_->setPos(hand_pos);
 
   mat4 head_t =
       glm::translate(vec3(0, 0, 2)) * glm::scale(vec3(20, sizes_.head_h, 20));
-  head_ = torso_->addChild(std::make_unique<Object>(ModelId::Bone, head_t));
+  head_ = torso_->addChild(Object(ModelId::Bone, head_t));
   head_->setPos(vec3(0, sizes_.neck, 5));
 
   mat4 femur_t = glm::scale(vec3(sizes_.bone_w, -sizes_.femur, sizes_.bone_w));
-  lfemur_ = pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
+  lfemur_ = pelvis_->addChild(Object(ModelId::Bone, femur_t));
   vec3 femur_pos = {-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0};
   lfemur_->setPos(femur_pos);
 
   mat4 shin_t = glm::scale(vec3(sizes_.bone_w, -sizes_.shin, sizes_.bone_w));
-  lshin_ = lfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
+  lshin_ = lfemur_->addChild(Object(ModelId::Bone, shin_t));
   vec3 shin_pos = vec3(0, -sizes_.femur, 0);
   lshin_->setPos(shin_pos);
 
   mat4 foot_t = glm::translate(-sizes_.ankle + vec3(-1, 0, 0)) *
                 glm::scale(vec3(13, 4, sizes_.foot_l)) *
                 glm::translate(vec3(0, 0, -0.5));
-  lfoot_ = lshin_->addChild(std::make_unique<Object>(ModelId::Bone, foot_t));
+  lfoot_ = lshin_->addChild(Object(ModelId::Bone, foot_t));
   vec3 foot_pos = vec3(0, -sizes_.shin, 0);
   lfoot_->setPos(foot_pos);
 
@@ -188,27 +184,23 @@ void Skelly::makeBones() {
   mat4 flip = glm::scale(vec3(-1, 1, 1));
   mat3 flip3 = mat3(flip);
 
-  rfemur_ = pelvis_->addChild(std::make_unique<Object>(ModelId::Bone, femur_t));
+  rfemur_ = pelvis_->addChild(Object(ModelId::Bone, femur_t));
   rfemur_->setPos(flip3 * femur_pos);
 
-  rshin_ = rfemur_->addChild(std::make_unique<Object>(ModelId::Bone, shin_t));
+  rshin_ = rfemur_->addChild(Object(ModelId::Bone, shin_t));
   rshin_->setPos(flip3 * shin_pos);
 
-  rfoot_ =
-      rshin_->addChild(std::make_unique<Object>(ModelId::Bone, flip * foot_t));
+  rfoot_ = rshin_->addChild(Object(ModelId::Bone, flip * foot_t));
   rfoot_->setPos(flip3 * foot_pos);
 
-  rbicep_ = Object(ModelId::Bone, flip * bicep_t);
-  torso_->addChild(&rbicep_);
-  rbicep_.setPos(flip3 * bicep_pos);
+  rbicep_ = torso_->addChild(Object(ModelId::Bone, flip * bicep_t));
+  rbicep_->setPos(flip3 * bicep_pos);
 
-  rforearm_ = Object(ModelId::Bone, flip * forearm_t);
-  rbicep_.addChild(&rforearm_);
-  rforearm_.setPos(flip3 * forearm_pos);
+  rforearm_ = rbicep_->addChild(Object(ModelId::Bone, flip * forearm_t));
+  rforearm_->setPos(flip3 * forearm_pos);
 
-  rhand_ = Object(ModelId::Bone, flip * hand_t);
-  rforearm_.addChild(&rhand_);
-  rhand_.setPos(flip3 * hand_pos);
+  rhand_ = rforearm_->addChild(Object(ModelId::Bone, flip * hand_t));
+  rhand_->setPos(flip3 * hand_pos);
 
   // Add non-bone control objects
   vec3 foot_offset = {-options_.stance_w / 2, 0, 12};
@@ -217,16 +209,14 @@ void Skelly::makeBones() {
 
   vec3 wrist_pos = vec3(-sizes_.wrist_d, 0, 0) + bicep_pos;
   mat4 control_t = glm::scale(vec3(5));
-  ik_.lhand.obj =
-      torso_->addChild(std::make_unique<Object>(ModelId::Control, control_t));
+  ik_.lhand.obj = torso_->addChild(Object(ModelId::Control, control_t));
   ik_.lhand.obj->setPos(wrist_pos);
 
-  ik_.rhand.obj =
-      torso_->addChild(std::make_unique<Object>(ModelId::Control, control_t));
+  ik_.rhand.obj = torso_->addChild(Object(ModelId::Control, control_t));
   ik_.rhand.obj->setPos(flip3 * wrist_pos);
 
   mat4 root_control_t = glm::scale(vec3(10, 1, 30));
-  root_.addChild(std::make_unique<Object>(ModelId::Control, root_control_t));
+  root_.addChild(Object(ModelId::Control, root_control_t));
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -417,7 +407,7 @@ void Skelly::UpdateImgui() {
 void Skelly::initFoot(Foot& foot, vec3 offset) {
   mat4 control_t = glm::scale(vec3(5));
   foot.obj =
-      root_.addChild(std::make_unique<Object>(ModelId::Control, control_t));
+      root_.addChild(Object(ModelId::Control, control_t));
   foot.offset = offset;
   foot.obj->setPos(foot.offset);
   if (options_.animate_in_world) {
@@ -545,7 +535,7 @@ void Skelly::updateMovements() {
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
 
   float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
-  vec3 shoulder = lbicep_.getPos();
+  vec3 shoulder = lbicep_->getPos();
   float hand_width = options_.arm_span_pct * sizes_.wrist_d;
   vec3 back =
       vec3(-hand_width, -hand_dist, -0.2 * hand_dist + options_.hands_forward) +
@@ -615,7 +605,7 @@ void Skelly::updateCog(Time now, float delta_s) {
   vec3 offset = root_.toLocal() * vec4(lean, 0);
   pos += offset;
 
-  cog_.setPos(pos);
+  cog_->setPos(pos);
 }
 
 void Skelly::updatePelvis(Time now) {
@@ -830,10 +820,10 @@ void Skelly::updateHands(Time now) {
 
 void Skelly::updateArms() {
   updateTwoBoneIk(
-      lbicep_, sizes_.bicep, lforearm_, sizes_.forearm, lbicep_.getPos(),
+      *lbicep_, sizes_.bicep, *lforearm_, sizes_.forearm, lbicep_->getPos(),
       ik_.lhand.obj->getPos(), vec3(-1, 0, 0), vec3(0, 1, 0));
   updateTwoBoneIk(
-      rbicep_, sizes_.bicep, rforearm_, sizes_.forearm, rbicep_.getPos(),
+      *rbicep_, sizes_.bicep, *rforearm_, sizes_.forearm, rbicep_->getPos(),
       ik_.rhand.obj->getPos(), vec3(1, 0, 0), vec3(0, -1, 0));
 }
 

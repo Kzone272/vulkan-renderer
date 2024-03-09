@@ -151,9 +151,10 @@ void Object::animate(Time now) {
   }
 }
 
-Object* Object::addChild(std::unique_ptr<Object> child) {
-  auto* ptr = child.get();
-  owned_children_.push_back(std::move(child));
+Object* Object::addChild(Object&& child) {
+  auto unique_child = std::make_unique<Object>(std::move(child));
+  auto* ptr = unique_child.get();
+  owned_children_.push_back(std::move(unique_child));
   addChild(ptr);
   return ptr;
 }

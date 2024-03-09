@@ -17,6 +17,12 @@ class Object {
   Object(
       ModelId model = ModelId::None,
       std::optional<mat4> model_transform = std::nullopt);
+  
+  // Move only.
+  Object(Object&& other) = default;
+  Object& operator=(Object&& other) = default;
+  Object(const Object& other) = delete;
+  Object& operator=(const Object&& other) = delete;
 
   void setParent(Object* parent);
   void setScale(const vec3& scale);
@@ -42,7 +48,7 @@ class Object {
   void clearRotAnims();
   void animate(Time now);
 
-  Object* addChild(std::unique_ptr<Object> child);
+  Object* addChild(Object&& child);
   void addChild(Object* child);
   const std::vector<Object*>& children();
   void clearChildren();
