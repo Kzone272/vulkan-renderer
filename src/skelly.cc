@@ -18,7 +18,7 @@ void moveTightrope(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 120;
   move.crouch_pct = 0.9;
-  move.stance_w = 0;
+  move.stance_w_pct = 0;
   move.hand_height_pct = 0.25;
   move.arm_span_pct = 0.9;
 }
@@ -42,7 +42,7 @@ void moveSnow(MoveOptions& move) {
 }
 void moveRunway(MoveOptions& move) {
   move = MoveOptions{};
-  move.stance_w = 5;
+  move.stance_w_pct = 0.2;
   move.hip_sway = 12;
   move.hip_spin = 10;
   move.shoulder_spin = 12;
@@ -54,7 +54,7 @@ void moveCrouch(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 120;
   move.crouch_pct = 0.65;
-  move.stance_w = 35;
+  move.stance_w_pct = 1.2;
   move.step_height = 15;
   move.arm_span_pct = 0.2;
   move.hand_height_pct = 0.5;
@@ -125,7 +125,7 @@ void Skelly::makeBones() {
   sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
   sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
 
-  rig_.makeBones(sizes_, options_);
+  rig_.makeBones(sizes_);
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -245,7 +245,7 @@ void Skelly::UpdateImgui() {
     ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
     ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
     ImGui::SliderFloat("Crouch %", &options_.crouch_pct, 0.01, 1.2);
-    if (ImGui::SliderFloat("Stance W", &options_.stance_w, 0, 60)) {
+    if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
       makeBones();
     }
     ImGui::SliderFloat("Step Height", &options_.step_height, 0, 50);
@@ -541,7 +541,7 @@ void Skelly::updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
     // when walking starts, or if we should move feet back when stopped.
     bool supported = !rig_.lfoot_c_.in_swing && !rig_.rfoot_c_.in_swing;
     vec3 pos = foot.obj->getPos();
-    float target_dist = glm::length(pos - foot.offset);
+    float target_dist = glm::length(pos - foot.start_pos);
     bool should_step = supported && target_dist > options_.foot_dist;
   }
 
@@ -575,7 +575,10 @@ void Skelly::swingFoot(Foot& foot, Time now, Movement<vec3>& move) {
   mat4 to_world = rig_.root_.toWorld();
 
   float forward = std::min(sizes_.leg * 0.3f, target_speed_ / 3);
-  vec3 end = vec3(0, 0, forward) + foot.offset;
+  vec3 step_offset = foot.start_pos;
+  step_offset.x =
+      (foot.is_left ? -1 : 1) * options_.stance_w_pct * sizes_.pelvis_w / 2;
+  vec3 end = vec3(0, 0, forward) + step_offset;
   foot.world_target = to_world * vec4(end, 1);
 
   vec3 mid_pos = (start + end) / 2.f + vec3(0, options_.step_height, 0);
@@ -675,11 +678,13 @@ void Skelly::updateHands(Time now) {
 
 void Skelly::updateArms() {
   updateTwoBoneIk(
-      *rig_.lbicep_, sizes_.bicep, *rig_.lforearm_, sizes_.forearm, rig_.lbicep_->getPos(),
-      rig_.lhand_c_.obj->getPos(), vec3(-1, 0, 0), vec3(0, 1, 0));
+      *rig_.lbicep_, sizes_.bicep, *rig_.lforearm_, sizes_.forearm,
+      rig_.lbicep_->getPos(), rig_.lhand_c_.obj->getPos(), vec3(-1, 0, 0),
+      vec3(0, 1, 0));
   updateTwoBoneIk(
-      *rig_.rbicep_, sizes_.bicep, *rig_.rforearm_, sizes_.forearm, rig_.rbicep_->getPos(),
-      rig_.rhand_c_.obj->getPos(), vec3(1, 0, 0), vec3(0, -1, 0));
+      *rig_.rbicep_, sizes_.bicep, *rig_.rforearm_, sizes_.forearm,
+      rig_.rbicep_->getPos(), rig_.rhand_c_.obj->getPos(), vec3(1, 0, 0),
+      vec3(0, -1, 0));
 }
 
 // Returns pair of angles for bone1 and bone2.

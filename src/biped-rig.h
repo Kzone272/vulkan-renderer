@@ -11,9 +11,10 @@ struct Foot {
   Object* obj;
   bool planted = false;
   bool in_swing = false;
+  bool is_left = false;
   vec3 world_target;
   glm::quat world_rot;
-  vec3 offset;
+  vec3 start_pos;
   float angle = 0;  // Angle relative to floor
   vec3 knee = {0, 0, 1};
 };
@@ -37,7 +38,6 @@ struct Hand {
 };
 
 struct SkellySizes;
-struct MoveOptions;
 
 struct BipedRig {
   BipedRig() = default;
@@ -45,7 +45,7 @@ struct BipedRig {
   BipedRig(const BipedRig& other) = delete;
   BipedRig& operator=(const BipedRig& other) = delete;
 
-  void makeBones(const SkellySizes& sizes, const MoveOptions& move_);
+  void makeBones(const SkellySizes& sizes);
   void plantFoot(Foot& foot);
 
   Object root_;

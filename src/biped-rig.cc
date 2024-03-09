@@ -4,18 +4,20 @@
 
 namespace {
 
-void initFoot(BipedRig& rig, Foot& foot, vec3 offset, const MoveOptions& move) {
+void initFoot(BipedRig& rig, Foot& foot, vec3 pos, bool is_left) {
   mat4 control_t = glm::scale(vec3(5));
-  foot.obj =
-      rig.root_.addChild(Object(ModelId::Control, control_t));
-  foot.offset = offset;
-  foot.obj->setPos(foot.offset);
+  foot.obj = rig.root_.addChild(Object(ModelId::Control, control_t));
+  foot.start_pos = pos;
+  foot.obj->setPos(pos);
+  foot.is_left = is_left;
   rig.plantFoot(foot);
 }
 
-}
+}  // namespace
 
-void BipedRig::makeBones(const SkellySizes& sizes, const MoveOptions& move) {
+void BipedRig::makeBones(const SkellySizes& sizes) {
+  root_.clearChildren();
+
   cog_ = root_.addChild(Object(ModelId::Control, glm::scale(vec3(5))));
   cog_->setPos(vec3(0, sizes.pelvis_y, 0));
 
@@ -92,9 +94,9 @@ void BipedRig::makeBones(const SkellySizes& sizes, const MoveOptions& move) {
   rhand_->setPos(flip3 * hand_pos);
 
   // Add non-bone control objects
-  vec3 foot_offset = {-move.stance_w / 2, 0, 12};
-  initFoot(*this, lfoot_c_, foot_offset, move);
-  initFoot(*this, rfoot_c_, flip3 * foot_offset, move);
+  vec3 left_foot_pos = {-sizes.pelvis_w / 2, 0, 12};
+  initFoot(*this, lfoot_c_, left_foot_pos, /*=is_left*/ true);
+  initFoot(*this, rfoot_c_, flip3 * left_foot_pos, /*=is_left*/ false);
 
   vec3 wrist_pos = vec3(-sizes.wrist_d, 0, 0) + bicep_pos;
   mat4 control_t = glm::scale(vec3(5));
