@@ -20,21 +20,21 @@ layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormalDepth;
 
 
-float dirLight(vec3 l, vec3 norm) {
+float dirLight(vec3 lightVec, vec3 norm) {
+  vec3 l = -normalize(vec3(global.view * vec4(lightVec, 0)));
   return max(0, dot(l, norm));
 }
 
-float pointLight(vec3 p, float falloff, vec3 norm) {
-  vec3 toLight = p - fragPos;
+float pointLight(vec3 lightVec, float falloff, vec3 norm) {
+  vec3 lightPos = vec3(global.view * vec4(lightVec, 1));
+  vec3 toLight = lightPos - fragPos;
   vec3 l = normalize(toLight);
   float intensity = clamp(map(length(toLight), 0, falloff, 1, 0), 0, 1);
   return max(0, intensity * dot(l, norm));
 }
 
 void main() {
-  vec3 wnorm = normalize(fragNormal);
-  vec4 vpos = global.view * vec4(fragPos, 1);
-  vec4 vnorm = global.view * vec4(wnorm, 0);
+  vec3 vnorm = normalize(fragNormal);
   float z = gl_FragCoord.z;
   outNormalDepth = vec4(vnorm.xyz, z);
 
@@ -50,9 +50,9 @@ void main() {
 
       float intensity = 0;
       if (light.type == kDirectionalLightType) {
-        intensity = dirLight(normalize(-light.vec), wnorm);
+        intensity = dirLight(light.vec, vnorm);
       } else if (light.type == kPointLightType) {
-        intensity = pointLight(light.vec, light.falloff, wnorm);
+        intensity = pointLight(light.vec, light.falloff, vnorm);
       }
 
       lambert += intensity * light.color * diffuse;
@@ -63,16 +63,8 @@ void main() {
     lambert += vec3(0.2) * diffuse;
     color = clamp(lambert, 0, 1);
   } else if (material.type == kGoochMaterial) {
-    vec3 L = vec3(0, 1, 1);
-    // Use first directional light if one exists.
-    for (int i = 0; i < global.lights.length(); i++) {
-      if (global.lights[i].type == kDirectionalLightType) {
-        L = normalize(-global.lights[i].vec);
-        break;
-      }
-    }
-
-    float gooch = (1 + dot(wnorm, L)) / 2;
+    vec3 L = normalize(vec3(1, 1, 1));
+    float gooch = (1 + dot(vnorm, L)) / 2;
     color = mix(material.color2, material.color1, gooch);
   }
 

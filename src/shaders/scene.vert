@@ -21,9 +21,10 @@ layout(push_constant) uniform PushData {
 } push;
 
 void main() {
-  fragPos = vec3(push.model * vec4(inPosition, 1.0));
-  gl_Position = global.proj * global.view * push.model * vec4(inPosition, 1.0);
-  fragNormal = vec3(push.model * vec4(inNormal, 0));
+  mat4 to_view = global.view * push.model;
+  fragPos = vec3(to_view * vec4(inPosition, 1.0));
+  gl_Position = global.proj * vec4(fragPos, 1.0);
+  fragNormal = vec3(to_view * vec4(inNormal, 0));
   fragColor = inColor;
   fragUv = inUv;
 }
