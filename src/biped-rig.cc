@@ -35,14 +35,12 @@ void BipedRig::makeBones(const SkellySizes& sizes) {
       glm::scale(vec3(sizes.bicep, sizes.bone_w, sizes.bone_w)) * arm_rot;
   lbicep_ = torso_->addChild(Object(ModelId::Bone, bicep_t));
   lbicep_->setPos(bicep_pos);
-  lbicep_->setRot(glm::angleAxis(glm::radians(70.f), vec3(0, 0, 1)));
 
   vec3 forearm_pos = {-sizes.bicep, 0, 0};
   mat4 forearm_t =
       glm::scale(vec3(sizes.forearm, sizes.bone_w, sizes.bone_w)) * arm_rot;
   lforearm_ = lbicep_->addChild(Object(ModelId::Bone, forearm_t));
   lforearm_->setPos(forearm_pos);
-  lforearm_->setRot(glm::angleAxis(glm::radians(45.f), vec3(0, 1, 0)));
 
   vec3 hand_pos = {-sizes.forearm, 0, 0};
   mat4 hand_t = glm::scale(vec3(sizes.hand_l, 7, 9)) * arm_rot;
@@ -98,12 +96,13 @@ void BipedRig::makeBones(const SkellySizes& sizes) {
   initFoot(*this, lfoot_c_, left_foot_pos, /*=is_left*/ true);
   initFoot(*this, rfoot_c_, flip3 * left_foot_pos, /*=is_left*/ false);
 
-  vec3 wrist_pos = vec3(-sizes.wrist_d, 0, 0) + bicep_pos;
+  vec3 wrist_pos =
+      lbicep_->posToAncestor(&root_, vec3(-sizes.wrist_d, 0, 0));
   mat4 control_t = glm::scale(vec3(5));
-  lhand_c_.obj = torso_->addChild(Object(ModelId::Control, control_t));
+  lhand_c_.obj = root_.addChild(Object(ModelId::Control, control_t));
   lhand_c_.obj->setPos(wrist_pos);
 
-  rhand_c_.obj = torso_->addChild(Object(ModelId::Control, control_t));
+  rhand_c_.obj = root_.addChild(Object(ModelId::Control, control_t));
   rhand_c_.obj->setPos(flip3 * wrist_pos);
 
   mat4 root_control_t = glm::scale(vec3(10, 1, 30));

@@ -652,6 +652,7 @@ void Skelly::updateLeg(
   foot.setRot(foot_rot);
 }
 
+// b1_pos, target, main_axis, and rot_axis all need to be in b1's parent space.
 void Skelly::updateTwoBoneIk(
     Object& bone1, float b1_l, Object& bone2, float b2_l, vec3 b1_pos,
     vec3 target, vec3 main_axis, vec3 rot_axis) {
@@ -672,19 +673,30 @@ void Skelly::updateShoulders(Time now) {
 }
 
 void Skelly::updateHands(Time now) {
-  rig_.lhand_c_.obj->setPos(sampleMovement(walk_.larm, now));
-  rig_.rhand_c_.obj->setPos(sampleMovement(walk_.rarm, now));
+  // This animation is in torso space, but the hands are in root space.
+  if (walk_.larm.anim) {
+    vec3 root_hand = sampleMovement(walk_.larm, now);
+    rig_.lhand_c_.obj->setPos(
+        rig_.torso_->posToAncestor(&rig_.root_, root_hand));
+  }
+  if (walk_.rarm.anim) {
+    vec3 root_hand = sampleMovement(walk_.rarm, now);
+    rig_.rhand_c_.obj->setPos(
+        rig_.torso_->posToAncestor(&rig_.root_, root_hand));
+  }
 }
 
 void Skelly::updateArms() {
   updateTwoBoneIk(
       *rig_.lbicep_, sizes_.bicep, *rig_.lforearm_, sizes_.forearm,
-      rig_.lbicep_->getPos(), rig_.lhand_c_.obj->getPos(), vec3(-1, 0, 0),
-      vec3(0, 1, 0));
+      rig_.lbicep_->getPos(),
+      rig_.torso_->posToLocal(&rig_.root_, rig_.lhand_c_.obj->getPos()),
+      vec3(-1, 0, 0), vec3(0, 1, 0));
   updateTwoBoneIk(
       *rig_.rbicep_, sizes_.bicep, *rig_.rforearm_, sizes_.forearm,
-      rig_.rbicep_->getPos(), rig_.rhand_c_.obj->getPos(), vec3(1, 0, 0),
-      vec3(0, -1, 0));
+      rig_.rbicep_->getPos(),
+      rig_.torso_->posToLocal(&rig_.root_, rig_.rhand_c_.obj->getPos()),
+      vec3(1, 0, 0), vec3(0, -1, 0));
 }
 
 // Returns pair of angles for bone1 and bone2.

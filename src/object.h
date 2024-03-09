@@ -35,12 +35,15 @@ class Object {
 
   // Transform from this object's space to an ancestor.
   const mat4 toAncestor(Object* ancestor);
+  const vec3 posToAncestor(Object* ancestor, vec3 pos = vec3(0,0,0));
   // Local space to world (root of tree).
   const mat4 toWorld();
   // From world space to local.
   const mat4 toLocal();
   // From ancestor's space to local.
   const mat4 toLocal(Object* ancestor);
+  const vec3 posToLocal(Object* ancestor, vec3 pos = vec3(0,0,0));
+
 
   void addPosAnim(Animation<vec3>* a);
   void clearAddAnims();

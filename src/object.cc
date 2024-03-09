@@ -87,6 +87,10 @@ const mat4 Object::toAncestor(Object* ancestor) {
   return parent_->toAncestor(ancestor) * getTransform();
 }
 
+const vec3 Object::posToAncestor(Object* ancestor, vec3 pos) {
+  return toAncestor(ancestor) * vec4(pos, 1);
+}
+
 // Local space to world (root of tree).
 const mat4 Object::toWorld() {
   return toAncestor(nullptr);
@@ -100,6 +104,10 @@ const mat4 Object::toLocal() {
 // From ancestor's space to local.
 const mat4 Object::toLocal(Object* ancestor) {
   return glm::inverse(toAncestor(ancestor));
+}
+
+const vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
+  return toLocal(ancestor) * vec4(pos, 1);
 }
 
 std::vector<ModelId> Object::getModels() {
