@@ -44,6 +44,8 @@ add_executable(main
   shaders.cc
   scene-data.h
   second-order.h
+  biped-rig.h
+  biped-rig.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

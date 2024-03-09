@@ -108,7 +108,7 @@ void sizeChimp(SkellySizes& sizes) {
 }  // namespace
 
 Skelly::Skelly() {
-  root_.setPos(vec3(200, 0, 200));
+  rig_.root_.setPos(vec3(200, 0, 200));
   makeBones();
   updateMovements();
   lean_so_ = std::make_unique<SecondOrder<vec3>>(options_.lean_params, vec3{0});
@@ -125,103 +125,12 @@ void Skelly::makeBones() {
   sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
   sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
 
-  root_.clearChildren();
-
-  cog_ = root_.addChild(Object(ModelId::Control, glm::scale(vec3(5))));
-  cog_->setPos(vec3(0, sizes_.pelvis_y, 0));
-
-  mat4 pelvis_t = glm::scale(vec3(sizes_.pelvis_w, -sizes_.pelvis_h, 15));
-  pelvis_ = cog_->addChild(Object(ModelId::Bone, pelvis_t));
-  pelvis_->setPos(vec3(0, 0, 0));
-
-  mat4 torso_t = glm::scale(vec3(sizes_.shoulders_w, -15, 15));
-  torso_ = cog_->addChild(Object(ModelId::Bone, torso_t));
-  torso_->setPos(vec3(0, sizes_.shoulders_y, 0));
-
-  vec3 bicep_pos = {-(sizes_.shoulders_w / 2 + 3), -5, 0};
-  mat4 arm_rot = glm::toMat4(glm::angleAxis(glm::radians(90.f), vec3(0, 0, 1)));
-  mat4 bicep_t =
-      glm::scale(vec3(sizes_.bicep, sizes_.bone_w, sizes_.bone_w)) * arm_rot;
-  lbicep_ = torso_->addChild(Object(ModelId::Bone, bicep_t));
-  lbicep_->setPos(bicep_pos);
-  lbicep_->setRot(glm::angleAxis(glm::radians(70.f), vec3(0, 0, 1)));
-
-  vec3 forearm_pos = {-sizes_.bicep, 0, 0};
-  mat4 forearm_t =
-      glm::scale(vec3(sizes_.forearm, sizes_.bone_w, sizes_.bone_w)) * arm_rot;
-  lforearm_ = lbicep_->addChild(Object(ModelId::Bone, forearm_t));
-  lforearm_->setPos(forearm_pos);
-  lforearm_->setRot(glm::angleAxis(glm::radians(45.f), vec3(0, 1, 0)));
-
-  vec3 hand_pos = {-sizes_.forearm, 0, 0};
-  mat4 hand_t = glm::scale(vec3(sizes_.hand_l, 7, 9)) * arm_rot;
-  lhand_ = lforearm_->addChild(Object(ModelId::Bone, hand_t));
-  lhand_->setPos(hand_pos);
-
-  mat4 head_t =
-      glm::translate(vec3(0, 0, 2)) * glm::scale(vec3(20, sizes_.head_h, 20));
-  head_ = torso_->addChild(Object(ModelId::Bone, head_t));
-  head_->setPos(vec3(0, sizes_.neck, 5));
-
-  mat4 femur_t = glm::scale(vec3(sizes_.bone_w, -sizes_.femur, sizes_.bone_w));
-  lfemur_ = pelvis_->addChild(Object(ModelId::Bone, femur_t));
-  vec3 femur_pos = {-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0};
-  lfemur_->setPos(femur_pos);
-
-  mat4 shin_t = glm::scale(vec3(sizes_.bone_w, -sizes_.shin, sizes_.bone_w));
-  lshin_ = lfemur_->addChild(Object(ModelId::Bone, shin_t));
-  vec3 shin_pos = vec3(0, -sizes_.femur, 0);
-  lshin_->setPos(shin_pos);
-
-  mat4 foot_t = glm::translate(-sizes_.ankle + vec3(-1, 0, 0)) *
-                glm::scale(vec3(13, 4, sizes_.foot_l)) *
-                glm::translate(vec3(0, 0, -0.5));
-  lfoot_ = lshin_->addChild(Object(ModelId::Bone, foot_t));
-  vec3 foot_pos = vec3(0, -sizes_.shin, 0);
-  lfoot_->setPos(foot_pos);
-
-  // Add opposite limbs with flipped positions.
-  mat4 flip = glm::scale(vec3(-1, 1, 1));
-  mat3 flip3 = mat3(flip);
-
-  rfemur_ = pelvis_->addChild(Object(ModelId::Bone, femur_t));
-  rfemur_->setPos(flip3 * femur_pos);
-
-  rshin_ = rfemur_->addChild(Object(ModelId::Bone, shin_t));
-  rshin_->setPos(flip3 * shin_pos);
-
-  rfoot_ = rshin_->addChild(Object(ModelId::Bone, flip * foot_t));
-  rfoot_->setPos(flip3 * foot_pos);
-
-  rbicep_ = torso_->addChild(Object(ModelId::Bone, flip * bicep_t));
-  rbicep_->setPos(flip3 * bicep_pos);
-
-  rforearm_ = rbicep_->addChild(Object(ModelId::Bone, flip * forearm_t));
-  rforearm_->setPos(flip3 * forearm_pos);
-
-  rhand_ = rforearm_->addChild(Object(ModelId::Bone, flip * hand_t));
-  rhand_->setPos(flip3 * hand_pos);
-
-  // Add non-bone control objects
-  vec3 foot_offset = {-options_.stance_w / 2, 0, 12};
-  initFoot(ik_.lfoot, foot_offset);
-  initFoot(ik_.rfoot, flip3 * foot_offset);
-
-  vec3 wrist_pos = vec3(-sizes_.wrist_d, 0, 0) + bicep_pos;
-  mat4 control_t = glm::scale(vec3(5));
-  ik_.lhand.obj = torso_->addChild(Object(ModelId::Control, control_t));
-  ik_.lhand.obj->setPos(wrist_pos);
-
-  ik_.rhand.obj = torso_->addChild(Object(ModelId::Control, control_t));
-  ik_.rhand.obj->setPos(flip3 * wrist_pos);
-
-  mat4 root_control_t = glm::scale(vec3(10, 1, 30));
-  root_.addChild(Object(ModelId::Control, root_control_t));
+  rig_.makeBones(sizes_, options_);
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
   if (input.kb.pressed.contains(' ')) {
-    vec3 start = root_.getPos();
+    vec3 start = rig_.root_.getPos();
 
     float speedz = 300;
     float speedy = 600;
@@ -281,7 +190,7 @@ void Skelly::handleInput(const InputState& input, Time now) {
 void Skelly::update(Time now, float delta_s) {
   updateSpeed(now, delta_s);
   // Root animate used for awkward jump animation I should probably delete.
-  root_.animate(now);
+  rig_.root_.animate(now);
   updateCycle(now, delta_s);
   updateCog(now, delta_s);
   updatePelvis(now);
@@ -293,11 +202,11 @@ void Skelly::update(Time now, float delta_s) {
 }
 
 vec3 Skelly::getPos() {
-  return root_.getPos();
+  return rig_.root_.getPos();
 }
 
 Object* Skelly::getObj() {
-  return &root_;
+  return &rig_.root_;
 }
 
 float Skelly::getPelvisHeight() {
@@ -404,18 +313,6 @@ void Skelly::UpdateImgui() {
   ImGui::End();
 }
 
-void Skelly::initFoot(Foot& foot, vec3 offset) {
-  mat4 control_t = glm::scale(vec3(5));
-  foot.obj =
-      root_.addChild(Object(ModelId::Control, control_t));
-  foot.offset = offset;
-  foot.obj->setPos(foot.offset);
-  if (options_.animate_in_world) {
-    foot.world_target = root_.toWorld() * vec4(foot.obj->getPos(), 1);
-  }
-  plantFoot(foot);
-}
-
 void Skelly::updateSpeed(Time now, float delta_s) {
   vec3 curr_vel = vel_;
 
@@ -431,14 +328,14 @@ void Skelly::updateSpeed(Time now, float delta_s) {
 
   auto pos = getPos();
   pos += curr_vel * delta_s;
-  root_.setPos(pos);
+  rig_.root_.setPos(pos);
 
   if (glm::length(curr_vel) > 0.1) {
     float target_angle = glm::orientedAngle(
         vec3(0, 0, 1), glm::normalize(curr_vel), vec3(0, 1, 0));
     target_angle = fmodClamp(target_angle, glm::radians(360.f));
 
-    float current = glm::angle(root_.getRot());
+    float current = glm::angle(rig_.root_.getRot());
     float delta = angleDelta(current, target_angle);
 
     float angle = target_angle;
@@ -449,7 +346,7 @@ void Skelly::updateSpeed(Time now, float delta_s) {
     }
     angle = fmodClamp(angle, glm::radians(360.f));
 
-    root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+    rig_.root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
   }
 }
 
@@ -535,7 +432,7 @@ void Skelly::updateMovements() {
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
 
   float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
-  vec3 shoulder = lbicep_->getPos();
+  vec3 shoulder = rig_.lbicep_->getPos();
   float hand_width = options_.arm_span_pct * sizes_.wrist_d;
   vec3 back =
       vec3(-hand_width, -hand_dist, -0.2 * hand_dist + options_.hands_forward) +
@@ -602,26 +499,26 @@ void Skelly::updateCog(Time now, float delta_s) {
     lean = lean_so_->update(delta_s, lean_target);
   }
 
-  vec3 offset = root_.toLocal() * vec4(lean, 0);
+  vec3 offset = rig_.root_.toLocal() * vec4(lean, 0);
   pos += offset;
 
-  cog_->setPos(pos);
+  rig_.cog_->setPos(pos);
 }
 
 void Skelly::updatePelvis(Time now) {
-  ik_.pelvis.sway = sampleMovement(walk_.sway, now);
-  ik_.pelvis.spin = sampleMovement(walk_.spin, now);
+  rig_.pelvis_c_.sway = sampleMovement(walk_.sway, now);
+  rig_.pelvis_c_.spin = sampleMovement(walk_.spin, now);
 
-  glm::quat rot = glm::angleAxis(ik_.pelvis.spin, vec3(0, 1, 0)) *
-                  glm::angleAxis(ik_.pelvis.sway, vec3(0, 0, -1));
-  pelvis_->setRot(rot);
+  glm::quat rot = glm::angleAxis(rig_.pelvis_c_.spin, vec3(0, 1, 0)) *
+                  glm::angleAxis(rig_.pelvis_c_.sway, vec3(0, 0, -1));
+  rig_.pelvis_->setRot(rot);
 }
 
 void Skelly::updateFeet(Time now) {
-  updateHeel(now, ik_.lfoot, walk_.lheel);
-  updateHeel(now, ik_.rfoot, walk_.rheel);
-  updateFoot(ik_.rfoot, now, walk_.rstep);
-  updateFoot(ik_.lfoot, now, walk_.lstep);
+  updateHeel(now, rig_.lfoot_c_, walk_.lheel);
+  updateHeel(now, rig_.rfoot_c_, walk_.rheel);
+  updateFoot(rig_.rfoot_c_, now, walk_.rstep);
+  updateFoot(rig_.lfoot_c_, now, walk_.lstep);
 }
 
 void Skelly::updateHeel(Time now, Foot& foot, Movement<float>& move) {
@@ -642,7 +539,7 @@ void Skelly::updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
   {
     // This code isn't used anymore, but probably should be used to determine
     // when walking starts, or if we should move feet back when stopped.
-    bool supported = !ik_.lfoot.in_swing && !ik_.rfoot.in_swing;
+    bool supported = !rig_.lfoot_c_.in_swing && !rig_.rfoot_c_.in_swing;
     vec3 pos = foot.obj->getPos();
     float target_dist = glm::length(pos - foot.offset);
     bool should_step = supported && target_dist > options_.foot_dist;
@@ -653,7 +550,7 @@ void Skelly::updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
   }
 
   if (foot.planted) {
-    mat4 to_local = root_.toLocal();
+    mat4 to_local = rig_.root_.toLocal();
     foot.obj->setPos(to_local * vec4(foot.world_target, 1));
   }
 
@@ -661,15 +558,15 @@ void Skelly::updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
     if (now > move.anim->to_time_) {
       vec3 plant_pos = move.anim->sample(move.anim->to_time_);
       if (options_.animate_in_world) {
-        plant_pos = root_.toLocal() * vec4(plant_pos, 1);
+        plant_pos = rig_.root_.toLocal() * vec4(plant_pos, 1);
       }
       foot.obj->setPos(plant_pos);
       move.anim.reset();
-      plantFoot(foot);
+      rig_.plantFoot(foot, options_);
     } else {
       vec3 swing_pos = sampleMovement(move, now);
       if (options_.animate_in_world) {
-        swing_pos = root_.toLocal() * vec4(swing_pos, 1);
+        swing_pos = rig_.root_.toLocal() * vec4(swing_pos, 1);
       }
       foot.obj->setPos(swing_pos);
     }
@@ -681,7 +578,7 @@ void Skelly::swingFoot(Foot& foot, Time now, Movement<vec3>& move) {
   foot.planted = false;
 
   vec3 start = foot.obj->getPos();
-  mat4 to_world = root_.toWorld();
+  mat4 to_world = rig_.root_.toWorld();
   if (options_.animate_in_world) {
     start = to_world * vec4(start, 1);
   }
@@ -726,19 +623,9 @@ void Skelly::swingFoot(Foot& foot, Time now, Movement<vec3>& move) {
   startMovement(move, now);
 }
 
-void Skelly::plantFoot(Foot& foot) {
-  foot.planted = true;
-  foot.in_swing = false;
-  if (!options_.animate_in_world) {
-    foot.world_target = root_.toWorld() * vec4(foot.obj->getPos(), 1);
-  }
-  mat4 to_world = foot.obj->toWorld();
-  foot.world_rot = glm::quat_cast(to_world);
-}
-
 void Skelly::updateLegs() {
-  updateLeg(*lfemur_, *lshin_, *lfoot_, ik_.lfoot);
-  updateLeg(*rfemur_, *rshin_, *rfoot_, ik_.rfoot);
+  updateLeg(*rig_.lfemur_, *rig_.lshin_, *rig_.lfoot_, rig_.lfoot_c_);
+  updateLeg(*rig_.rfemur_, *rig_.rshin_, *rig_.rfoot_, rig_.rfoot_c_);
 }
 
 // TODO: Use updateTwoBoneIk() for most of this.
@@ -747,8 +634,8 @@ void Skelly::updateLeg(
   float toe_angle = 0;
   // If hip is too far from ankle, compute the angle to lift the heel just
   // enough to compensate.
-  vec3 hip = femur.toAncestor(&root_) * vec4(0, 0, 0, 1);
-  vec3 ankle_pos = ik_foot.obj->toAncestor(&root_) * vec4(sizes_.ankle, 1);
+  vec3 hip = femur.toAncestor(&rig_.root_) * vec4(0, 0, 0, 1);
+  vec3 ankle_pos = ik_foot.obj->toAncestor(&rig_.root_) * vec4(sizes_.ankle, 1);
   float hip_to_ankle = glm::length(hip - ankle_pos);
   float max_leg = 0.97 * (sizes_.femur + sizes_.shin);
   if (hip_to_ankle > max_leg) {
@@ -773,7 +660,7 @@ void Skelly::updateLeg(
   // this will become relevant again if I add an animation to land on the heel.
   if (toe_angle < 0) {
     // Lift up foot if it would go through the ground.
-    vec3 target = root_.toLocal() * vec4(ik_foot.world_target, 1);
+    vec3 target = rig_.root_.toLocal() * vec4(ik_foot.world_target, 1);
     float above = ik_foot.obj->getPos().y - target.y;
     float lift =
         glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(toe_angle)).y;
@@ -782,14 +669,14 @@ void Skelly::updateLeg(
   }
 
   // Ankle in pelvis space.
-  vec3 pelvis_ankle =
-      pelvis_->toLocal(&root_) * ik_foot.obj->getTransform() * vec4(ankle, 1);
+  vec3 pelvis_ankle = rig_.pelvis_->toLocal(&rig_.root_) *
+                      ik_foot.obj->getTransform() * vec4(ankle, 1);
 
   updateTwoBoneIk(
       femur, sizes_.femur, shin, sizes_.shin, femur.getPos(), pelvis_ankle,
       vec3(0, -1, 0), vec3(1, 0, 0));
 
-  mat4 foot_to_root = shin.toLocal(&root_);
+  mat4 foot_to_root = shin.toLocal(&rig_.root_);
   glm::quat foot_rot = ankle_rot * glm::quat_cast(foot_to_root);
   foot.setRot(foot_rot);
 }
@@ -810,21 +697,21 @@ void Skelly::updateTwoBoneIk(
 
 void Skelly::updateShoulders(Time now) {
   float angle = sampleMovement(walk_.shoulders, now);
-  torso_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+  rig_.torso_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void Skelly::updateHands(Time now) {
-  ik_.lhand.obj->setPos(sampleMovement(walk_.larm, now));
-  ik_.rhand.obj->setPos(sampleMovement(walk_.rarm, now));
+  rig_.lhand_c_.obj->setPos(sampleMovement(walk_.larm, now));
+  rig_.rhand_c_.obj->setPos(sampleMovement(walk_.rarm, now));
 }
 
 void Skelly::updateArms() {
   updateTwoBoneIk(
-      *lbicep_, sizes_.bicep, *lforearm_, sizes_.forearm, lbicep_->getPos(),
-      ik_.lhand.obj->getPos(), vec3(-1, 0, 0), vec3(0, 1, 0));
+      *rig_.lbicep_, sizes_.bicep, *rig_.lforearm_, sizes_.forearm, rig_.lbicep_->getPos(),
+      rig_.lhand_c_.obj->getPos(), vec3(-1, 0, 0), vec3(0, 1, 0));
   updateTwoBoneIk(
-      *rbicep_, sizes_.bicep, *rforearm_, sizes_.forearm, rbicep_->getPos(),
-      ik_.rhand.obj->getPos(), vec3(1, 0, 0), vec3(0, -1, 0));
+      *rig_.rbicep_, sizes_.bicep, *rig_.rforearm_, sizes_.forearm, rig_.rbicep_->getPos(),
+      rig_.rhand_c_.obj->getPos(), vec3(1, 0, 0), vec3(0, -1, 0));
 }
 
 // Returns pair of angles for bone1 and bone2.

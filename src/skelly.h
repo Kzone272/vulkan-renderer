@@ -5,6 +5,7 @@
 #include "object.h"
 #include "second-order.h"
 #include "time-include.h"
+#include "biped-rig.h"
 
 struct MoveOptions {
   float max_speed = 200;
@@ -74,49 +75,6 @@ class Skelly {
     int move_preset = 0;
     int size_preset = 0;
   } ui_;
-
-  struct CenterOfGravity {
-    vec3 pos;
-  };
-
-  struct Foot {
-    Object* obj;
-    bool planted = false;
-    bool in_swing = false;
-    vec3 world_target;
-    glm::quat world_rot;
-    vec3 offset;
-    float angle = 0;  // Angle relative to floor
-    vec3 knee = {0, 0, 1};
-  };
-
-  struct Pelvis {
-    float tilt;  // x
-    float sway;  // z
-    float spin;  // y
-  };
-
-  struct Torso {
-    vec3 pos;
-    float tilt;  // x
-    float sway;  // z
-    float spin;  // y
-  };
-
-  struct Hand {
-    Object* obj;
-    vec3 elbow = {0, 0, -1};  // dir
-  };
-
-  struct IkControls {
-    CenterOfGravity cog;
-    Pelvis pelvis;
-    Foot lfoot;
-    Foot rfoot;
-    Torso torso;
-    Hand lhand;
-    Hand rhand;
-  } ik_ = {};
 
   template <class T>
   struct Movement {
@@ -197,23 +155,7 @@ class Skelly {
   MoveOptions options_;
   SkellySizes sizes_;
 
-  Object root_;
-  Object* cog_;
-  Object* pelvis_;
-  Object* torso_;
-  Object* lbicep_;
-  Object* lforearm_;
-  Object* lhand_;
-  Object* rbicep_;
-  Object* rforearm_;
-  Object* rhand_;
-  Object* head_;
-  Object* lfemur_;
-  Object* lshin_;
-  Object* lfoot_;
-  Object* rfemur_;
-  Object* rshin_;
-  Object* rfoot_;
+  BipedRig rig_;
 
   float cycle_t_ = 0;
   float cycle_dur_ = 1000;
