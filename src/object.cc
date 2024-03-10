@@ -12,14 +12,14 @@ const std::map<ModelId, ModelInfo> kModelRegistry = {
      {
          "assets/models/viking_room.obj",
          "assets/textures/viking_room.png",
-         glm::rotate(mat4(1), glm::radians(-90.f), vec3(1, 0, 0)) *
-             glm::scale(mat4(1), vec3(-300, 300, 300)),
+         glm::rotate(glm::radians(-90.f), vec3(1, 0, 0)) *
+             glm::scale(vec3(-300, 300, 300)),
      }},
     {ModelId::Pony,
      {
          "assets/models/pony/pony.obj",
          "assets/models/pony/pony-body-diffuse.jpg",
-         glm::scale(mat4(1), vec3(0.5)),
+         glm::scale(vec3(0.5)),
      }},
 };
 
@@ -153,8 +153,7 @@ void Object::animate(Time now) {
   anim_rot_ = {1, {0, 0, 0}};
   for (auto* anim : rot_anims_) {
     // TOOD: Properly sort out the rotation axis.
-    anim_rot_ =
-        glm::angleAxis(anim->sample(now), vec3(-1, 0, 0)) * anim_rot_;
+    anim_rot_ = glm::angleAxis(anim->sample(now), vec3(-1, 0, 0)) * anim_rot_;
     dirty_ = true;
   }
 }

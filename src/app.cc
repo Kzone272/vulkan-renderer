@@ -471,9 +471,9 @@ void App::updateTrackballCamera() {
 
   updateDist(trackball_.dist);
 
-  frame_state_.view = glm::translate(mat4(1), vec3(0, 0, trackball_.dist)) *
+  frame_state_.view = glm::translate(vec3(0, 0, trackball_.dist)) *
                       glm::toMat4(trackball_.rot) *
-                      glm::translate(mat4(1), trackball_.focus);
+                      glm::translate(trackball_.focus);
 }
 
 vec3 App::getTrackballVec(ivec2 mouse) {
@@ -507,7 +507,7 @@ void App::updateFpsCamera() {
         vec3(glm::inverse(rot) * move_scale * vec4(dir.x, 0, dir.y, 0));
   }
 
-  frame_state_.view = rot * glm::translate(mat4(1), -fps_cam_.pos);
+  frame_state_.view = rot * glm::translate(-fps_cam_.pos);
 }
 
 void App::updateYawPitch(float& yaw, float& pitch) {
@@ -537,8 +537,8 @@ void App::updateFollowCamera() {
   mat4 rot = glm::eulerAngleXY(
       glm::radians(follow_cam_.pitch), glm::radians(follow_cam_.yaw));
 
-  frame_state_.view = glm::translate(mat4(1), vec3(0, 0, follow_cam_.dist)) *
-                      rot * glm::translate(mat4(1), -follow_cam_.focus);
+  frame_state_.view = glm::translate(vec3(0, 0, follow_cam_.dist)) * rot *
+                      glm::translate(-follow_cam_.focus);
 }
 
 void App::handleInput() {
