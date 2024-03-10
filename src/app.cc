@@ -107,6 +107,9 @@ void App::setupWorld() {
   auto* room = world_.addChild(Object(ModelId::Viking));
   room->setPos(vec3(300, 1, 300));
 
+  auto* ball = world_.addChild(Object(ModelId::Sphere, glm::scale(vec3(100))));
+  ball->setPos(vec3(300, 100, -300));
+
   loadMaterials();
   loadModels();
   loadPrimitives();
@@ -153,7 +156,8 @@ void App::loadMaterials() {
 
   default_mats_.insert({ModelId::Cube, cube_mat});
   default_mats_.insert({ModelId::Bone, bone_mat});
-  default_mats_.insert({ModelId::Control, control_mat});
+  default_mats_.insert({ModelId::BoxControl, control_mat});
+  default_mats_.insert({ModelId::BallControl, control_mat});
   default_mats_.insert({ModelId::Floor, floor_mats_[ui_.floor]});
   default_mats_.insert({ModelId::Tetra, cube_mat});
 }
@@ -185,15 +189,17 @@ void App::loadPrimitives() {
   auto cube = makeCube();
   useMesh(ModelId::Cube, cube);
   useMesh(ModelId::Bone, cube);
-  useMesh(ModelId::Control, cube);
+  useMesh(ModelId::BoxControl, cube);
+  useMesh(ModelId::BallControl, makeSphere(8));
   useMesh(ModelId::Floor, makePlane(10000, 10000));
   useMesh(ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
+  useMesh(ModelId::Sphere, makeSphere(20));
 }
 
 void App::setGooch(bool on) {
   std::vector<ModelId> gooch_models = {
-      ModelId::Cube,  ModelId::Bone, ModelId::Control,
-      ModelId::Tetra, ModelId::Pony, ModelId::Viking,
+      ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
+      ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
   };
   for (auto& model : gooch_models) {
     renderer_->setModelMaterial(model, on ? gooch_mat_ : default_mats_[model]);

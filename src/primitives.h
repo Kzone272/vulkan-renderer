@@ -70,7 +70,7 @@ constexpr Mesh makeCube() {
   return std::move(m);
 }
 
-Mesh makePlane(float x_size, float z_size) {
+inline Mesh makePlane(float x_size, float z_size) {
   Mesh m;
   // repeat texture every 1m
   float x_reps = x_size / 100;
@@ -88,9 +88,11 @@ Mesh makePlane(float x_size, float z_size) {
   return std::move(m);
 }
 
+namespace {
 void iter(Mesh& mesh, int steps, bool in);
+}  // namespace
 
-Mesh tetrahedron(int steps, bool in) {
+inline Mesh tetrahedron(int steps, bool in) {
   vec3 a(0, 0, 2.f / 3.f);
   glm::quat r120 = glm::angleAxis(glm::radians(120.f), vec3(0, 1, 0));
   vec3 b = r120 * a;
@@ -129,6 +131,8 @@ Mesh tetrahedron(int steps, bool in) {
 
   return std::move(tetra);
 };
+
+namespace {
 
 void iter(Mesh& mesh, int steps, bool in) {
   for (int i = 0; i < steps; i++) {
@@ -201,3 +205,53 @@ void iter(Mesh& mesh, int steps, bool in) {
     mesh.vertices = std::move(new_verts);
   }
 }
+
+}  // namespace
+
+inline Mesh makeSphere(int rows) {
+  DASSERT(rows >= 3);
+  const int slices = 2 * rows;
+
+  Mesh sphere;
+  glm::quat rY = glm::angleAxis(glm::radians(360.f / slices), vec3(0, 1, 0));
+  glm::quat rZ = glm::angleAxis(glm::radians(180.f / rows), vec3(0, 0, 1));
+
+  vec3 up(0, 1, 0);
+  sphere.vertices.push_back({.pos{up}, .normal{up}});
+
+  vec3 point = up;
+  for (int i = 1; i < rows; i++) {
+    point = rZ * point;
+    for (int j = 0; j < slices; j++) {
+      sphere.vertices.push_back({.pos{point}, .normal{point}});
+      point = rY * point;
+    }
+  }
+  sphere.vertices.push_back({.pos{-up}, .normal{-up}});
+
+  // Top and bottom caps.
+  const uint32_t last = sphere.vertices.size() - 1;
+  for (uint32_t i = 0; i < slices; i++) {
+    // Top cap
+    uint32_t start = 1;
+    uint32_t next_i = (i + 1) % slices;
+    sphere.indices.insert(sphere.indices.end(), {0, start + next_i, start + i});
+    // Bottom cap
+    start = last - slices;
+    sphere.indices.insert(
+        sphere.indices.end(), {last, start + i, start + next_i});
+  }
+
+  // Middle rows
+  for (int i = 0; i < rows - 2; i++) {
+    for (int j = 0; j < slices; j++) {
+      uint32_t tl = 1 + i * slices + j;
+      uint32_t tr = 1 + i * slices + ((j + 1) % slices);
+      uint32_t bl = tl + slices;
+      uint32_t br = tr + slices;
+      sphere.indices.insert(sphere.indices.end(), {tl, tr, bl, bl, tr, br});
+    }
+  }
+
+  return std::move(sphere);
+};

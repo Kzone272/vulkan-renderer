@@ -6,7 +6,7 @@ namespace {
 
 void initFoot(BipedRig& rig, Foot& foot, vec3 pos, bool is_left) {
   mat4 control_t = glm::scale(vec3(5));
-  foot.obj = rig.root_.addChild(Object(ModelId::Control, control_t));
+  foot.obj = rig.root_.addChild(Object(ModelId::BallControl, control_t));
   foot.start_pos = pos;
   foot.obj->setPos(pos);
   foot.is_left = is_left;
@@ -18,7 +18,7 @@ void initFoot(BipedRig& rig, Foot& foot, vec3 pos, bool is_left) {
 void BipedRig::makeBones(const SkellySizes& sizes) {
   root_.clearChildren();
 
-  cog_ = root_.addChild(Object(ModelId::Control, glm::scale(vec3(5))));
+  cog_ = root_.addChild(Object(ModelId::BallControl, glm::scale(vec3(5))));
   cog_->setPos(vec3(0, sizes.pelvis_y, 0));
 
   mat4 pelvis_t = glm::scale(vec3(sizes.pelvis_w, -sizes.pelvis_h, 15));
@@ -96,17 +96,16 @@ void BipedRig::makeBones(const SkellySizes& sizes) {
   initFoot(*this, lfoot_c_, left_foot_pos, /*=is_left*/ true);
   initFoot(*this, rfoot_c_, flip3 * left_foot_pos, /*=is_left*/ false);
 
-  vec3 wrist_pos =
-      lbicep_->posToAncestor(&root_, vec3(-sizes.wrist_d, 0, 0));
+  vec3 wrist_pos = lbicep_->posToAncestor(&root_, vec3(-sizes.wrist_d, 0, 0));
   mat4 control_t = glm::scale(vec3(5));
-  lhand_c_.obj = root_.addChild(Object(ModelId::Control, control_t));
+  lhand_c_.obj = root_.addChild(Object(ModelId::BallControl, control_t));
   lhand_c_.obj->setPos(wrist_pos);
 
-  rhand_c_.obj = root_.addChild(Object(ModelId::Control, control_t));
+  rhand_c_.obj = root_.addChild(Object(ModelId::BallControl, control_t));
   rhand_c_.obj->setPos(flip3 * wrist_pos);
 
   mat4 root_control_t = glm::scale(vec3(10, 1, 30));
-  root_.addChild(Object(ModelId::Control, root_control_t));
+  root_.addChild(Object(ModelId::BoxControl, root_control_t));
 }
 
 void BipedRig::plantFoot(Foot& foot) {

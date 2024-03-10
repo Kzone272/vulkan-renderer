@@ -56,9 +56,11 @@ enum class ModelId {
   Pony,
   Cube,
   Bone,
-  Control,
+  BallControl,
+  BoxControl,
   Tetra,
   Floor,
+  Sphere,
 };
 
 struct ModelInfo {
