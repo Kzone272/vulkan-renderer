@@ -570,7 +570,7 @@ void App::updateImgui() {
 
   ImGui::Begin("Stats");
   ImGui::Text("%s", ui_.fps.c_str());
-  std::string pos_str = "Pos: " + toStr(skelly_.getPos());
+  std::string pos_str = std::format("Pos: {}", toStr(skelly_.getPos()));
   ImGui::Text(pos_str.c_str());
   ImGui::End();
 
@@ -617,6 +617,8 @@ void App::updateImgui() {
         CameraType::Follow,
     };
     options_.cam_type = cam_types[cam_ind];
+    std::string cam_str = std::format("Follow Cam Dist: {}", follow_cam_.dist);
+    ImGui::Text(cam_str.c_str());
     ImGui::EndTabItem();
   }
   if (ImGui::BeginTabItem("Objects")) {
