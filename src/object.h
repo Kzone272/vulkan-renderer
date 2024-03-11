@@ -17,7 +17,7 @@ class Object {
   Object(
       ModelId model = ModelId::None,
       std::optional<mat4> model_transform = std::nullopt);
-  
+
   // Move only.
   Object(Object&& other) = default;
   Object& operator=(Object&& other) = default;
@@ -26,24 +26,25 @@ class Object {
 
   void setParent(Object* parent);
   void setScale(const vec3& scale);
+  vec3 getScale() const;
   void setRot(glm::quat rot);
-  glm::quat getRot();
+  glm::quat getRot() const;
   void setPos(const vec3& pos);
-  vec3 getPos();
+  vec3 getPos() const;
   void setPosOffset(vec3 offset);
   const mat4& getTransform();
 
   // Transform from this object's space to an ancestor.
-  const mat4 toAncestor(Object* ancestor);
-  const vec3 posToAncestor(Object* ancestor, vec3 pos = vec3(0,0,0));
+  mat4 toAncestor(Object* ancestor);
+  vec3 posToAncestor(Object* ancestor, vec3 pos = vec3(0, 0, 0));
   // Local space to world (root of tree).
-  const mat4 toWorld();
+  mat4 toWorld();
+  vec3 posToWorld(vec3 pos = vec3(0, 0, 0));
   // From world space to local.
-  const mat4 toLocal();
+  mat4 toLocal();
   // From ancestor's space to local.
-  const mat4 toLocal(Object* ancestor);
-  const vec3 posToLocal(Object* ancestor, vec3 pos = vec3(0,0,0));
-
+  mat4 toLocal(Object* ancestor);
+  vec3 posToLocal(Object* ancestor, vec3 pos = vec3(0, 0, 0));
 
   void addPosAnim(Animation<vec3>* a);
   void clearAddAnims();

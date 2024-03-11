@@ -108,7 +108,7 @@ void sizeChimp(SkellySizes& sizes) {
 }  // namespace
 
 Skelly::Skelly() {
-  rig_.root_.setPos(vec3(200, 0, 200));
+  root_.setPos(vec3(200, 0, 200));
   makeBones();
   updateMovements();
   lean_so_ = std::make_unique<SecondOrder<vec3>>(options_.lean_params, vec3{0});
@@ -118,19 +118,21 @@ void Skelly::makeBones() {
   sizes_.pelvis_y = sizes_.leg + sizes_.pelvis_h;
   sizes_.shoulders_y =
       sizes_.height - sizes_.pelvis_y - sizes_.neck - sizes_.head_h;
-  float leg_l = sizes_.leg - sizes_.ankle.y;
-  sizes_.femur = sizes_.femur_pct * leg_l;
-  sizes_.shin = leg_l - sizes_.femur;
+  sizes_.ankle_d = sizes_.leg - sizes_.ankle.y;
+  sizes_.femur = sizes_.femur_pct * sizes_.ankle_d;
+  sizes_.shin = sizes_.ankle_d - sizes_.femur;
   sizes_.wrist_d = sizes_.arm - sizes_.hand_l;
   sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
   sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
 
-  rig_.makeBones(sizes_);
+  root_.clearChildren();
+  skeleton_.makeBones(sizes_, &root_);
+  rig_.makeRig(skeleton_, &root_);
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
   if (input.kb.pressed.contains(' ')) {
-    vec3 start = rig_.root_.getPos();
+    vec3 start = root_.getPos();
 
     float speedz = 300;
     float speedy = 600;
@@ -190,7 +192,7 @@ void Skelly::handleInput(const InputState& input, Time now) {
 void Skelly::update(Time now, float delta_s) {
   updateSpeed(now, delta_s);
   // Root animate used for awkward jump animation I should probably delete.
-  rig_.root_.animate(now);
+  root_.animate(now);
   updateCycle(now, delta_s);
   updateCog(now, delta_s);
   updatePelvis(now);
@@ -198,15 +200,15 @@ void Skelly::update(Time now, float delta_s) {
   updateLegs();
   updateShoulders(now);
   updateHands(now);
-  updateArms();
+  skeleton_.setFromRig(rig_);
 }
 
 vec3 Skelly::getPos() {
-  return rig_.root_.getPos();
+  return root_.getPos();
 }
 
 Object* Skelly::getObj() {
-  return &rig_.root_;
+  return &root_;
 }
 
 float Skelly::getPelvisHeight() {
@@ -328,14 +330,14 @@ void Skelly::updateSpeed(Time now, float delta_s) {
 
   auto pos = getPos();
   pos += curr_vel * delta_s;
-  rig_.root_.setPos(pos);
+  root_.setPos(pos);
 
   if (glm::length(curr_vel) > 0.1) {
     float target_angle = glm::orientedAngle(
         vec3(0, 0, 1), glm::normalize(curr_vel), vec3(0, 1, 0));
     target_angle = fmodClamp(target_angle, glm::radians(360.f));
 
-    float current = glm::angle(rig_.root_.getRot());
+    float current = glm::angle(root_.getRot());
     float delta = angleDelta(current, target_angle);
 
     float angle = target_angle;
@@ -346,7 +348,7 @@ void Skelly::updateSpeed(Time now, float delta_s) {
     }
     angle = fmodClamp(angle, glm::radians(360.f));
 
-    rig_.root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+    root_.setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
   }
 }
 
@@ -414,7 +416,7 @@ void Skelly::updateMovements() {
   walk_.spin.spline = Spline<float>(
       SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
 
-  std::vector<float> values = {0, 10, 50, 5, -15, 5, 0, 0};
+  std::vector<float> values = {0, 8, 45, 5, -15, 5, 0, 0};
   float speed_scale = std::min(target_speed_, 300.f) / 150.f;
   for (float& val : values) {
     val *= options_.heel_lift_pct * speed_scale;
@@ -432,7 +434,7 @@ void Skelly::updateMovements() {
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
 
   float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
-  vec3 shoulder = rig_.lbicep_->getPos();
+  vec3 shoulder = rig_.lsho_->getPos();
   float hand_width = options_.arm_span_pct * sizes_.wrist_d;
   vec3 back =
       vec3(-hand_width, -hand_dist, -0.2 * hand_dist + options_.hands_forward) +
@@ -499,157 +501,177 @@ void Skelly::updateCog(Time now, float delta_s) {
     lean = lean_so_->update(delta_s, lean_target);
   }
 
-  vec3 offset = rig_.root_.toLocal() * vec4(lean, 0);
+  vec3 offset = root_.toLocal() * vec4(lean, 0);
   pos += offset;
-
   rig_.cog_->setPos(pos);
+
+  // Rotate COG based on lean amount.
+  glm::quat rot = glm::rotation(
+      glm::normalize(vec3(0, 1, 0)),
+      glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
+  rig_.cog_->setRot(rot);
 }
 
 void Skelly::updatePelvis(Time now) {
-  rig_.pelvis_c_.sway = sampleMovement(walk_.sway, now);
-  rig_.pelvis_c_.spin = sampleMovement(walk_.spin, now);
+  float sway = sampleMovement(walk_.sway, now);
+  float spin = sampleMovement(walk_.spin, now);
 
-  glm::quat rot = glm::angleAxis(rig_.pelvis_c_.spin, vec3(0, 1, 0)) *
-                  glm::angleAxis(rig_.pelvis_c_.sway, vec3(0, 0, -1));
+  glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
+                  glm::angleAxis(sway, vec3(0, 0, -1));
   rig_.pelvis_->setRot(rot);
 }
 
 void Skelly::updateFeet(Time now) {
-  updateHeel(now, rig_.lfoot_c_, walk_.lheel);
-  updateHeel(now, rig_.rfoot_c_, walk_.rheel);
-  updateFoot(rig_.rfoot_c_, now, walk_.rstep);
-  updateFoot(rig_.lfoot_c_, now, walk_.lstep);
+  updateHeel(now, rig_.lfoot_m_, walk_.lheel);
+  updateHeel(now, rig_.rfoot_m_, walk_.rheel);
+  updateFoot(rig_.rfoot_m_, *rig_.rfoot_, now, walk_.rstep);
+  updateFoot(rig_.lfoot_m_, *rig_.lfoot_, now, walk_.lstep);
 }
 
-void Skelly::updateHeel(Time now, Foot& foot, Movement<float>& move) {
+void Skelly::updateHeel(Time now, FootMeta& foot_m, Movement<float>& move) {
   if (move.should_start) {
     startMovement(move, now);
   }
 
-  foot.angle = sampleMovement(move, now);
+  foot_m.angle = glm::radians(sampleMovement(move, now));
   if (move.anim && now > move.anim->to_time_) {
     move.anim.reset();
-    foot.angle = 0;
+    foot_m.angle = 0;
   }
 
-  foot.angle += sampleMovement(walk_.heels_add, now);
+  // foot_m.angle += sampleMovement(walk_.heels_add, now);
 }
 
-void Skelly::updateFoot(Foot& foot, Time now, Movement<vec3>& move) {
+void Skelly::updateFoot(
+    FootMeta& foot_m, Object& foot, Time now, Movement<vec3>& move) {
   {
     // This code isn't used anymore, but probably should be used to determine
     // when walking starts, or if we should move feet back when stopped.
-    bool supported = !rig_.lfoot_c_.in_swing && !rig_.rfoot_c_.in_swing;
-    vec3 pos = foot.obj->getPos();
-    float target_dist = glm::length(pos - foot.start_pos);
-    bool should_step = supported && target_dist > options_.foot_dist;
+    // bool supported = !rig_.lfoot_c_.in_swing && !rig_.rfoot_c_.in_swing;
+    // vec3 pos = foot_m.obj->getPos();
+    // float target_dist = glm::length(pos - foot_m.start_pos);
+    // bool should_step = supported && target_dist > options_.foot_dist;
   }
 
   if (move.should_start) {
-    swingFoot(foot, now, move);
+    swingFoot(foot_m, foot, now, move);
   }
 
-  if (foot.planted) {
-    mat4 to_local = rig_.root_.toLocal();
-    foot.obj->setPos(to_local * vec4(foot.world_target, 1));
+  if (foot_m.planted) {
+    mat4 to_local = root_.toLocal();
+    foot.setPos(vec3(to_local * vec4(foot_m.world_target, 1)));
   }
 
   if (move.anim) {
     if (now > move.anim->to_time_) {
       vec3 plant_pos = move.anim->sample(move.anim->to_time_);
-      foot.obj->setPos(plant_pos);
+      foot.setPos(plant_pos);
       move.anim.reset();
-      rig_.plantFoot(foot);
+      rig_.plantFoot(foot_m);
     } else {
       vec3 swing_pos = sampleMovement(move, now);
-      foot.obj->setPos(swing_pos);
+      foot.setPos(swing_pos);
     }
   }
 }
 
-void Skelly::swingFoot(Foot& foot, Time now, Movement<vec3>& move) {
-  foot.in_swing = true;
-  foot.planted = false;
+void Skelly::swingFoot(
+    FootMeta& foot_m, Object& foot, Time now, Movement<vec3>& move) {
+  foot_m.in_swing = true;
+  foot_m.planted = false;
 
-  vec3 start = foot.obj->getPos();
-  mat4 to_world = rig_.root_.toWorld();
+  vec3 start = foot.getPos();
+  mat4 to_world = root_.toWorld();
 
   float forward = std::min(sizes_.leg * 0.3f, target_speed_ / 3);
-  vec3 step_offset = foot.start_pos;
+  vec3 step_offset = foot_m.start_pos;
   step_offset.x =
-      (foot.is_left ? -1 : 1) * options_.stance_w_pct * sizes_.pelvis_w / 2;
+      (foot_m.is_left ? -1 : 1) * options_.stance_w_pct * sizes_.pelvis_w / 2;
   vec3 end = vec3(0, 0, forward) + step_offset;
-  foot.world_target = to_world * vec4(end, 1);
+  foot_m.world_target = to_world * vec4(end, 1);
 
   vec3 mid_pos = (start + end) / 2.f + vec3(0, options_.step_height, 0);
 
   vec3 path = end - start;
   vec3 swing_vel = 1.25f * path / (move.dur * cycle_dur_ / 1000);
+  vec3 heel_lift = vec3(0, 4 * options_.step_height, 0) + swing_vel;
   vec3 no_vel = vec3(0, 0, -target_speed_);
-  vec3 toe_drop = vec3(0, -options_.step_height / 2, -target_speed_);
 
   move.spline = Spline<vec3>(
-      SplineType::Hermite, {start, no_vel, mid_pos, swing_vel, end, toe_drop});
+      SplineType::Hermite, {start, heel_lift, mid_pos, swing_vel, end, no_vel});
 
   startMovement(move, now);
 }
 
 void Skelly::updateLegs() {
-  updateLeg(*rig_.lfemur_, *rig_.lshin_, *rig_.lfoot_, rig_.lfoot_c_);
-  updateLeg(*rig_.rfemur_, *rig_.rshin_, *rig_.rfoot_, rig_.rfoot_c_);
+  updateLeg(
+      *rig_.lhip_, *skeleton_.lshin_, *rig_.lfoot_, *rig_.ltoe_, rig_.lfoot_m_);
+  updateLeg(
+      *rig_.rhip_, *skeleton_.rshin_, *rig_.rfoot_, *rig_.rtoe_, rig_.rfoot_m_);
 }
 
 // TODO: Use updateTwoBoneIk() for most of this.
 void Skelly::updateLeg(
-    Object& femur, Object& shin, Object& foot, Foot& ik_foot) {
+    Object& hip, Object& shin, Object& foot, Object& toe, FootMeta& foot_m) {
   float toe_angle = 0;
   // If hip is too far from ankle, compute the angle to lift the heel just
   // enough to compensate.
-  vec3 hip = femur.toAncestor(&rig_.root_) * vec4(0, 0, 0, 1);
-  vec3 ankle_pos = ik_foot.obj->toAncestor(&rig_.root_) * vec4(sizes_.ankle, 1);
-  float hip_to_ankle = glm::length(hip - ankle_pos);
-  float max_leg = 0.97 * (sizes_.femur + sizes_.shin);
-  if (hip_to_ankle > max_leg) {
-    float hip_to_toe = glm::length(ik_foot.obj->getPos() - hip);
-    float toe_to_ankle = glm::length(sizes_.ankle);
-    float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
-    if (hip_to_toe > max_leg + toe_to_ankle) {
-      // Target for toe is too far away. Point toes at target.
-      toe_angle = flat_angle;
-    } else {
-      float lift_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
-      toe_angle = flat_angle - lift_angle;
-    }
-  }
+  vec3 hip_pos = hip.posToAncestor(&root_);
+  // vec3 ankle_pos = toe.toAncestor(&root_) * vec4(sizes_.ankle, 1);
+  vec3 ankle_pos = foot.getPos();
+  // foot.setRot(glm::identity<glm::quat>());
+  vec3 toe_pos = toe.posToAncestor(&root_);
+  // float hip_to_ankle = glm::length(hip_pos - ankle_pos);
+  // float max_leg = 0.97 * (sizes_.ankle_d);
+  // if (hip_to_ankle > max_leg) {
+  //   float hip_to_toe = glm::length(toe_pos - hip_pos);
+  //   float toe_to_ankle = glm::length(sizes_.ankle);
+  //   float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
+  //   if (hip_to_toe > max_leg + toe_to_ankle) {
+  //     // Target for toe is too far away. Point toes at target.
+  //     toe_angle = flat_angle;
+  //   } else {
+  //     float lift_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
+  //     toe_angle = flat_angle - lift_angle;
+  //   }
+  // }
+  float toe_target = std::min(toe_pos.y, 5.f);
+  // foot_m.angle = toe_angle;
 
-  // float angle = glm::radians(ik_foot.angle); // Ignore animated heel angle.
   glm::quat ankle_rot = glm::angleAxis(toe_angle, vec3(1, 0, 0));
-  vec3 ankle = sizes_.ankle;
-  ankle = ankle_rot * ankle;
+  vec3 ankle_in_toe = toe.posToLocal(&foot);
+  vec3 raise_ankle = ankle_rot * ankle_in_toe;
+  // foot.setPos(toe.posToAncestor(&root_, raise_ankle));
+
+  // if (foot_m.is_left) {
+  //   std::println(
+  //       "ang:{} ankleintoe:{}, raisepos:{}", glm::degrees(toe_angle),
+  //       toStr(ankle_in_toe), toStr(raise_ankle));
+  // }
 
   // TODO: this currently isn't possible with heel angle determined by IK. But
   // this will become relevant again if I add an animation to land on the heel.
-  if (toe_angle < 0) {
-    // Lift up foot if it would go through the ground.
-    vec3 target = rig_.root_.toLocal() * vec4(ik_foot.world_target, 1);
-    float above = ik_foot.obj->getPos().y - target.y;
-    float lift =
-        glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(toe_angle)).y;
-    ankle.y += std::max(lift - above, 0.f);
-    // TODO: Move foot back so heel doesn't slide forward
-  }
+  // if (toe_angle < 0) {
+  //   // Lift up foot if it would go through the ground.
+  //   vec3 target = root_.toLocal() * vec4(foot_m.world_target, 1);
+  //   float above = toe_pos.y - target.y;
+  //   float lift =
+  //       glm::rotate(vec2(sizes_.foot_l, 0), -glm::radians(toe_angle)).y;
+  //   ankle.y += std::max(lift - above, 0.f);
+  //   // TODO: Move foot back so heel doesn't slide forward
+  // }
 
-  // Ankle in pelvis space.
-  vec3 pelvis_ankle = rig_.pelvis_->toLocal(&rig_.root_) *
-                      ik_foot.obj->getTransform() * vec4(ankle, 1);
+  // vec3 new_toe_pos = toe.posToAncestor(&root_);
+  // if (new_toe_pos.y < 0) {
+  //   float lift = -new_toe_pos.y;
+  //   vec3 ankle_in_toe
+  //   vec3 new_pos = ankle_rot * foot.getPos();
+  //   foot.setPos(new_pos);
+  // }
 
-  updateTwoBoneIk(
-      femur, sizes_.femur, shin, sizes_.shin, femur.getPos(), pelvis_ankle,
-      vec3(0, -1, 0), vec3(1, 0, 0));
-
-  mat4 foot_to_root = shin.toLocal(&rig_.root_);
+  mat4 foot_to_root = shin.toLocal(&root_);
   glm::quat foot_rot = ankle_rot * glm::quat_cast(foot_to_root);
-  foot.setRot(foot_rot);
+  foot.setRot(glm::angleAxis(foot_m.angle, vec3(1, 0, 0)));
 }
 
 // b1_pos, target, main_axis, and rot_axis all need to be in b1's parent space.
@@ -669,34 +691,19 @@ void Skelly::updateTwoBoneIk(
 
 void Skelly::updateShoulders(Time now) {
   float angle = sampleMovement(walk_.shoulders, now);
-  rig_.torso_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+  rig_.neck_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void Skelly::updateHands(Time now) {
   // This animation is in torso space, but the hands are in root space.
   if (walk_.larm.anim) {
     vec3 root_hand = sampleMovement(walk_.larm, now);
-    rig_.lhand_c_.obj->setPos(
-        rig_.torso_->posToAncestor(&rig_.root_, root_hand));
+    rig_.lhand_->setPos(rig_.neck_->posToAncestor(&root_, root_hand));
   }
   if (walk_.rarm.anim) {
     vec3 root_hand = sampleMovement(walk_.rarm, now);
-    rig_.rhand_c_.obj->setPos(
-        rig_.torso_->posToAncestor(&rig_.root_, root_hand));
+    rig_.rhand_->setPos(rig_.neck_->posToAncestor(&root_, root_hand));
   }
-}
-
-void Skelly::updateArms() {
-  updateTwoBoneIk(
-      *rig_.lbicep_, sizes_.bicep, *rig_.lforearm_, sizes_.forearm,
-      rig_.lbicep_->getPos(),
-      rig_.torso_->posToLocal(&rig_.root_, rig_.lhand_c_.obj->getPos()),
-      vec3(-1, 0, 0), vec3(0, 1, 0));
-  updateTwoBoneIk(
-      *rig_.rbicep_, sizes_.bicep, *rig_.rforearm_, sizes_.forearm,
-      rig_.rbicep_->getPos(),
-      rig_.torso_->posToLocal(&rig_.root_, rig_.rhand_c_.obj->getPos()),
-      vec3(1, 0, 0), vec3(0, -1, 0));
 }
 
 // Returns pair of angles for bone1 and bone2.
@@ -714,6 +721,8 @@ std::pair<float, float> Skelly::solveIk(
 void Skelly::cycleUi(Cycle& cycle) {
   movementUi("lstep", cycle.lstep);
   movementUi("rstep", cycle.rstep);
+  movementUi("lheel", cycle.lheel);
+  movementUi("rheel", cycle.rheel);
 }
 
 void Skelly::movementUi(const std::string& label, auto& move) {

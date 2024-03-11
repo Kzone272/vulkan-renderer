@@ -1,11 +1,9 @@
 #pragma once
 
-#include "object.h"
 #include "glm-include.h"
+#include "object.h"
 
-struct CenterOfGravity {
-  vec3 pos;
-};
+struct SkellySizes;
 
 struct Foot {
   Object* obj;
@@ -19,36 +17,23 @@ struct Foot {
   vec3 knee = {0, 0, 1};
 };
 
-struct Pelvis {
-  float tilt;  // x
-  float sway;  // z
-  float spin;  // y
-};
-
-struct Torso {
-  vec3 pos;
-  float tilt;  // x
-  float sway;  // z
-  float spin;  // y
-};
-
 struct Hand {
   Object* obj;
   vec3 elbow = {0, 0, -1};  // dir
 };
 
-struct SkellySizes;
+struct BipedRig;
 
-struct BipedRig {
-  BipedRig() = default;
+struct BipedSkeleton {
+  BipedSkeleton() = default;
   // Not copyable
-  BipedRig(const BipedRig& other) = delete;
-  BipedRig& operator=(const BipedRig& other) = delete;
+  BipedSkeleton(const BipedSkeleton& other) = delete;
+  BipedSkeleton& operator=(const BipedSkeleton& other) = delete;
 
-  void makeBones(const SkellySizes& sizes);
-  void plantFoot(Foot& foot);
+  void makeBones(const SkellySizes& sizes, Object* root);
+  void setFromRig(const BipedRig& rig);
 
-  Object root_;
+  Object* root_;
   Object* cog_;
   Object* pelvis_;
   Object* torso_;
@@ -66,12 +51,63 @@ struct BipedRig {
   Object* rshin_;
   Object* rfoot_;
 
-  // Controls "_c"
-  CenterOfGravity cog_c_;
-  Pelvis pelvis_c_;
-  Foot lfoot_c_;
-  Foot rfoot_c_;
-  Torso torso_c_;
-  Hand lhand_c_;
-  Hand rhand_c_;
+  float femur_l_;
+  float shin_l_;
+  float bicep_l_;
+  float forearm_l_;
+  vec3 toe_pos_;
+};
+
+class IkChain {
+  // IkChain() = default;
+  // IkChain(Object* root) = default;
+  Object* root;
+  Object* target;
+  // TODO: Support chain of bones.
+  Object* b1;
+  Object* b2;
+  vec3 dir;
+};
+
+struct FootMeta {
+  Object* foot;
+  Object* toe;
+  bool planted = false;
+  bool in_swing = false;
+  bool is_left = false;
+  vec3 world_target;
+  vec3 start_pos;
+  float angle = 0;  // Angle relative to floor
+};
+
+struct BipedRig {
+  BipedRig() = default;
+  void makeRig(const BipedSkeleton& skeleton, Object* root);
+  void plantFoot(FootMeta& foot_m);
+
+  Object* root_;
+  Object* cog_;
+  Object* neck_;
+  Object* head_;
+  Object* lsho_;  // (sho)ulder
+  Object* rsho_;
+  Object* lhand_;
+  Object* rhand_;
+  Object* pelvis_;
+  Object* lhip_;
+  Object* rhip_;
+  Object* lfoot_;
+  Object* rfoot_;
+  Object* ltoe_;
+  Object* rtoe_;
+
+  IkChain larm_;
+  IkChain rarm_;
+  IkChain lleg_;
+  IkChain rleg_;
+  IkChain spine_;
+  IkChain cerv_;  // Cervical spine (neck to head)
+
+  FootMeta lfoot_m_{.is_left = true};
+  FootMeta rfoot_m_;
 };

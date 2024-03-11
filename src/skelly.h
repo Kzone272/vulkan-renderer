@@ -1,11 +1,11 @@
 #pragma once
 
+#include "biped-rig.h"
 #include "glm-include.h"
 #include "input.h"
 #include "object.h"
 #include "second-order.h"
 #include "time-include.h"
-#include "biped-rig.h"
 
 struct MoveOptions {
   float max_speed = 200;
@@ -14,8 +14,8 @@ struct MoveOptions {
   float crouch_pct = 0.95;
   float stance_w_pct = 0.5;
   float foot_dist = 5;
-  float step_height = 5;
-  float lean = 20;
+  float step_height = 10;
+  float lean = 10;
   float bounce = 2;
   float hip_sway = 6;
   float hip_spin = 8;
@@ -39,7 +39,8 @@ struct SkellySizes {
   float arm = 70;
   float bicep_pct = 0.5;
   // Constants
-  vec3 ankle = vec3(0, 10, -18);  // from foot to ankle
+  vec3 ankle = vec3(0, 10, -18);  // from toe to ankle
+  vec3 toe = -ankle;              // from ankle to toe
   float pelvis_h = 15;            // height above hip
   float head_h = 25;              // length between shoulders and head
   float neck = 10;                // length between shoulders and head
@@ -48,6 +49,7 @@ struct SkellySizes {
   // Driven by params above.
   float pelvis_y;
   float shoulders_y;
+  float ankle_d;  // Distance from hip to ankle
   float femur;
   float shin;
   float wrist_d;  // Distance from shoulder to wrist
@@ -131,18 +133,19 @@ class Skelly {
   void updateCog(Time now, float delta_s);
   void updatePelvis(Time now);
   void updateFeet(Time now);
-  void updateHeel(Time now, Foot& foot, Movement<float>& move);
-  void updateFoot(Foot& foot, Time now, Movement<vec3>& move);
-  void swingFoot(Foot& foot, Time now, Movement<vec3>& move);
-  void plantFoot(Foot& foot);
+  void updateHeel(Time now, FootMeta& foot, Movement<float>& move);
+  void updateFoot(
+      FootMeta& foot_m, Object& foot, Time now, Movement<vec3>& move);
+  void swingFoot(
+      FootMeta& foot_m, Object& foot, Time now, Movement<vec3>& move);
   void updateLegs();
-  void updateLeg(Object& femur, Object& shin, Object& foot, Foot& ik_foot);
+  void updateLeg(
+      Object& femur, Object& shin, Object& foot, Object& toe, FootMeta& foot_m);
   void updateTwoBoneIk(
       Object& bone1, float b1_l, Object& bone2, float b2_l, vec3 b1_pos,
       vec3 target, vec3 main_axis, vec3 rot_axis);
   void updateShoulders(Time now);
   void updateHands(Time now);
-  void updateArms();
 
   // Returns pair of angles for bone1 and bone2.
   std::pair<float, float> solveIk(float bone1, float bone2, float target);
@@ -153,6 +156,8 @@ class Skelly {
   MoveOptions options_;
   SkellySizes sizes_;
 
+  Object root_;
+  BipedSkeleton skeleton_;
   BipedRig rig_;
 
   float cycle_t_ = 0;
