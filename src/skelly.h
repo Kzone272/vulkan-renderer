@@ -1,11 +1,11 @@
 #pragma once
 
+#include "biped-rig.h"
 #include "glm-include.h"
 #include "input.h"
 #include "object.h"
 #include "second-order.h"
 #include "time-include.h"
-#include "biped-rig.h"
 
 struct MoveOptions {
   float max_speed = 200;
@@ -15,7 +15,7 @@ struct MoveOptions {
   float stance_w_pct = 0.5;
   float foot_dist = 5;
   float step_height = 5;
-  float lean = 20;
+  float lean = 10;
   float bounce = 2;
   float hip_sway = 6;
   float hip_spin = 8;
@@ -26,6 +26,7 @@ struct MoveOptions {
   float hand_height_pct = 0.95;
   float hands_forward = 0;
   vec3 lean_params = {10, 5, 0};
+  float step_offset = 5;
 };
 
 struct SkellySizes {
@@ -33,13 +34,14 @@ struct SkellySizes {
   float height = 185;
   float bone_w = 6;
   float leg = 100;  // floor to hip
-  float femur_pct = 0.5;
+  float femur_pct = 0.55;
   float pelvis_w = 30;
   float shoulders_w = 40;
   float arm = 70;
   float bicep_pct = 0.5;
   // Constants
-  vec3 ankle = vec3(0, 10, -18);  // from foot to ankle
+  vec3 ankle = vec3(0, 10, -18);  // from toe to ankle
+  vec3 toe = -ankle;              // from ankle to toe
   float pelvis_h = 15;            // height above hip
   float head_h = 25;              // length between shoulders and head
   float neck = 10;                // length between shoulders and head
@@ -48,6 +50,7 @@ struct SkellySizes {
   // Driven by params above.
   float pelvis_y;
   float shoulders_y;
+  float ankle_d;  // Distance from hip to ankle
   float femur;
   float shin;
   float wrist_d;  // Distance from shoulder to wrist
@@ -103,8 +106,8 @@ class Skelly {
       // Durations should be in [0, 1]
       .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
       .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
-      .lheel = {.offset = 0.85, .dur = 0.7},
-      .rheel = {.offset = 0.35, .dur = 0.7},
+      .lheel = {.offset = 0.05, .dur = 0.45},
+      .rheel = {.offset = 0.55, .dur = 0.45},
       .bounce = {.offset = 0, .dur = 0.5, .loop = true},      // pelvis up/down
       .sway = {.offset = 0, .dur = 1, .loop = true},          // z
       .spin = {.offset = 0, .dur = 1, .loop = true},          // y
@@ -114,7 +117,6 @@ class Skelly {
       .rarm = {.offset = 0, .dur = 1, .loop = true},
   };
 
-  void initFoot(Foot& foot, vec3 offset);
   void updateSpeed(Time now, float delta_s);
 
   bool inCycle(const auto& move, float t);
@@ -131,21 +133,12 @@ class Skelly {
   void updateCog(Time now, float delta_s);
   void updatePelvis(Time now);
   void updateFeet(Time now);
-  void updateHeel(Time now, Foot& foot, Movement<float>& move);
-  void updateFoot(Foot& foot, Time now, Movement<vec3>& move);
-  void swingFoot(Foot& foot, Time now, Movement<vec3>& move);
-  void plantFoot(Foot& foot);
-  void updateLegs();
-  void updateLeg(Object& femur, Object& shin, Object& foot, Foot& ik_foot);
-  void updateTwoBoneIk(
-      Object& bone1, float b1_l, Object& bone2, float b2_l, vec3 b1_pos,
-      vec3 target, vec3 main_axis, vec3 rot_axis);
+  void updateToeAngle(Time now, FootMeta& foot, Movement<float>& move);
+  void updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move);
+  void updateAnkle(Object& hip, FootMeta& foot_m);
+  void swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move);
   void updateShoulders(Time now);
   void updateHands(Time now);
-  void updateArms();
-
-  // Returns pair of angles for bone1 and bone2.
-  std::pair<float, float> solveIk(float bone1, float bone2, float target);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);
@@ -153,6 +146,8 @@ class Skelly {
   MoveOptions options_;
   SkellySizes sizes_;
 
+  Object root_;
+  BipedSkeleton skeleton_;
   BipedRig rig_;
 
   float cycle_t_ = 0;

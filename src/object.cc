@@ -43,12 +43,15 @@ void Object::setScale(const vec3& scale) {
   scale_ = scale;
   dirty_ = true;
 }
+vec3 Object::getScale() const {
+  return scale_;
+}
 
 void Object::setRot(glm::quat rot) {
   rot_ = rot;
   dirty_ = true;
 }
-glm::quat Object::getRot() {
+glm::quat Object::getRot() const {
   return rot_ * anim_rot_;
 }
 
@@ -57,7 +60,7 @@ void Object::setPos(const vec3& pos) {
   dirty_ = true;
 }
 
-vec3 Object::getPos() {
+vec3 Object::getPos() const {
   return pos_ + pos_offset_ + anim_pos_;
 }
 
@@ -75,7 +78,7 @@ const mat4& Object::getTransform() {
 }
 
 // Transform from this object's space to an ancestor.
-const mat4 Object::toAncestor(Object* ancestor) {
+mat4 Object::toAncestor(Object* ancestor) {
   if (ancestor == this) {
     return mat4(1);
   }
@@ -87,26 +90,34 @@ const mat4 Object::toAncestor(Object* ancestor) {
   return parent_->toAncestor(ancestor) * getTransform();
 }
 
-const vec3 Object::posToAncestor(Object* ancestor, vec3 pos) {
+vec3 Object::posToAncestor(Object* ancestor, vec3 pos) {
   return toAncestor(ancestor) * vec4(pos, 1);
 }
 
 // Local space to world (root of tree).
-const mat4 Object::toWorld() {
+mat4 Object::toWorld() {
   return toAncestor(nullptr);
 }
 
+vec3 Object::posToWorld(vec3 pos) {
+  return toWorld() * vec4(pos, 1);
+}
+
 // From world space to local.
-const mat4 Object::toLocal() {
+mat4 Object::toLocal() {
   return glm::inverse(toWorld());
 }
 
+vec3 Object::posToLocal(vec3 pos) {
+  return toLocal() * vec4(pos, 1);
+}
+
 // From ancestor's space to local.
-const mat4 Object::toLocal(Object* ancestor) {
+mat4 Object::toLocal(Object* ancestor) {
   return glm::inverse(toAncestor(ancestor));
 }
 
-const vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
+vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
   return toLocal(ancestor) * vec4(pos, 1);
 }
 

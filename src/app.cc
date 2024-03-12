@@ -379,6 +379,11 @@ void App::checkFps(Time now) {
     int fps = frame_state_.frame_num - last_fps_frame_;
     ui_.fps = std::format("{:.2f}ms avg frame ({} fps)\n", avg_time, fps);
 
+    float skelly_avg = stats_.skelly_total / stats_.skelly_num;
+    stats_.skelly_total = 0;
+    stats_.skelly_num = 0;
+    ui_.skelly = std::format("Skeleton avg time: {:.3f}ms", skelly_avg);
+
     next_fps_time_ = now + 1s;
     last_fps_frame_ = frame_state_.frame_num;
   }
@@ -420,7 +425,13 @@ void App::updateObjects() {
     object->setRot(spin);
   }
 
-  skelly_.update(frame_time_, time_delta_s_);
+  {
+    Time start = Clock::now();
+    skelly_.update(frame_time_, time_delta_s_);
+    Time end = Clock::now();
+    stats_.skelly_total += FloatMs(end - start).count();
+    stats_.skelly_num++;
+  }
 
   if ((Floor)ui_.floor == Floor::Voronoi) {
     for (int i = 0; i < cell_centers_.size(); i++) {
@@ -577,6 +588,7 @@ void App::updateImgui() {
   ImGui::Begin("Stats");
   ImGui::Text("%s", ui_.fps.c_str());
   std::string pos_str = std::format("Pos: {}", toStr(skelly_.getPos()));
+  ImGui::Text("%s", ui_.skelly.c_str());
   ImGui::Text(pos_str.c_str());
   ImGui::End();
 
