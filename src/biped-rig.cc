@@ -146,19 +146,21 @@ void IkChain::solve() {
       *b1, b1_l, *b2, b2_l, rootPos(), targetPos(), point_zero, rot_axis);
 }
 
-void BipedSkeleton::setFromRig(const BipedRig& rig) {
-  copyTransform(*rig.cog_, *cog_);
-  copyTransform(*rig.neck_, *torso_);
-  copyTransform(*rig.head_, *head_);
-  copyTransform(*rig.pelvis_, *pelvis_);
+void BipedRig::updateSkeleton(BipedSkeleton& skl) {
+  copyTransform(*cog_, *skl.cog_);
+  copyTransform(*neck_, *skl.torso_);
+  copyTransform(*head_, *skl.head_);
+  copyTransform(*pelvis_, *skl.pelvis_);
 
-  lfoot_->setRot(glm::identity<glm::quat>());
-  auto l_flat = glm::quat_cast(lfoot_->toLocal(root_));
-  lfoot_->setRot(rig.lfoot_->getRot() * l_flat);
+  solveIk();
 
-  rfoot_->setRot(glm::identity<glm::quat>());
-  auto r_flat = glm::quat_cast(rfoot_->toLocal(root_));
-  rfoot_->setRot(rig.rfoot_->getRot() * r_flat);
+  skl.lfoot_->setRot(glm::identity<glm::quat>());
+  auto l_flat = glm::quat_cast(skl.lfoot_->toLocal(root_));
+  skl.lfoot_->setRot(lfoot_->getRot() * l_flat);
+
+  skl.rfoot_->setRot(glm::identity<glm::quat>());
+  auto r_flat = glm::quat_cast(skl.rfoot_->toLocal(root_));
+  skl.rfoot_->setRot(rfoot_->getRot() * r_flat);
 }
 
 void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {

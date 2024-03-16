@@ -200,8 +200,7 @@ void Skelly::update(Time now, float delta_s) {
   updateFeet(now);
   updateShoulders(now);
   updateHands(now);
-  rig_.solveIk();
-  skeleton_.setFromRig(rig_);
+  rig_.updateSkeleton(skeleton_);
 }
 
 vec3 Skelly::getPos() {

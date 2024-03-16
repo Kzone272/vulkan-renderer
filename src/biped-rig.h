@@ -13,7 +13,6 @@ struct BipedSkeleton {
   BipedSkeleton& operator=(const BipedSkeleton& other) = delete;
 
   void makeBones(const SkellySizes& sizes, Object* root);
-  void setFromRig(const BipedRig& rig);
 
   Object* root_;
   Object* cog_;
@@ -83,6 +82,7 @@ struct BipedRig {
   void makeRig(const BipedSkeleton& skeleton, Object* root);
   void plantFoot(FootMeta& foot_m);
   void initFoot(FootMeta& foot_m);
+  void updateSkeleton(BipedSkeleton& skeleton);
   void solveIk();
 
   Object* root_;
