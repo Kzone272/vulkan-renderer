@@ -361,6 +361,15 @@ bool Skelly::inCycle(const auto& move, float t) {
   return t <= end;
 }
 
+float getMoveT(const auto& move, float cycle_t) {
+  float end = move.offset + move.dur;
+  float move_t = remapRange(cycle_t, move.offset, end, 0, 1);
+  if (move.loop) {
+    move_t = fmodClamp(move_t, 1);
+  }
+  return move_t;
+}
+
 void Skelly::checkMove(auto& move, Time now, bool moves_changed, float prev_t) {
   if (!move.loop) {
     move.should_start = !inCycle(move, prev_t) && inCycle(move, cycle_t_);
@@ -470,23 +479,25 @@ Time Skelly::getMoveStart(auto& move, Time now) {
   return addMs(now, -pos_in_anim * cycle_dur_);
 }
 
-vec3 Skelly::sampleMovement(Movement<vec3>& move, Time now) {
+vec3 Skelly::sampleMovement(Movement<vec3>& move) {
   if (move.anim) {
-    return move.anim->sample(now);
+    float anim_t = getMoveT(move, cycle_t_);
+    return move.anim->sample(anim_t);
   }
   return vec3(0);
 }
 
-float Skelly::sampleMovement(Movement<float>& move, Time now) {
+float Skelly::sampleMovement(Movement<float>& move) {
   if (move.anim) {
-    return move.anim->sample(now);
+    float anim_t = getMoveT(move, cycle_t_);
+    return move.anim->sample(anim_t);
   }
   return 0;
 }
 
 void Skelly::updateCog(Time now, float delta_s) {
   vec3 pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
-  pos.y += sampleMovement(walk_.bounce, now);
+  pos.y += sampleMovement(walk_.bounce);
 
   vec3 lean_target(0);
   if (vel_curve_) {
@@ -513,8 +524,8 @@ void Skelly::updateCog(Time now, float delta_s) {
 }
 
 void Skelly::updatePelvis(Time now) {
-  float sway = sampleMovement(walk_.sway, now);
-  float spin = sampleMovement(walk_.spin, now);
+  float sway = sampleMovement(walk_.sway);
+  float spin = sampleMovement(walk_.spin);
 
   glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
                   glm::angleAxis(sway, vec3(0, 0, -1));
@@ -537,7 +548,7 @@ void Skelly::updateToeAngle(Time now, FootMeta& foot_m, Movement<float>& move) {
     startMovement(move, now);
   }
 
-  foot_m.toe_angle = sampleMovement(move, now);
+  foot_m.toe_angle = sampleMovement(move);
   if (move.anim && now > move.anim->to_time_) {
     move.anim.reset();
     foot_m.toe_angle = 0;
@@ -560,7 +571,7 @@ void Skelly::updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move) {
       foot_m.toe_pos = plant_pos;
       rig_.plantFoot(foot_m);
     } else {
-      vec3 swing_pos = sampleMovement(move, now);
+      vec3 swing_pos = sampleMovement(move);
       foot_m.toe_pos = swing_pos;
     }
   }
@@ -634,18 +645,18 @@ void Skelly::updateAnkle(Object& hip, FootMeta& foot_m) {
 }
 
 void Skelly::updateShoulders(Time now) {
-  float angle = sampleMovement(walk_.shoulders, now);
+  float angle = sampleMovement(walk_.shoulders);
   rig_.neck_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void Skelly::updateHands(Time now) {
   // This animation is in torso space, but the hands are in root space.
   if (walk_.larm.anim) {
-    vec3 root_hand = sampleMovement(walk_.larm, now);
+    vec3 root_hand = sampleMovement(walk_.larm);
     rig_.lhand_->setPos(rig_.neck_->posToAncestor(&root_, root_hand));
   }
   if (walk_.rarm.anim) {
-    vec3 root_hand = sampleMovement(walk_.rarm, now);
+    vec3 root_hand = sampleMovement(walk_.rarm);
     rig_.rhand_->setPos(rig_.neck_->posToAncestor(&root_, root_hand));
   }
 }
@@ -655,6 +666,7 @@ void Skelly::cycleUi(Cycle& cycle) {
   movementUi("rstep", cycle.rstep);
   movementUi("lheel", cycle.lheel);
   movementUi("rheel", cycle.rheel);
+  movementUi("bounce", cycle.bounce);
 }
 
 void Skelly::movementUi(const std::string& label, auto& move) {
@@ -680,12 +692,12 @@ void Skelly::movementUi(const std::string& label, auto& move) {
   draw_list->AddRectFilled(p0, p1, IM_COL32_BLACK);  // bg
   ImVec2 p2 = ImVec2(p0.x + move.offset * bar_size.x, p0.y);
   float t2 = move.offset + move.dur;
-  float end = remapRange(t2, 0, 1, p0.x, p1.x);  // this is clamped
+  float end = remapRangeClamped(t2, 0, 1, p0.x, p1.x);
   ImVec2 p3 = ImVec2(end, p1.y);
   draw_list->AddRectFilled(p2, p3, IM_COL32_WHITE);  // first chunk
   if (t2 > 1) {
     float t2_wrapped = t2 - 1;
-    float wrapped_end = remapRange(t2_wrapped, 0, 1, p0.x, p1.x);
+    float wrapped_end = remapRangeClamped(t2_wrapped, 0, 1, p0.x, p1.x);
     ImVec2 p4 = ImVec2(wrapped_end, p1.y);
     draw_list->AddRectFilled(p0, p4, IM_COL32_WHITE);  // wrapped chunk
   }

@@ -46,6 +46,7 @@ struct Animation {
   Animation(
       const Spline<T>& spline, float dur_ms, Time start, bool loop = false);
   T sample(Time now, SampleType sample_type = SampleType::Position);
+  T sample(float t, SampleType sample_type = SampleType::Position);
 
   Spline<T> spline_;
   float dur_ms_;
@@ -217,8 +218,13 @@ T Animation<T>::sample(Time now, SampleType sample_type) {
   if (loop_) {
     time_ms = fmodClamp(time_ms, dur_ms_);
   }
-  float pct = time_ms / dur_ms_;
-  float u = spline_.segments_ * pct;
+  float t = time_ms / dur_ms_;
+  return sample(t, sample_type);
+}
+
+template <class T>
+T Animation<T>::sample(float t, SampleType sample_type) {
+  float u = spline_.segments_ * t;
 
   return spline_.sample(u, sample_type);
 }

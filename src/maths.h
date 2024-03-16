@@ -2,6 +2,9 @@
 
 float remapRange(
     float value, float in_min, float in_max, float out_min, float out_max);
+// Output will be clamped within [out_min, out_max].
+float remapRangeClamped(
+    float value, float in_min, float in_max, float out_min, float out_max);
 // Returns shortest delta from current to target angle.
 float angleDelta(float current, float target);
 // Returns a % b, always in the range [0, b). b >= 0.

@@ -127,8 +127,8 @@ class Skelly {
 
   void startMovement(auto& move, Time now);
   Time getMoveStart(auto& move, Time now);
-  vec3 sampleMovement(Movement<vec3>& move, Time now);
-  float sampleMovement(Movement<float>& move, Time now);
+  vec3 sampleMovement(Movement<vec3>& move);
+  float sampleMovement(Movement<float>& move);
 
   void updateCog(Time now, float delta_s);
   void updatePelvis(Time now);
