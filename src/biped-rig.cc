@@ -121,30 +121,36 @@ void solveTwoBoneIk(
 
 }  // namespace
 
+IkChain::IkChain(
+    Object* root, Object* target, Object* b1, Object* b2, float b1_l,
+    float b2_l, vec3 rot_axis)
+    : root(root),
+      target(target),
+      b1(b1),
+      b2(b2),
+      b1_l(b1_l),
+      b2_l(b2_l),
+      rot_axis(rot_axis) {
+  point_zero = glm::normalize(targetPos() - rootPos());
+}
+
+vec3 IkChain::rootPos() {
+  return root->getPos();
+}
+vec3 IkChain::targetPos() {
+  return root->getParent()->posToLocal(target->getParent(), target->getPos());
+}
+
+void IkChain::solve() {
+  solveTwoBoneIk(
+      *b1, b1_l, *b2, b2_l, rootPos(), targetPos(), point_zero, rot_axis);
+}
+
 void BipedSkeleton::setFromRig(const BipedRig& rig) {
   copyTransform(*rig.cog_, *cog_);
   copyTransform(*rig.neck_, *torso_);
   copyTransform(*rig.head_, *head_);
   copyTransform(*rig.pelvis_, *pelvis_);
-
-  // TODO: Wrap these IK solves in an object.
-  solveTwoBoneIk(
-      *lbicep_, bicep_l_, *lforearm_, forearm_l_, rig.lsho_->getPos(),
-      rig.neck_->posToLocal(root_, rig.lhand_->getPos()), vec3(-1, 0, 0),
-      vec3(0, 1, 0));
-  solveTwoBoneIk(
-      *rbicep_, bicep_l_, *rforearm_, forearm_l_, rig.rsho_->getPos(),
-      rig.neck_->posToLocal(root_, rig.rhand_->getPos()), vec3(1, 0, 0),
-      vec3(0, -1, 0));
-
-  solveTwoBoneIk(
-      *lfemur_, femur_l_, *lshin_, shin_l_, rig.lhip_->getPos(),
-      rig.pelvis_->posToLocal(root_, rig.lfoot_->getPos()), vec3(0, -1, 0),
-      vec3(1, 0, 0));
-  solveTwoBoneIk(
-      *rfemur_, femur_l_, *rshin_, shin_l_, rig.rhip_->getPos(),
-      rig.pelvis_->posToLocal(root_, rig.rfoot_->getPos()), vec3(0, -1, 0),
-      vec3(1, 0, 0));
 
   lfoot_->setRot(glm::identity<glm::quat>());
   auto l_flat = glm::quat_cast(lfoot_->toLocal(root_));
@@ -204,6 +210,20 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rfoot_m_.toe = rtoe_;
   initFoot(rfoot_m_);
 
+  larm_ = IkChain(
+      lsho_, lhand_, skeleton.lbicep_, skeleton.lforearm_, skeleton.bicep_l_,
+      skeleton.forearm_l_, vec3(0, 1, 0));
+  rarm_ = IkChain(
+      rsho_, rhand_, skeleton.rbicep_, skeleton.rforearm_, skeleton.bicep_l_,
+      skeleton.forearm_l_, vec3(0, -1, 0));
+
+  lleg_ = IkChain(
+      lhip_, lfoot_, skeleton.lfemur_, skeleton.lshin_, skeleton.femur_l_,
+      skeleton.shin_l_, vec3(1, 0, 0));
+  rleg_ = IkChain(
+      rhip_, rfoot_, skeleton.rfemur_, skeleton.rshin_, skeleton.femur_l_,
+      skeleton.shin_l_, vec3(1, 0, 0));
+
   // Marks the root position/direction.
   mat4 root_control_t = glm::scale(vec3(10, 1, 30));
   root_->addChild(Object(ModelId::BoxControl, root_control_t));
@@ -219,4 +239,11 @@ void BipedRig::plantFoot(FootMeta& foot_m) {
   foot_m.planted = true;
   foot_m.in_swing = false;
   foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
+}
+
+void BipedRig::solveIk() {
+  larm_.solve();
+  rarm_.solve();
+  lleg_.solve();
+  rleg_.solve();
 }

@@ -40,13 +40,28 @@ struct BipedSkeleton {
   vec3 toe_pos_;
 };
 
-class IkChain {
+struct IkChain {
+  IkChain() = default;
+  IkChain(
+      Object* root, Object* target, Object* b1, Object* b2, float b1_l,
+      float b2_l, vec3 rot_axis);
+  void solve();
+  // Positions in root's parent's space
+  vec3 rootPos();
+  vec3 targetPos();
+
   Object* root;
   Object* target;
   // TODO: Support chain of bones.
   Object* b1;
   Object* b2;
-  vec3 dir;
+  float b1_l;
+  float b2_l;
+  vec3 rot_axis;
+  // Computed:
+  // The normalized vector pointing from the root to the target in the root's
+  // parent's space, when bones are in zero-state.
+  vec3 point_zero;
 };
 
 struct FootMeta {
@@ -68,6 +83,7 @@ struct BipedRig {
   void makeRig(const BipedSkeleton& skeleton, Object* root);
   void plantFoot(FootMeta& foot_m);
   void initFoot(FootMeta& foot_m);
+  void solveIk();
 
   Object* root_;
   Object* cog_;

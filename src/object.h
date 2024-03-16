@@ -25,6 +25,9 @@ class Object {
   Object& operator=(const Object&& other) = delete;
 
   void setParent(Object* parent);
+  Object* getParent() {
+    return parent_;
+  }
   void setScale(const vec3& scale);
   vec3 getScale() const;
   void setRot(glm::quat rot);
