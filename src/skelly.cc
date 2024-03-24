@@ -132,6 +132,12 @@ void Skelly::makeBones() {
   initFoot(lfoot_m_, rig_.lfoot_, rig_.ltoe_);
   initFoot(rfoot_m_, rig_.rfoot_, rig_.rtoe_);
   pose_ = rig_.getZeroPose();
+
+  mod_pose_.type = PoseType::Override;
+  mod_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
+  vec3 hands_pos(0, 100, 30);
+  mod_pose_.getBone(BoneId::Lhand).setPos(hands_pos);
+  mod_pose_.getBone(BoneId::Rhand).setPos(hands_pos);
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -203,7 +209,7 @@ void Skelly::update(Time now, float delta_s) {
   updateFeet(now);
   updateShoulders(now);
   updateHands(now);
-  rig_.applyPose(pose_);
+  rig_.applyPose(Pose::blend(pose_, mod_pose_, options_.mod_blend));
   rig_.updateSkeleton(skeleton_);
 }
 
@@ -312,6 +318,11 @@ void Skelly::UpdateImgui() {
 
   if (ImGui::BeginTabItem("Cycle")) {
     cycleUi(walk_);
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("Mods")) {
+    ImGui::SliderFloat("Mod Blend %", &options_.mod_blend, 0, 1);
     ImGui::EndTabItem();
   }
 

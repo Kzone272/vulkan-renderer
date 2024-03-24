@@ -27,6 +27,7 @@ struct MoveOptions {
   float hands_forward = 0;
   vec3 lean_params = {10, 5, 0};
   float step_offset = 5;
+  float mod_blend = 0;
 };
 
 struct SkellySizes {
@@ -165,6 +166,7 @@ class Skelly {
   Object root_;
   BipedSkeleton skeleton_;
   Pose pose_;
+  Pose mod_pose_;
   BipedRig rig_;
   FootMeta lfoot_m_{.is_left = true};
   FootMeta rfoot_m_;
