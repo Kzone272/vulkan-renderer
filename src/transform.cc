@@ -2,13 +2,17 @@
 
 void Transform::setPos(const vec3& pos) {
   pos_ = pos;
+  dirty_ = true;
 }
 void Transform::setScale(const vec3& scale) {
   scale_ = scale;
+  dirty_ = true;
 }
 void Transform::setRot(const quat& rot) {
   rot_ = rot;
+  dirty_ = true;
 }
+
 const vec3& Transform::getPos() const {
   return pos_;
 }
@@ -19,8 +23,16 @@ const quat& Transform::getRot() const {
   return rot_;
 }
 
-mat4 Transform::matrix() {
-  return glm::translate(pos_) * glm::toMat4(rot_) * glm::scale(scale_);
+const mat4& Transform::matrix() {
+  if (dirty_) {
+    updateMatrix();
+    dirty_ = false;
+  }
+  return matrix_;
+}
+
+void Transform::updateMatrix() {
+  matrix_ = glm::translate(pos_) * glm::toMat4(rot_) * glm::scale(scale_);
 }
 
 Transform Transform::blend(const Transform& t1, const Transform& t2, float a) {

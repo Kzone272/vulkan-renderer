@@ -11,8 +11,7 @@ Pose Pose::freeze(const BipedRig& rig) {
       rig.lfoot_, rig.rfoot_, rig.ltoe_,   rig.rtoe_,
   };
   for (auto* bone : all_bones) {
-    p.setBone(
-        bone, Transform{bone->getPos(), bone->getScale(), bone->getRot()});
+    p.setBone(bone, bone->getTransform());
   }
   return p;
 }

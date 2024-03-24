@@ -9,6 +9,7 @@
 #include "animation.h"
 #include "glm-include.h"
 #include "render-objects.h"
+#include "transform.h"
 
 extern const std::map<ModelId, ModelInfo> kModelRegistry;
 
@@ -34,8 +35,9 @@ class Object {
   glm::quat getRot() const;
   void setPos(const vec3& pos);
   vec3 getPos() const;
-  void setPosOffset(vec3 offset);
-  const mat4& getTransform();
+  void setTransform(const Transform& t);
+  const Transform& getTransform() const;
+  const mat4& matrix();
 
   // Transform from this object's space to an ancestor.
   mat4 toAncestor(Object* ancestor);
@@ -72,13 +74,8 @@ class Object {
   mat4 model_transform_{1};
 
   Object* parent_ = nullptr;
-  bool dirty_ = false;
-  mat4 transform_{1};
-  vec3 scale_{1};
-  glm::quat rot_ = {1, {0, 0, 0}};
-  glm::quat anim_rot_ = {1, {0, 0, 0}};
-  vec3 pos_{0};
-  vec3 anim_pos_{0};
+  Transform transform_;
+  Transform anim_transform_;
 
   // Offset from the current position.
   vec3 pos_offset_{0};

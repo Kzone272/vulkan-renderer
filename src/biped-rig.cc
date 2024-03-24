@@ -87,18 +87,6 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
 
 namespace {
 
-void copyTransform(const Object& src, Object& dst) {
-  dst.setPos(src.getPos());
-  dst.setRot(src.getRot());
-  dst.setScale(src.getScale());
-}
-
-void copyTransform(const Transform& src, Object& dst) {
-  dst.setPos(src.getPos());
-  dst.setRot(src.getRot());
-  dst.setScale(src.getScale());
-}
-
 // Returns pair of angles for bone1 and bone2.
 std::pair<float, float> solveIk(float bone1, float bone2, float target) {
   if (target >= bone1 + bone2) {
@@ -153,10 +141,10 @@ void IkChain::solve() {
 }
 
 void BipedRig::updateSkeleton(BipedSkeleton& skl) {
-  copyTransform(*cog_, *skl.cog_);
-  copyTransform(*neck_, *skl.torso_);
-  copyTransform(*head_, *skl.head_);
-  copyTransform(*pelvis_, *skl.pelvis_);
+  skl.cog_->setTransform(cog_->getTransform());
+  skl.torso_->setTransform(neck_->getTransform());
+  skl.head_->setTransform(head_->getTransform());
+  skl.pelvis_->setTransform(pelvis_->getTransform());
 
   solveIk();
 
@@ -247,7 +235,7 @@ void BipedRig::applyPose(const Pose& pose) {
   for (auto* bone : all_bones) {
     auto* bone_t = pose.maybeGetBone(bone);
     if (bone_t) {
-      copyTransform(*bone_t, *bone);
+      bone->setTransform(*bone_t);
     }
   }
   std::vector<IkChain*> all_iks = {&larm_, &rarm_, &lleg_, &rleg_};

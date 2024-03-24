@@ -40,41 +40,49 @@ void Object::setParent(Object* parent) {
 }
 
 void Object::setScale(const vec3& scale) {
-  scale_ = scale;
-  dirty_ = true;
+  transform_.setScale(scale);
 }
 vec3 Object::getScale() const {
-  return scale_;
+  return transform_.getScale();
 }
 
 void Object::setRot(glm::quat rot) {
-  rot_ = rot;
-  dirty_ = true;
+  transform_.setRot(rot);
 }
 glm::quat Object::getRot() const {
-  return rot_ * anim_rot_;
+  if (rot_anims_.size()) {
+    return anim_transform_.getRot() * transform_.getRot();
+  } else {
+    return transform_.getRot();
+  }
 }
 
 void Object::setPos(const vec3& pos) {
-  pos_ = pos;
-  dirty_ = true;
+  transform_.setPos(pos);
 }
 
 vec3 Object::getPos() const {
-  return pos_ + pos_offset_ + anim_pos_;
-}
-
-void Object::setPosOffset(vec3 offset) {
-  pos_offset_ = offset;
-  dirty_ = true;
-}
-
-const mat4& Object::getTransform() {
-  if (dirty_) {
-    updateTransform();
-    dirty_ = false;
+  if (pos_anims_.size()) {
+    return transform_.getPos() + anim_transform_.getPos();
+  } else {
+    return transform_.getPos();
   }
+}
+
+void Object::setTransform(const Transform& t) {
+  transform_ = t;
+}
+
+const Transform& Object::getTransform() const {
   return transform_;
+};
+
+const mat4& Object::matrix() {
+  if (pos_anims_.size() || rot_anims_.size()) {
+    return Transform::addBlend(transform_, anim_transform_, 1).matrix();
+  } else {
+    return transform_.matrix();
+  }
 }
 
 // Transform from this object's space to an ancestor.
@@ -85,9 +93,9 @@ mat4 Object::toAncestor(Object* ancestor) {
   if (parent_ == nullptr) {
     // You should not request transform to an invalid ancestor.
     DASSERT(ancestor == nullptr);
-    return getTransform();
+    return matrix();
   }
-  return parent_->toAncestor(ancestor) * getTransform();
+  return parent_->toAncestor(ancestor) * matrix();
 }
 
 vec3 Object::posToAncestor(Object* ancestor, vec3 pos) {
@@ -155,17 +163,21 @@ void Object::animate(Time now) {
     return !anim->loop_ && now > anim->to_time_;
   });
 
-  anim_pos_ = vec3(0);
-  for (auto* anim : pos_anims_) {
-    anim_pos_ += anim->sample(now);
-    dirty_ = true;
+  if (pos_anims_.size()) {
+    vec3 anim_pos(0);
+    for (auto* anim : pos_anims_) {
+      anim_pos += anim->sample(now);
+    }
+    anim_transform_.setPos(anim_pos);
   }
 
-  anim_rot_ = {1, {0, 0, 0}};
-  for (auto* anim : rot_anims_) {
-    // TOOD: Properly sort out the rotation axis.
-    anim_rot_ = glm::angleAxis(anim->sample(now), vec3(-1, 0, 0)) * anim_rot_;
-    dirty_ = true;
+  if (rot_anims_.size()) {
+    quat anim_rot = glm::identity<quat>();
+    for (auto* anim : rot_anims_) {
+      // TOOD: Properly sort out the rotation axis.
+      anim_rot = glm::angleAxis(anim->sample(now), vec3(-1, 0, 0)) * anim_rot;
+    }
+    anim_transform_.setRot(anim_rot);
   }
 }
 
@@ -193,7 +205,7 @@ void Object::clearChildren() {
 
 void Object::getSceneObjects(
     const mat4& parent, std::vector<SceneObject>& objs) {
-  mat4 transform = parent * getTransform();
+  mat4 transform = parent * matrix();
   if (model_ != ModelId::None) {
     objs.push_back({
         model_,
@@ -203,9 +215,4 @@ void Object::getSceneObjects(
   for (auto& child : children_) {
     child->getSceneObjects(transform, objs);
   }
-}
-
-void Object::updateTransform() {
-  transform_ =
-      glm::translate(getPos()) * glm::toMat4(getRot()) * glm::scale(getScale());
 }
