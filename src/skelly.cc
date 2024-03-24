@@ -524,7 +524,7 @@ void Skelly::updateCog(Time now, float delta_s) {
       glm::normalize(vec3(0, 1, 0)),
       glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
 
-  Transform& cog_t = pose_.getBone(rig_.cog_);
+  Transform& cog_t = pose_.getBone(BoneId::Cog);
   cog_t.setPos(pos);
   cog_t.setRot(rot);
 }
@@ -536,7 +536,7 @@ void Skelly::updatePelvis(Time now) {
   glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
                   glm::angleAxis(sway, vec3(0, 0, -1));
 
-  pose_.getBone(rig_.pelvis_).setRot(rot);
+  pose_.getBone(BoneId::Pelvis).setRot(rot);
 }
 
 void Skelly::updateFeet(Time now) {
@@ -545,8 +545,8 @@ void Skelly::updateFeet(Time now) {
   updateToe(rfoot_m_, now, walk_.rstep);
   updateToe(lfoot_m_, now, walk_.lstep);
 
-  mat4 to_root =
-      pose_.getBone(rig_.cog_).matrix() * pose_.getBone(rig_.pelvis_).matrix();
+  mat4 to_root = pose_.getBone(BoneId::Cog).matrix() *
+                 pose_.getBone(BoneId::Pelvis).matrix();
   vec3 lhip_pos = to_root * vec4(skeleton_.lfemur_->getPos(), 1);
   vec3 rhip_pos = to_root * vec4(skeleton_.rfemur_->getPos(), 1);
 
@@ -653,7 +653,8 @@ void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   glm::quat ankle_rot =
       point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
 
-  Transform& foot_t = pose_.getBone(foot_m.foot);
+  Transform& foot_t =
+      pose_.getBone(foot_m.is_left ? BoneId::Lfoot : BoneId::Rfoot);
   foot_t.setPos(foot_m.toe_pos + ankle_rot * sizes_.ankle);
   foot_t.setRot(ankle_rot);
 
@@ -674,21 +675,21 @@ void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
 
 void Skelly::updateShoulders(Time now) {
   float angle = sampleMovement(walk_.shoulders);
-  pose_.getBone(rig_.neck_).setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+  pose_.getBone(BoneId::Neck).setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void Skelly::updateHands(Time now) {
   // This animation is in torso space, but the hands are in root space.
-  mat4 to_root =
-      pose_.getBone(rig_.cog_).matrix() * pose_.getBone(rig_.neck_).matrix();
+  mat4 to_root = pose_.getBone(BoneId::Cog).matrix() *
+                 pose_.getBone(BoneId::Neck).matrix();
 
   if (walk_.larm.anim) {
     vec3 root_hand = sampleMovement(walk_.larm);
-    pose_.getBone(rig_.lhand_).setPos(to_root * vec4(root_hand, 1));
+    pose_.getBone(BoneId::Lhand).setPos(to_root * vec4(root_hand, 1));
   }
   if (walk_.rarm.anim) {
     vec3 root_hand = sampleMovement(walk_.rarm);
-    pose_.getBone(rig_.rhand_).setPos(to_root * vec4(root_hand, 1));
+    pose_.getBone(BoneId::Rhand).setPos(to_root * vec4(root_hand, 1));
   }
 }
 

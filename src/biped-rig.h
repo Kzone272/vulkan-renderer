@@ -73,6 +73,7 @@ struct BipedRig {
   void updateSkeleton(BipedSkeleton& skeleton);
   void solveIk();
   void applyPose(const Pose& pose);
+  Object* getBone(BoneId bone) const;
 
   Object* root_;
   Object* cog_;

@@ -5,13 +5,9 @@
 
 Pose Pose::freeze(const BipedRig& rig) {
   Pose p;
-  std::vector<Object*> all_bones = {
-      rig.cog_,   rig.neck_,  rig.head_,   rig.lsho_, rig.rsho_,
-      rig.lhand_, rig.rhand_, rig.pelvis_, rig.lhip_, rig.rhip_,
-      rig.lfoot_, rig.rfoot_, rig.ltoe_,   rig.rtoe_,
-  };
-  for (auto* bone : all_bones) {
-    p.setBone(bone, bone->getTransform());
+  for (uint32_t i = 0; i < static_cast<uint32_t>(BoneId::COUNT); i++) {
+    BoneId bone = static_cast<BoneId>(i);
+    p.setBone(bone, rig.getBone(bone)->getTransform());
   }
   return p;
 }
@@ -20,16 +16,15 @@ Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
   DASSERT(p1.type == PoseType::Override);
   Pose p = p1;
 
-  for (auto& entry : p2.bone_ts) {
-    const Object* bone = entry.first;
-    const Transform& t2 = entry.second;
+  for (uint32_t i = 0; i < static_cast<uint32_t>(BoneId::COUNT); i++) {
+    BoneId bone = static_cast<BoneId>(i);
 
-    auto* t1 = p1.maybeGetBone(bone);
-    DASSERT(t1);
-    if (p2.type == PoseType::Additive) {
-      p.setBone(bone, Transform::addBlend(*t1, t2, a));
-    } else {
-      p.setBone(bone, Transform::blend(*t1, t2, a));
+    if (p2.bone_mask && p2.bone_mask->contains(bone)) {
+      if (p2.type == PoseType::Additive) {
+        p.setBone(bone, Transform::addBlend(p1.bone_ts[i], p2.bone_ts[i], a));
+      } else {
+        p.setBone(bone, Transform::blend(p1.bone_ts[i], p2.bone_ts[i], a));
+      }
     }
   }
 
@@ -53,19 +48,17 @@ Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
   return p;
 }
 
-Transform& Pose::getBone(const Object* bone) {
-  return bone_ts[bone];
+const Transform& Pose::getBoneConst(BoneId bone) const {
+  DASSERT(bone < BoneId::COUNT);
+  DASSERT(!bone_mask || bone_mask->contains(bone));
+  return bone_ts[static_cast<uint32_t>(bone)];
 }
 
-const Transform* Pose::maybeGetBone(const Object* bone) const {
-  auto it = bone_ts.find(bone);
-  if (it != bone_ts.end()) {
-    return &it->second;
-  } else {
-    return nullptr;
-  }
+Transform& Pose::getBone(BoneId bone) {
+  DASSERT(bone < BoneId::COUNT);
+  return bone_ts[static_cast<uint32_t>(bone)];
 }
 
-void Pose::setBone(const Object* bone, const Transform& t) {
+void Pose::setBone(BoneId bone, const Transform& t) {
   getBone(bone) = t;
 }

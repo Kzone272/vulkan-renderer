@@ -228,21 +228,43 @@ void BipedRig::solveIk() {
 }
 
 void BipedRig::applyPose(const Pose& pose) {
-  std::vector<Object*> all_bones = {
-      cog_,    neck_, head_, lsho_,  rsho_,  lhand_, rhand_,
-      pelvis_, lhip_, rhip_, lfoot_, rfoot_, ltoe_,  rtoe_,
-  };
-  for (auto* bone : all_bones) {
-    auto* bone_t = pose.maybeGetBone(bone);
-    if (bone_t) {
-      bone->setTransform(*bone_t);
+  for (uint32_t i = 0; i < static_cast<uint32_t>(BoneId::COUNT); i++) {
+    BoneId bone_id = static_cast<BoneId>(i);
+    if (pose.bone_mask && !pose.bone_mask->contains(bone_id)) {
+      continue;
     }
+    getBone(bone_id)->setTransform(pose.getBoneConst(bone_id));
   }
+
   std::vector<IkChain*> all_iks = {&larm_, &rarm_, &lleg_, &rleg_};
   for (auto* ik : all_iks) {
     auto ik_it = pose.ik_dirs.find(ik);
     if (ik_it != pose.ik_dirs.end()) {
       ik->rot_axis = ik_it->second;
     }
+  }
+}
+
+Object* BipedRig::getBone(BoneId bone) const {
+  switch (bone) {
+    case BoneId::Cog:
+      return cog_;
+    case BoneId::Neck:
+      return neck_;
+    case BoneId::Head:
+      return head_;
+    case BoneId::Lhand:
+      return lhand_;
+    case BoneId::Rhand:
+      return rhand_;
+    case BoneId::Pelvis:
+      return pelvis_;
+    case BoneId::Lfoot:
+      return lfoot_;
+    case BoneId::Rfoot:
+      return rfoot_;
+    default:
+      ASSERT(false);
+      return nullptr;
   }
 }
