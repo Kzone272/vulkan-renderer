@@ -58,6 +58,20 @@ struct SkellySizes {
   float forearm;
 };
 
+struct FootMeta {
+  Object* foot;
+  Object* toe;
+  bool planted = false;
+  bool in_swing = false;
+  bool is_left = false;
+  vec3 world_target;
+  vec3 start_pos;
+  float toe_angle = 0;  // Angle relative to floor
+  vec3 toe_pos;
+  vec3 toe_dir = {0, 0, 1};
+  vec3 toe_dir_start = {0, 0, 1};
+};
+
 class Skelly {
  public:
   Skelly();
@@ -135,7 +149,9 @@ class Skelly {
   void updateFeet(Time now);
   void updateToeAngle(Time now, FootMeta& foot, Movement<float>& move);
   void updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move);
-  void updateAnkle(Object& hip, FootMeta& foot_m);
+  void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
+  void initFoot(FootMeta& foot_m, Object* foot, Object* toe);
+  void plantFoot(FootMeta& foot_m);
   void swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move);
   void updateShoulders(Time now);
   void updateHands(Time now);
@@ -148,7 +164,10 @@ class Skelly {
 
   Object root_;
   BipedSkeleton skeleton_;
+  Pose pose_;
   BipedRig rig_;
+  FootMeta lfoot_m_{.is_left = true};
+  FootMeta rfoot_m_;
 
   float cycle_t_ = 0;
   float cycle_dur_ = 1000;

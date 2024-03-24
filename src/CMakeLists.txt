@@ -46,6 +46,10 @@ add_executable(main
   second-order.h
   biped-rig.h
   biped-rig.cc
+  transform.h
+  transform.cc
+  pose.h
+  pose.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

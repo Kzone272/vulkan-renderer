@@ -93,6 +93,12 @@ void copyTransform(const Object& src, Object& dst) {
   dst.setScale(src.getScale());
 }
 
+void copyTransform(const Transform& src, Object& dst) {
+  dst.setPos(src.getPos());
+  dst.setRot(src.getRot());
+  dst.setScale(src.getScale());
+}
+
 // Returns pair of angles for bone1 and bone2.
 std::pair<float, float> solveIk(float bone1, float bone2, float target) {
   if (target >= bone1 + bone2) {
@@ -205,12 +211,7 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rtoe_ = rfoot_->addChild(Object(ModelId::BallControl, toe_t));
   rtoe_->setPos(skeleton.toe_pos_);
 
-  lfoot_m_.foot = lfoot_;
-  lfoot_m_.toe = ltoe_;
-  initFoot(lfoot_m_);
-  rfoot_m_.foot = rfoot_;
-  rfoot_m_.toe = rtoe_;
-  initFoot(rfoot_m_);
+  zero_p_ = Pose::freeze(*this);
 
   larm_ = IkChain(
       lsho_, lhand_, skeleton.lbicep_, skeleton.lforearm_, skeleton.bicep_l_,
@@ -231,21 +232,29 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   root_->addChild(Object(ModelId::BoxControl, root_control_t));
 }
 
-void BipedRig::initFoot(FootMeta& foot_m) {
-  foot_m.toe_pos = foot_m.toe->posToAncestor(root_);
-  foot_m.start_pos = foot_m.toe_pos;
-  plantFoot(foot_m);
-}
-
-void BipedRig::plantFoot(FootMeta& foot_m) {
-  foot_m.planted = true;
-  foot_m.in_swing = false;
-  foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
-}
-
 void BipedRig::solveIk() {
   larm_.solve();
   rarm_.solve();
   lleg_.solve();
   rleg_.solve();
+}
+
+void BipedRig::applyPose(const Pose& pose) {
+  std::vector<Object*> all_bones = {
+      cog_,    neck_, head_, lsho_,  rsho_,  lhand_, rhand_,
+      pelvis_, lhip_, rhip_, lfoot_, rfoot_, ltoe_,  rtoe_,
+  };
+  for (auto* bone : all_bones) {
+    auto* bone_t = pose.maybeGetBone(bone);
+    if (bone_t) {
+      copyTransform(*bone_t, *bone);
+    }
+  }
+  std::vector<IkChain*> all_iks = {&larm_, &rarm_, &lleg_, &rleg_};
+  for (auto* ik : all_iks) {
+    auto ik_it = pose.ik_dirs.find(ik);
+    if (ik_it != pose.ik_dirs.end()) {
+      ik->rot_axis = ik_it->second;
+    }
+  }
 }

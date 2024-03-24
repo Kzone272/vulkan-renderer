@@ -129,6 +129,9 @@ void Skelly::makeBones() {
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
   rig_.makeRig(skeleton_, &root_);
+  initFoot(lfoot_m_, rig_.lfoot_, rig_.ltoe_);
+  initFoot(rfoot_m_, rig_.rfoot_, rig_.rtoe_);
+  pose_ = rig_.getZeroPose();
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -200,6 +203,7 @@ void Skelly::update(Time now, float delta_s) {
   updateFeet(now);
   updateShoulders(now);
   updateHands(now);
+  rig_.applyPose(pose_);
   rig_.updateSkeleton(skeleton_);
 }
 
@@ -443,7 +447,7 @@ void Skelly::updateMovements() {
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
 
   float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
-  vec3 shoulder = rig_.lsho_->getPos();
+  vec3 shoulder = skeleton_.lbicep_->getPos();
   float hand_width = options_.arm_span_pct * sizes_.wrist_d;
   vec3 back =
       vec3(-hand_width, -hand_dist, -0.2 * hand_dist + options_.hands_forward) +
@@ -514,13 +518,15 @@ void Skelly::updateCog(Time now, float delta_s) {
 
   vec3 offset = root_.toLocal() * vec4(lean, 0);
   pos += offset;
-  rig_.cog_->setPos(pos);
 
   // Rotate COG based on lean amount.
   glm::quat rot = glm::rotation(
       glm::normalize(vec3(0, 1, 0)),
       glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
-  rig_.cog_->setRot(rot);
+
+  Transform& cog_t = pose_.getBone(rig_.cog_);
+  cog_t.setPos(pos);
+  cog_t.setRot(rot);
 }
 
 void Skelly::updatePelvis(Time now) {
@@ -529,16 +535,23 @@ void Skelly::updatePelvis(Time now) {
 
   glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
                   glm::angleAxis(sway, vec3(0, 0, -1));
-  rig_.pelvis_->setRot(rot);
+
+  pose_.getBone(rig_.pelvis_).setRot(rot);
 }
 
 void Skelly::updateFeet(Time now) {
-  updateToeAngle(now, rig_.lfoot_m_, walk_.lheel);
-  updateToeAngle(now, rig_.rfoot_m_, walk_.rheel);
-  updateToe(rig_.rfoot_m_, now, walk_.rstep);
-  updateToe(rig_.lfoot_m_, now, walk_.lstep);
-  updateAnkle(*rig_.lhip_, rig_.lfoot_m_);
-  updateAnkle(*rig_.rhip_, rig_.rfoot_m_);
+  updateToeAngle(now, lfoot_m_, walk_.lheel);
+  updateToeAngle(now, rfoot_m_, walk_.rheel);
+  updateToe(rfoot_m_, now, walk_.rstep);
+  updateToe(lfoot_m_, now, walk_.lstep);
+
+  mat4 to_root =
+      pose_.getBone(rig_.cog_).matrix() * pose_.getBone(rig_.pelvis_).matrix();
+  vec3 lhip_pos = to_root * vec4(skeleton_.lfemur_->getPos(), 1);
+  vec3 rhip_pos = to_root * vec4(skeleton_.rfemur_->getPos(), 1);
+
+  updateAnkle(lhip_pos, lfoot_m_);
+  updateAnkle(rhip_pos, rfoot_m_);
 }
 
 void Skelly::updateToeAngle(Time now, FootMeta& foot_m, Movement<float>& move) {
@@ -569,12 +582,26 @@ void Skelly::updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move) {
       vec3 plant_pos = move.anim->sample(move.anim->to_time_);
       move.anim.reset();
       foot_m.toe_pos = plant_pos;
-      rig_.plantFoot(foot_m);
+      plantFoot(foot_m);
     } else {
       vec3 swing_pos = sampleMovement(move);
       foot_m.toe_pos = swing_pos;
     }
   }
+}
+
+void Skelly::initFoot(FootMeta& foot_m, Object* foot, Object* toe) {
+  foot_m.foot = foot;
+  foot_m.toe = toe;
+  foot_m.toe_pos = foot_m.toe->posToAncestor(&root_);
+  foot_m.start_pos = foot_m.toe_pos;
+  plantFoot(foot_m);
+}
+
+void Skelly::plantFoot(FootMeta& foot_m) {
+  foot_m.planted = true;
+  foot_m.in_swing = false;
+  foot_m.world_target = root_.posToWorld(foot_m.toe_pos);
 }
 
 void Skelly::swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move) {
@@ -603,10 +630,9 @@ void Skelly::swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move) {
   startMovement(move, now);
 }
 
-void Skelly::updateAnkle(Object& hip, FootMeta& foot_m) {
+void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   // If hip is too far from ankle, compute the angle to lift the ankle just
   // enough to compensate.
-  vec3 hip_pos = hip.posToAncestor(&root_);
   auto point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
   vec3 flat_ankle_pos = foot_m.toe_pos + point_foot * sizes_.ankle;
   float hip_to_ankle = glm::length(hip_pos - flat_ankle_pos);
@@ -626,8 +652,10 @@ void Skelly::updateAnkle(Object& hip, FootMeta& foot_m) {
 
   glm::quat ankle_rot =
       point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
-  foot_m.foot->setPos(foot_m.toe_pos + ankle_rot * sizes_.ankle);
-  foot_m.foot->setRot(ankle_rot);
+
+  Transform& foot_t = pose_.getBone(foot_m.foot);
+  foot_t.setPos(foot_m.toe_pos + ankle_rot * sizes_.ankle);
+  foot_t.setRot(ankle_rot);
 
   // TODO: this currently isn't possible with heel angle determined by IK. But
   // this will become relevant again if I add an animation to land on the
@@ -646,18 +674,21 @@ void Skelly::updateAnkle(Object& hip, FootMeta& foot_m) {
 
 void Skelly::updateShoulders(Time now) {
   float angle = sampleMovement(walk_.shoulders);
-  rig_.neck_->setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+  pose_.getBone(rig_.neck_).setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void Skelly::updateHands(Time now) {
   // This animation is in torso space, but the hands are in root space.
+  mat4 to_root =
+      pose_.getBone(rig_.cog_).matrix() * pose_.getBone(rig_.neck_).matrix();
+
   if (walk_.larm.anim) {
     vec3 root_hand = sampleMovement(walk_.larm);
-    rig_.lhand_->setPos(rig_.neck_->posToAncestor(&root_, root_hand));
+    pose_.getBone(rig_.lhand_).setPos(to_root * vec4(root_hand, 1));
   }
   if (walk_.rarm.anim) {
     vec3 root_hand = sampleMovement(walk_.rarm);
-    rig_.rhand_->setPos(rig_.neck_->posToAncestor(&root_, root_hand));
+    pose_.getBone(rig_.rhand_).setPos(to_root * vec4(root_hand, 1));
   }
 }
 

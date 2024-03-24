@@ -207,5 +207,5 @@ void Object::getSceneObjects(
 
 void Object::updateTransform() {
   transform_ =
-      glm::translate(getPos()) * glm::toMat4(getRot()) * glm::scale(scale_);
+      glm::translate(getPos()) * glm::toMat4(getRot()) * glm::scale(getScale());
 }

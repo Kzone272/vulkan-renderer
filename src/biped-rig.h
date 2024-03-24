@@ -2,6 +2,7 @@
 
 #include "glm-include.h"
 #include "object.h"
+#include "pose.h"
 
 struct SkellySizes;
 struct BipedRig;
@@ -63,27 +64,15 @@ struct IkChain {
   vec3 point_zero;
 };
 
-struct FootMeta {
-  Object* foot;
-  Object* toe;
-  bool planted = false;
-  bool in_swing = false;
-  bool is_left = false;
-  vec3 world_target;
-  vec3 start_pos;
-  float toe_angle = 0;  // Angle relative to floor
-  vec3 toe_pos;
-  vec3 toe_dir = {0, 0, 1};
-  vec3 toe_dir_start = {0, 0, 1};
-};
-
 struct BipedRig {
   BipedRig() = default;
   void makeRig(const BipedSkeleton& skeleton, Object* root);
-  void plantFoot(FootMeta& foot_m);
-  void initFoot(FootMeta& foot_m);
+  Pose getZeroPose() {
+    return zero_p_;
+  }
   void updateSkeleton(BipedSkeleton& skeleton);
   void solveIk();
+  void applyPose(const Pose& pose);
 
   Object* root_;
   Object* cog_;
@@ -108,6 +97,5 @@ struct BipedRig {
   IkChain spine_;
   IkChain cerv_;  // Cervical spine (neck to head)
 
-  FootMeta lfoot_m_{.is_left = true};
-  FootMeta rfoot_m_;
+  Pose zero_p_;
 };
