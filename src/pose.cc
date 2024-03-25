@@ -19,9 +19,12 @@ Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
   for (uint32_t i = 0; i < static_cast<uint32_t>(BoneId::COUNT); i++) {
     BoneId bone = static_cast<BoneId>(i);
 
-    if (p2.bone_mask && p2.bone_mask->contains(bone)) {
+    if (!p2.bone_mask || p2.bone_mask->contains(bone)) {
       if (p2.type == PoseType::Additive) {
+        std::println("p1pos:{}:", toStr(p1.bone_ts[i].getPos()));
+        std::println("p2pos:{}:", toStr(p2.bone_ts[i].getPos()));
         p.setBone(bone, Transform::addBlend(p1.bone_ts[i], p2.bone_ts[i], a));
+        std::println("ppos:{}:", toStr(p.bone_ts[i].getPos()));
       } else {
         p.setBone(bone, Transform::blend(p1.bone_ts[i], p2.bone_ts[i], a));
       }

@@ -22,12 +22,11 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   torso_ = cog_->addChild(Object(ModelId::Bone, torso_t));
   torso_->setPos(vec3(0, sizes.shoulders_y, 0));
 
-  vec3 bicep_pos = {-(sizes.shoulders_w / 2 + 3), -5, 0};
   mat4 arm_rot = glm::toMat4(glm::angleAxis(glm::radians(90.f), vec3(0, 0, 1)));
   mat4 bicep_t =
       glm::scale(vec3(sizes.bicep, sizes.bone_w, sizes.bone_w)) * arm_rot;
   lbicep_ = torso_->addChild(Object(ModelId::Bone, bicep_t));
-  lbicep_->setPos(bicep_pos);
+  lbicep_->setPos(sizes.sho_pos);
 
   vec3 forearm_pos = {-sizes.bicep, 0, 0};
   mat4 forearm_t =
@@ -47,8 +46,7 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
 
   mat4 femur_t = glm::scale(vec3(sizes.bone_w, -sizes.femur, sizes.bone_w));
   lfemur_ = pelvis_->addChild(Object(ModelId::Bone, femur_t));
-  vec3 femur_pos = {-(sizes.pelvis_w / 2 + 3), -sizes.pelvis_h, 0};
-  lfemur_->setPos(femur_pos);
+  lfemur_->setPos(sizes.hip_pos);
 
   mat4 shin_t = glm::scale(vec3(sizes.bone_w, -sizes.shin, sizes.bone_w));
   lshin_ = lfemur_->addChild(Object(ModelId::Bone, shin_t));
@@ -67,7 +65,7 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   mat3 flip3 = mat3(flip);
 
   rfemur_ = pelvis_->addChild(Object(ModelId::Bone, femur_t));
-  rfemur_->setPos(flip3 * femur_pos);
+  rfemur_->setPos(flip3 * sizes.hip_pos);
 
   rshin_ = rfemur_->addChild(Object(ModelId::Bone, shin_t));
   rshin_->setPos(flip3 * shin_pos);
@@ -76,7 +74,7 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   rfoot_->setPos(flip3 * foot_pos);
 
   rbicep_ = torso_->addChild(Object(ModelId::Bone, flip * bicep_t));
-  rbicep_->setPos(flip3 * bicep_pos);
+  rbicep_->setPos(flip3 * sizes.sho_pos);
 
   rforearm_ = rbicep_->addChild(Object(ModelId::Bone, flip * forearm_t));
   rforearm_->setPos(flip3 * forearm_pos);
@@ -232,6 +230,9 @@ void BipedRig::applyPose(const Pose& pose) {
     BoneId bone_id = static_cast<BoneId>(i);
     if (pose.bone_mask && !pose.bone_mask->contains(bone_id)) {
       continue;
+    }
+    if (bone_id == BoneId::Cog) {
+      std::println("applypos:{}:", toStr(pose.bone_ts[i].getPos()));
     }
     getBone(bone_id)->setTransform(pose.getBoneConst(bone_id));
   }

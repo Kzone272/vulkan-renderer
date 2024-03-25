@@ -57,6 +57,8 @@ struct SkellySizes {
   float wrist_d;  // Distance from shoulder to wrist
   float bicep;
   float forearm;
+  vec3 sho_pos;  // left shoulder
+  vec3 hip_pos;  // left hip
 };
 
 struct FootMeta {
@@ -81,6 +83,8 @@ struct Movement {
   // State
   Spline<T> spline;
   std::optional<Animation<T>> anim;
+
+  void start(float cycle_dur);
 };
 
 struct Cycle {
@@ -95,6 +99,61 @@ struct Cycle {
   Movement<float> shoulders;
   Movement<vec3> larm;
   Movement<vec3> rarm;
+};
+
+// This struct is still WIP
+class WalkCycle {
+ public:
+  void init(BipedRig& rig);
+  void updateCycle(
+      const MoveOptions& move, const SkellySizes& sizes, float cycle_dur,
+      float target_speed);
+  const Pose& getPose(float cycle_t);
+  Cycle& getCycle() {
+    return walk_;
+  }
+
+ private:
+  void updateCog();
+  void updatePelvis();
+  void updateFeet();
+  void updateToeAngle(FootMeta& foot, Movement<float>& move);
+  void updateToe(FootMeta& foot_m, Movement<vec3>& move);
+  void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
+  void initFoot(FootMeta& foot_m, vec3 toe_pos);
+  void plantFoot(FootMeta& foot_m);
+  void swingFoot(FootMeta& foot_m, Movement<vec3>& move);
+  void updateShoulders();
+  void updateHands();
+
+  Cycle walk_{
+      // Offsets should be in [0, 1)
+      // Durations should be in [0, 1]
+      .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
+      .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
+      .lheel = {.offset = 0.05, .dur = 0.45},
+      .rheel = {.offset = 0.55, .dur = 0.45},
+      .bounce = {.offset = 0, .dur = 0.5, .loop = true},      // pelvis up/down
+      .sway = {.offset = 0, .dur = 1, .loop = true},          // z
+      .spin = {.offset = 0, .dur = 1, .loop = true},          // y
+      .heels_add = {.offset = 0.25, .dur = 1, .loop = true},  // x
+      .shoulders = {.offset = 0, .dur = 1, .loop = true},     // y
+      .larm = {.offset = 0.5, .dur = 1, .loop = true},
+      .rarm = {.offset = 0, .dur = 1, .loop = true},
+  };
+  Pose pose_;
+  float cycle_dur_ = 0;
+  float cycle_t_ = 0;
+  float prev_cycle_t_ = 0;
+  float target_speed_ = 0;
+
+  // TODO: Delete these maybe
+  Object* root_;
+  const MoveOptions* move_;
+  const SkellySizes* sizes_;
+
+  FootMeta lfoot_m_{.is_left = true};
+  FootMeta rfoot_m_;
 };
 
 class Skelly {
@@ -116,46 +175,12 @@ class Skelly {
     int size_preset = 0;
   } ui_;
 
-  Cycle walk_{
-      // Offsets should be in [0, 1)
-      // Durations should be in [0, 1]
-      .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
-      .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
-      .lheel = {.offset = 0.05, .dur = 0.45},
-      .rheel = {.offset = 0.55, .dur = 0.45},
-      .bounce = {.offset = 0, .dur = 0.5, .loop = true},      // pelvis up/down
-      .sway = {.offset = 0, .dur = 1, .loop = true},          // z
-      .spin = {.offset = 0, .dur = 1, .loop = true},          // y
-      .heels_add = {.offset = 0.25, .dur = 1, .loop = true},  // x
-      .shoulders = {.offset = 0, .dur = 1, .loop = true},     // y
-      .larm = {.offset = 0.5, .dur = 1, .loop = true},
-      .rarm = {.offset = 0, .dur = 1, .loop = true},
-  };
-
   void updateSpeed(Time now, float delta_s);
 
-  bool inCycle(const auto& move, float t);
-  bool moveStarted(auto& move);
-  bool moveStopped(auto& move);
-
-  void updateCycle(Time now, float delta_s);
+  void updateCycle(float delta_s);
   void updateMovements();
-
-  void startMovement(auto& move);
-  vec3 sampleMovement(Movement<vec3>& move);
-  float sampleMovement(Movement<float>& move);
-
-  void updateCog(Time now, float delta_s);
-  void updatePelvis(Time now);
-  void updateFeet(Time now);
-  void updateToeAngle(Time now, FootMeta& foot, Movement<float>& move);
-  void updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move);
-  void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
-  void initFoot(FootMeta& foot_m, Object* foot, Object* toe);
-  void plantFoot(FootMeta& foot_m);
-  void swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move);
-  void updateShoulders(Time now);
-  void updateHands(Time now);
+  void tweakPose(Time now, float delta_s);
+  void updateLean(Time now, float delta_s);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);
@@ -166,14 +191,15 @@ class Skelly {
   Object root_;
   BipedSkeleton skeleton_;
   Pose pose_;
+  Pose tweak_pose_;
   Pose mod_pose_;
   BipedRig rig_;
-  FootMeta lfoot_m_{.is_left = true};
-  FootMeta rfoot_m_;
 
   float cycle_t_ = 0;
   float prev_cycle_t_ = 0;
   float cycle_dur_ = 1000;
+
+  WalkCycle walk_;
 
   vec2 input_dir_{0};
   std::optional<Animation<vec3>> vel_curve_;
@@ -182,14 +208,4 @@ class Skelly {
   bool target_speed_changed_ = false;
 
   std::unique_ptr<SecondOrder<vec3>> lean_so_;
-};
-
-// This struct is still WIP
-struct WalkCycle {
-  void updateCycle(float cycle_dur);
-  Pose getPose(float cycle_t);
-
-  Pose pose_;
-  float cycle_dur_;
-  float prev_t_;
 };
