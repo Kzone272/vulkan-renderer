@@ -385,12 +385,12 @@ float getMoveT(const auto& move, float cycle_t) {
   return move_t;
 }
 
-void Skelly::checkMove(auto& move, Time now, bool moves_changed, float prev_t) {
-  if (!move.loop) {
-    move.should_start = !inCycle(move, prev_t) && inCycle(move, cycle_t_);
-  } else if (moves_changed) {
-    startMovement(move, now);
-  }
+bool Skelly::moveStarted(auto& move) {
+  return !inCycle(move, prev_cycle_t_) && inCycle(move, cycle_t_);
+}
+
+bool Skelly::moveStopped(auto& move) {
+  return inCycle(move, prev_cycle_t_) && !inCycle(move, cycle_t_);
 }
 
 void Skelly::updateCycle(Time now, float delta_s) {
@@ -401,7 +401,7 @@ void Skelly::updateCycle(Time now, float delta_s) {
   //   cycle_t_ = 0;
   // }
 
-  float prev_t = cycle_t_;
+  prev_cycle_t_ = cycle_t_;
   cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
 
   if (target_speed_changed_) {
@@ -412,50 +412,29 @@ void Skelly::updateCycle(Time now, float delta_s) {
     }
     updateMovements();
   }
-
-  // TODO: Easy way to put all moves in a list?
-  checkMove(walk_.lstep, now, target_speed_changed_, prev_t);
-  checkMove(walk_.rstep, now, target_speed_changed_, prev_t);
-  checkMove(walk_.lheel, now, target_speed_changed_, prev_t);
-  checkMove(walk_.rheel, now, target_speed_changed_, prev_t);
-  checkMove(walk_.bounce, now, target_speed_changed_, prev_t);
-  checkMove(walk_.sway, now, target_speed_changed_, prev_t);
-  checkMove(walk_.spin, now, target_speed_changed_, prev_t);
-  checkMove(walk_.heels_add, now, target_speed_changed_, prev_t);
-  checkMove(walk_.larm, now, target_speed_changed_, prev_t);
-  checkMove(walk_.rarm, now, target_speed_changed_, prev_t);
-  checkMove(walk_.shoulders, now, target_speed_changed_, prev_t);
 }
 
 void Skelly::updateMovements() {
   float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
   walk_.bounce.spline =
       Spline<float>(SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
+  startMovement(walk_.bounce);
 
   float hip_sway = glm::radians(options_.hip_sway);
   walk_.sway.spline = Spline<float>(
       SplineType::Hermite, {-hip_sway, 0, hip_sway, 0, -hip_sway, 0});
+  startMovement(walk_.sway);
 
   float hip_spin = glm::radians(options_.hip_spin);
   walk_.spin.spline = Spline<float>(
       SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
-
-  std::vector<float> values = {0, 10, 50, 5, -15, 5, 0, 0};
-  float speed_scale = std::min(target_speed_, 300.f) / 150.f;
-  for (float& val : values) {
-    val *= options_.heel_lift_pct * speed_scale;
-  }
-  walk_.lheel.spline = Spline<float>(SplineType::Hermite, std::move(values));
-  walk_.rheel.spline = walk_.lheel.spline;
-
-  float heel = options_.heel_shift;
-  walk_.heels_add.spline =
-      Spline<float>(SplineType::Hermite, {-heel, 0, heel, 0, -heel, 0});
+  startMovement(walk_.spin);
 
   float shoulder_rot = glm::radians(options_.shoulder_spin);
   walk_.shoulders.spline = Spline<float>(
       SplineType::Hermite,
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
+  startMovement(walk_.shoulders);
 
   float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
   vec3 shoulder = skeleton_.lbicep_->getPos();
@@ -469,6 +448,7 @@ void Skelly::updateMovements() {
                  shoulder;
   walk_.larm.spline = Spline<vec3>(
       SplineType::Hermite, {back, vec3(0), forward, vec3(0), back, vec3(0)});
+  startMovement(walk_.larm);
 
   walk_.rarm.spline = walk_.larm.spline;
   // Flips right arm points on x axis.
@@ -476,22 +456,12 @@ void Skelly::updateMovements() {
   for (vec3& point : walk_.rarm.spline.points_) {
     point = flip * point;
   }
+  startMovement(walk_.rarm);
 }
 
-void Skelly::startMovement(auto& move, Time now) {
+void Skelly::startMovement(auto& move) {
   float dur = move.dur * cycle_dur_;
-  Time start = getMoveStart(move, now);
-  move.anim = Animation(move.spline, dur, start, move.loop);
-}
-
-Time Skelly::getMoveStart(auto& move, Time now) {
-  float t = cycle_t_;
-  if (t < move.offset) {
-    t += 1;
-    DASSERT(t >= move.offset);
-  }
-  float pos_in_anim = t - move.offset;
-  return addMs(now, -pos_in_anim * cycle_dur_);
+  move.anim = Animation(move.spline, dur, move.loop);
 }
 
 vec3 Skelly::sampleMovement(Movement<vec3>& move) {
@@ -566,38 +536,32 @@ void Skelly::updateFeet(Time now) {
 }
 
 void Skelly::updateToeAngle(Time now, FootMeta& foot_m, Movement<float>& move) {
-  if (move.should_start) {
+  if (moveStarted(move)) {
     move.spline = Spline<float>(
         SplineType::Hermite, {foot_m.toe_angle, foot_m.toe_angle * 3, 0, 0});
-    startMovement(move, now);
+    startMovement(move);
   }
 
-  foot_m.toe_angle = sampleMovement(move);
-  if (move.anim && now > move.anim->to_time_) {
-    move.anim.reset();
+  if (move.anim && inCycle(move, cycle_t_)) {
+    foot_m.toe_angle = sampleMovement(move);
+  } else {
     foot_m.toe_angle = 0;
   }
 }
 
 void Skelly::updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move) {
-  if (move.should_start) {
+  if (moveStarted(move)) {
     swingFoot(foot_m, now, move);
+  } else if (moveStopped(move) && move.anim) {
+    vec3 plant_pos = move.anim->sample(1);
+    foot_m.toe_pos = plant_pos;
+    plantFoot(foot_m);
   }
 
-  if (foot_m.planted) {
+  if (move.anim && inCycle(move, cycle_t_)) {
+    foot_m.toe_pos = sampleMovement(move);
+  } else {
     foot_m.toe_pos = root_.posToLocal(foot_m.world_target);
-  }
-
-  if (move.anim) {
-    if (now > move.anim->to_time_) {
-      vec3 plant_pos = move.anim->sample(move.anim->to_time_);
-      move.anim.reset();
-      foot_m.toe_pos = plant_pos;
-      plantFoot(foot_m);
-    } else {
-      vec3 swing_pos = sampleMovement(move);
-      foot_m.toe_pos = swing_pos;
-    }
   }
 }
 
@@ -611,12 +575,10 @@ void Skelly::initFoot(FootMeta& foot_m, Object* foot, Object* toe) {
 
 void Skelly::plantFoot(FootMeta& foot_m) {
   foot_m.planted = true;
-  foot_m.in_swing = false;
   foot_m.world_target = root_.posToWorld(foot_m.toe_pos);
 }
 
 void Skelly::swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move) {
-  foot_m.in_swing = true;
   foot_m.planted = false;
 
   vec3 start = foot_m.toe_pos;
@@ -637,8 +599,7 @@ void Skelly::swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move) {
 
   move.spline = Spline<vec3>(
       SplineType::Hermite, {start, no_vel, mid_pos, swing_vel, end, toe_drop});
-
-  startMovement(move, now);
+  startMovement(move);
 }
 
 void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {

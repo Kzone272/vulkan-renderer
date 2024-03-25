@@ -41,8 +41,8 @@ struct Spline {
 
 template <class T>
 struct Animation {
-  Animation() {
-  }
+  Animation() = default;
+  Animation(const Spline<T>& spline, float dur_ms, bool loop = false);
   Animation(
       const Spline<T>& spline, float dur_ms, Time start, bool loop = false);
   T sample(Time now, SampleType sample_type = SampleType::Position);
@@ -52,6 +52,7 @@ struct Animation {
   float dur_ms_;
   Time from_time_;
   Time to_time_;
+  bool has_times_ = false;
   bool loop_ = false;
 };
 
@@ -197,11 +198,15 @@ T Spline<T>::sample(float u, SampleType sample_type) {
 template <class T>
 Animation<T>::Animation(
     const Spline<T>& spline, float dur_ms, Time start, bool loop)
-    : spline_(spline),
-      dur_ms_(dur_ms),
-      from_time_(start),
-      to_time_(addMs(start, dur_ms)),
-      loop_(loop) {
+    : Animation(spline, dur_ms, loop) {
+  from_time_ = start;
+  to_time_ = addMs(start, dur_ms);
+  has_times_ = true;
+}
+
+template <class T>
+Animation<T>::Animation(const Spline<T>& spline, float dur_ms, bool loop)
+    : spline_(spline), dur_ms_(dur_ms), loop_(loop) {
   // We need to scale the velocities of Hermite splines based on duration of
   // each segment.
   // Notes on scaling: https://www.cubic.org/docs/hermite.htm
@@ -214,6 +219,7 @@ Animation<T>::Animation(
 
 template <class T>
 T Animation<T>::sample(Time now, SampleType sample_type) {
+  ASSERT(has_times_);
   float time_ms = FloatMs(now - from_time_).count();
   if (loop_) {
     time_ms = fmodClamp(time_ms, dur_ms_);

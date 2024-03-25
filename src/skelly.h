@@ -63,7 +63,6 @@ struct FootMeta {
   Object* foot;
   Object* toe;
   bool planted = false;
-  bool in_swing = false;
   bool is_left = false;
   vec3 world_target;
   vec3 start_pos;
@@ -71,6 +70,31 @@ struct FootMeta {
   vec3 toe_pos;
   vec3 toe_dir = {0, 0, 1};
   vec3 toe_dir_start = {0, 0, 1};
+};
+
+template <class T>
+struct Movement {
+  // Definition
+  float offset;
+  float dur;
+  bool loop = false;
+  // State
+  Spline<T> spline;
+  std::optional<Animation<T>> anim;
+};
+
+struct Cycle {
+  Movement<vec3> lstep;
+  Movement<vec3> rstep;
+  Movement<float> lheel;
+  Movement<float> rheel;
+  Movement<float> bounce;
+  Movement<float> sway;
+  Movement<float> spin;
+  Movement<float> heels_add;  // Mostly for debugging heel angle
+  Movement<float> shoulders;
+  Movement<vec3> larm;
+  Movement<vec3> rarm;
 };
 
 class Skelly {
@@ -92,30 +116,6 @@ class Skelly {
     int size_preset = 0;
   } ui_;
 
-  template <class T>
-  struct Movement {
-    // Definition
-    float offset;
-    float dur;
-    bool loop = false;
-    // State
-    bool should_start = false;
-    Spline<T> spline;
-    std::optional<Animation<T>> anim;
-  };
-  struct Cycle {
-    Movement<vec3> lstep;
-    Movement<vec3> rstep;
-    Movement<float> lheel;
-    Movement<float> rheel;
-    Movement<float> bounce;
-    Movement<float> sway;
-    Movement<float> spin;
-    Movement<float> heels_add;  // Mostly for debugging heel angle
-    Movement<float> shoulders;
-    Movement<vec3> larm;
-    Movement<vec3> rarm;
-  };
   Cycle walk_{
       // Offsets should be in [0, 1)
       // Durations should be in [0, 1]
@@ -135,13 +135,13 @@ class Skelly {
   void updateSpeed(Time now, float delta_s);
 
   bool inCycle(const auto& move, float t);
-  void checkMove(auto& move, Time now, bool moves_changed, float prev_t);
+  bool moveStarted(auto& move);
+  bool moveStopped(auto& move);
 
   void updateCycle(Time now, float delta_s);
   void updateMovements();
 
-  void startMovement(auto& move, Time now);
-  Time getMoveStart(auto& move, Time now);
+  void startMovement(auto& move);
   vec3 sampleMovement(Movement<vec3>& move);
   float sampleMovement(Movement<float>& move);
 
@@ -172,6 +172,7 @@ class Skelly {
   FootMeta rfoot_m_;
 
   float cycle_t_ = 0;
+  float prev_cycle_t_ = 0;
   float cycle_dur_ = 1000;
 
   vec2 input_dir_{0};
@@ -181,4 +182,14 @@ class Skelly {
   bool target_speed_changed_ = false;
 
   std::unique_ptr<SecondOrder<vec3>> lean_so_;
+};
+
+// This struct is still WIP
+struct WalkCycle {
+  void updateCycle(float cycle_dur);
+  Pose getPose(float cycle_t);
+
+  Pose pose_;
+  float cycle_dur_;
+  float prev_t_;
 };
