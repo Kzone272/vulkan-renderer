@@ -126,111 +126,6 @@ float Skelly::getPelvisHeight() {
   return sizes_.pelvis_y;
 }
 
-void Skelly::UpdateImgui() {
-  ImGui::Begin("Skeleton");
-
-  ImGui::SliderFloat("Max Speed", &options_.max_speed, 0, 500);
-  ImGui::Separator();
-
-  ImGui::BeginTabBar("Skeleton Tabs");
-  if (ImGui::BeginTabItem("Movement")) {
-    if (ImGui::Combo(
-            "Movement Presets", &ui_.move_preset,
-            "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
-      if (ui_.move_preset == 0) {
-        moveDefault(options_);
-      } else if (ui_.move_preset == 1) {
-        moveTightrope(options_);
-      } else if (ui_.move_preset == 2) {
-        movePreppy(options_);
-      } else if (ui_.move_preset == 3) {
-        moveSnow(options_);
-      } else if (ui_.move_preset == 4) {
-        moveRunway(options_);
-      } else if (ui_.move_preset == 5) {
-        moveCrouch(options_);
-      } else if (ui_.move_preset == 6) {
-        moveFlanders(options_);
-      }
-      makeBones();
-    }
-
-    ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
-    ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
-    ImGui::SliderFloat("Crouch %", &options_.crouch_pct, 0.01, 1.2);
-    if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
-      makeBones();
-    }
-    ImGui::SliderFloat("Step Height", &options_.step_height, 0, 50);
-    ImGui::SliderFloat("Lean", &options_.lean, 0, 200);
-    ImGui::SliderFloat("Bounce", &options_.bounce, 0, 10);
-    ImGui::SliderFloat("Hip Sway", &options_.hip_sway, 0, 30);
-    ImGui::SliderFloat("Hip Spin", &options_.hip_spin, 0, 45);
-    ImGui::SliderFloat("Heel Lift %", &options_.heel_lift_pct, 0, 2);
-    ImGui::SliderFloat("Heels Shift", &options_.heel_shift, 0, 90);
-    ImGui::SliderFloat("Shoulder Spin", &options_.shoulder_spin, 0, 45);
-    ImGui::SliderFloat("Arm Span %", &options_.arm_span_pct, -0.2, 1);
-    ImGui::SliderFloat("Hand Height %", &options_.hand_height_pct, -1, 1);
-    ImGui::SliderFloat("Hands Forward", &options_.hands_forward, -50, 50);
-    ImGui::SliderFloat("Step Offset", &options_.step_offset, -50, 50);
-    if (ImGui::SliderFloat3(
-            "Lean SO", (float*)&options_.lean_params, 0.001, 20, "%.5f")) {
-      lean_so_->updateParams(options_.lean_params);
-    }
-
-    ImGui::EndTabItem();
-  }
-
-  if (ImGui::BeginTabItem("Sizes")) {
-    if (ImGui::Combo(
-            "Size Presets", &ui_.size_preset,
-            "Default\0Tall\0Big\0Dwarf\0Chimp")) {
-      if (ui_.size_preset == 0) {
-        sizeDefault(sizes_);
-      } else if (ui_.size_preset == 1) {
-        sizeTall(sizes_);
-      } else if (ui_.size_preset == 2) {
-        sizeBig(sizes_);
-      } else if (ui_.size_preset == 3) {
-        sizeDwarf(sizes_);
-      } else if (ui_.size_preset == 4) {
-        sizeChimp(sizes_);
-      }
-      std::println("change size");
-      makeBones();
-    }
-    ImGui::Separator();
-
-    bool changed = false;
-    changed |= ImGui::SliderFloat("Height", &sizes_.height, 1, 250);
-    changed |= ImGui::SliderFloat("Leg", &sizes_.leg, 1, sizes_.height);
-    changed |= ImGui::SliderFloat("Femur", &sizes_.femur_pct, 0.05, 1);
-    changed |= ImGui::SliderFloat("Bone W", &sizes_.bone_w, 0.5, 10);
-    changed |= ImGui::SliderFloat("Pelvis W", &sizes_.pelvis_w, 1, 60);
-    changed |= ImGui::SliderFloat("Shoudlers W", &sizes_.shoulders_w, 1, 100);
-    changed |= ImGui::SliderFloat("Arm", &sizes_.arm, 1, 150);
-    changed |= ImGui::SliderFloat("Bicep %", &sizes_.bicep_pct, 0.05, 1);
-    if (changed) {
-      makeBones();
-    }
-
-    ImGui::EndTabItem();
-  }
-
-  if (ImGui::BeginTabItem("Cycle")) {
-    cycleUi(walk_);
-    ImGui::EndTabItem();
-  }
-
-  if (ImGui::BeginTabItem("Mods")) {
-    ImGui::SliderFloat("Mod Blend %", &options_.mod_blend, 0, 1);
-    ImGui::EndTabItem();
-  }
-
-  ImGui::EndTabBar();
-  ImGui::End();
-}
-
 void Skelly::updateSpeed(Time now, float delta_s) {
   vec3 curr_vel = vel_;
 
@@ -564,6 +459,111 @@ void Skelly::updateHands(Time now) {
     vec3 root_hand = sampleMovement(walk_.rarm);
     pose_.getBone(BoneId::Rhand).setPos(to_root * vec4(root_hand, 1));
   }
+}
+
+void Skelly::UpdateImgui() {
+  ImGui::Begin("Skeleton");
+
+  ImGui::SliderFloat("Max Speed", &options_.max_speed, 0, 500);
+  ImGui::Separator();
+
+  ImGui::BeginTabBar("Skeleton Tabs");
+  if (ImGui::BeginTabItem("Movement")) {
+    if (ImGui::Combo(
+            "Movement Presets", &ui_.move_preset,
+            "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
+      if (ui_.move_preset == 0) {
+        moveDefault(options_);
+      } else if (ui_.move_preset == 1) {
+        moveTightrope(options_);
+      } else if (ui_.move_preset == 2) {
+        movePreppy(options_);
+      } else if (ui_.move_preset == 3) {
+        moveSnow(options_);
+      } else if (ui_.move_preset == 4) {
+        moveRunway(options_);
+      } else if (ui_.move_preset == 5) {
+        moveCrouch(options_);
+      } else if (ui_.move_preset == 6) {
+        moveFlanders(options_);
+      }
+      makeBones();
+    }
+
+    ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
+    ImGui::SliderFloat("Crouch %", &options_.crouch_pct, 0.01, 1.2);
+    if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
+      makeBones();
+    }
+    ImGui::SliderFloat("Step Height", &options_.step_height, 0, 50);
+    ImGui::SliderFloat("Lean", &options_.lean, 0, 200);
+    ImGui::SliderFloat("Bounce", &options_.bounce, 0, 10);
+    ImGui::SliderFloat("Hip Sway", &options_.hip_sway, 0, 30);
+    ImGui::SliderFloat("Hip Spin", &options_.hip_spin, 0, 45);
+    ImGui::SliderFloat("Heel Lift %", &options_.heel_lift_pct, 0, 2);
+    ImGui::SliderFloat("Heels Shift", &options_.heel_shift, 0, 90);
+    ImGui::SliderFloat("Shoulder Spin", &options_.shoulder_spin, 0, 45);
+    ImGui::SliderFloat("Arm Span %", &options_.arm_span_pct, -0.2, 1);
+    ImGui::SliderFloat("Hand Height %", &options_.hand_height_pct, -1, 1);
+    ImGui::SliderFloat("Hands Forward", &options_.hands_forward, -50, 50);
+    ImGui::SliderFloat("Step Offset", &options_.step_offset, -50, 50);
+    if (ImGui::SliderFloat3(
+            "Lean SO", (float*)&options_.lean_params, 0.001, 20, "%.5f")) {
+      lean_so_->updateParams(options_.lean_params);
+    }
+
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("Sizes")) {
+    if (ImGui::Combo(
+            "Size Presets", &ui_.size_preset,
+            "Default\0Tall\0Big\0Dwarf\0Chimp")) {
+      if (ui_.size_preset == 0) {
+        sizeDefault(sizes_);
+      } else if (ui_.size_preset == 1) {
+        sizeTall(sizes_);
+      } else if (ui_.size_preset == 2) {
+        sizeBig(sizes_);
+      } else if (ui_.size_preset == 3) {
+        sizeDwarf(sizes_);
+      } else if (ui_.size_preset == 4) {
+        sizeChimp(sizes_);
+      }
+      std::println("change size");
+      makeBones();
+    }
+    ImGui::Separator();
+
+    bool changed = false;
+    changed |= ImGui::SliderFloat("Height", &sizes_.height, 1, 250);
+    changed |= ImGui::SliderFloat("Leg", &sizes_.leg, 1, sizes_.height);
+    changed |= ImGui::SliderFloat("Femur", &sizes_.femur_pct, 0.05, 1);
+    changed |= ImGui::SliderFloat("Bone W", &sizes_.bone_w, 0.5, 10);
+    changed |= ImGui::SliderFloat("Pelvis W", &sizes_.pelvis_w, 1, 60);
+    changed |= ImGui::SliderFloat("Shoudlers W", &sizes_.shoulders_w, 1, 100);
+    changed |= ImGui::SliderFloat("Arm", &sizes_.arm, 1, 150);
+    changed |= ImGui::SliderFloat("Bicep %", &sizes_.bicep_pct, 0.05, 1);
+    if (changed) {
+      makeBones();
+    }
+
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("Cycle")) {
+    cycleUi(walk_);
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("Mods")) {
+    ImGui::SliderFloat("Mod Blend %", &options_.mod_blend, 0, 1);
+    ImGui::EndTabItem();
+  }
+
+  ImGui::EndTabBar();
+  ImGui::End();
 }
 
 void Skelly::cycleUi(Cycle& cycle) {
