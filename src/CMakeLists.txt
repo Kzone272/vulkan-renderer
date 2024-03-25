@@ -24,6 +24,7 @@ add_executable(main
   primitives.h
   skelly.h
   skelly.cc
+  skelly-presets.h
   descriptors.h
   descriptors.cc
   files.h
