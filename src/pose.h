@@ -44,9 +44,13 @@ struct Pose {
   std::optional<std::set<BoneId>> bone_mask;
   std::map<const IkChain*, vec3> ik_dirs;
 
-  void setBone(BoneId bone, const Transform& t);
-  const Transform& getBoneConst(BoneId bone) const;
-  Transform& getBone(BoneId bone);
+  void setPos(BoneId bone, const vec3& pos);
+  void setScale(BoneId bone, const vec3& scale);
+  void setRot(BoneId bone, const quat& rot);
+  void setTransform(BoneId bone, const Transform& t);
+
+  const mat4& getMatrix(BoneId bone);
+  const Transform& getTransform(BoneId bone) const;
 
   static Pose freeze(const BipedRig& rig);
   static Pose blend(const Pose& p1, const Pose& p2, float a);

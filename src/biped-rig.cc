@@ -231,7 +231,7 @@ void BipedRig::applyPose(const Pose& pose) {
     if (pose.bone_mask && !pose.bone_mask->contains(bone_id)) {
       continue;
     }
-    getBone(bone_id)->setTransform(pose.getBoneConst(bone_id));
+    getBone(bone_id)->setTransform(pose.getTransform(bone_id));
   }
 
   std::vector<IkChain*> all_iks = {&larm_, &rarm_, &lleg_, &rleg_};

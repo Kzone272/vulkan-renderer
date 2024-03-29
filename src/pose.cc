@@ -7,7 +7,7 @@ Pose Pose::freeze(const BipedRig& rig) {
   Pose p;
   for (uint32_t i = 0; i < kBoneCount; i++) {
     BoneId bone = static_cast<BoneId>(i);
-    p.setBone(bone, rig.getBone(bone)->getTransform());
+    p.setTransform(bone, rig.getBone(bone)->getTransform());
   }
   return p;
 }
@@ -21,9 +21,10 @@ Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
 
     if (!p2.bone_mask || p2.bone_mask->contains(bone)) {
       if (p2.type == PoseType::Additive) {
-        p.setBone(bone, Transform::addBlend(p1.bone_ts[i], p2.bone_ts[i], a));
+        p.setTransform(
+            bone, Transform::addBlend(p1.bone_ts[i], p2.bone_ts[i], a));
       } else {
-        p.setBone(bone, Transform::blend(p1.bone_ts[i], p2.bone_ts[i], a));
+        p.setTransform(bone, Transform::blend(p1.bone_ts[i], p2.bone_ts[i], a));
       }
     }
   }
@@ -48,17 +49,33 @@ Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
   return p;
 }
 
-const Transform& Pose::getBoneConst(BoneId bone) const {
+const Transform& Pose::getTransform(BoneId bone) const {
   DASSERT(bone < BoneId::COUNT);
   DASSERT(!bone_mask || bone_mask->contains(bone));
   return bone_ts[static_cast<uint32_t>(bone)];
 }
 
-Transform& Pose::getBone(BoneId bone) {
+const mat4& Pose::getMatrix(BoneId bone) {
   DASSERT(bone < BoneId::COUNT);
-  return bone_ts[static_cast<uint32_t>(bone)];
+  return bone_ts[static_cast<uint32_t>(bone)].matrix();
 }
 
-void Pose::setBone(BoneId bone, const Transform& t) {
-  getBone(bone) = t;
+void Pose::setTransform(BoneId bone, const Transform& t) {
+  DASSERT(bone < BoneId::COUNT);
+  bone_ts[static_cast<uint32_t>(bone)] = t;
+}
+
+void Pose::setPos(BoneId bone, const vec3& pos) {
+  DASSERT(bone < BoneId::COUNT);
+  bone_ts[static_cast<uint32_t>(bone)].setPos(pos);
+}
+
+void Pose::setScale(BoneId bone, const vec3& scale) {
+  DASSERT(bone < BoneId::COUNT);
+  bone_ts[static_cast<uint32_t>(bone)].setScale(scale);
+}
+
+void Pose::setRot(BoneId bone, const quat& rot) {
+  DASSERT(bone < BoneId::COUNT);
+  bone_ts[static_cast<uint32_t>(bone)].setRot(rot);
 }

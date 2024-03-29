@@ -39,8 +39,8 @@ void Skelly::makeBones() {
   mod_pose_.type = PoseType::Override;
   mod_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
   vec3 hands_pos(0, 100, 30);
-  mod_pose_.getBone(BoneId::Lhand).setPos(hands_pos);
-  mod_pose_.getBone(BoneId::Rhand).setPos(hands_pos);
+  mod_pose_.setPos(BoneId::Lhand, hands_pos);
+  mod_pose_.setPos(BoneId::Rhand, hands_pos);
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -322,9 +322,8 @@ void Skelly::updateLean(Time now, float delta_s) {
       glm::normalize(vec3(0, 1, 0)),
       glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
 
-  Transform& cog_t = tweak_pose_.getBone(BoneId::Cog);
-  cog_t.setPos(offset);
-  cog_t.setRot(rot);
+  tweak_pose_.setPos(BoneId::Cog, offset);
+  tweak_pose_.setRot(BoneId::Cog, rot);
 }
 
 const Pose& WalkCycle::getPose(float cycle_t) {
@@ -347,7 +346,7 @@ void WalkCycle::updateCog() {
   vec3 pos = vec3(0, move_->max_leg_pct * sizes_->pelvis_y, 0);
   pos.y += sampleMovement(walk_.bounce, cycle_t_);
 
-  pose_.getBone(BoneId::Cog).setPos(pos);
+  pose_.setPos(BoneId::Cog, pos);
 }
 
 void WalkCycle::updatePelvis() {
@@ -357,7 +356,7 @@ void WalkCycle::updatePelvis() {
   glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
                   glm::angleAxis(sway, vec3(0, 0, -1));
 
-  pose_.getBone(BoneId::Pelvis).setRot(rot);
+  pose_.setRot(BoneId::Pelvis, rot);
 }
 
 void WalkCycle::updateFeet() {
@@ -366,8 +365,7 @@ void WalkCycle::updateFeet() {
   updateToe(rfoot_m_, walk_.rstep);
   updateToe(lfoot_m_, walk_.lstep);
 
-  mat4 to_root = pose_.getBone(BoneId::Cog).matrix() *
-                 pose_.getBone(BoneId::Pelvis).matrix();
+  mat4 to_root = pose_.getMatrix(BoneId::Cog) * pose_.getMatrix(BoneId::Pelvis);
   vec3 lhip_pos = to_root * vec4(sizes_->hip_pos, 1);
   vec3 rhip_pos = to_root * vec4(sizes_->hip_pos * vec3(-1, 1, 1), 1);
 
@@ -462,10 +460,9 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   glm::quat ankle_rot =
       point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
 
-  Transform& foot_t =
-      pose_.getBone(foot_m.is_left ? BoneId::Lfoot : BoneId::Rfoot);
-  foot_t.setPos(foot_m.toe_pos + ankle_rot * sizes_->ankle);
-  foot_t.setRot(ankle_rot);
+  BoneId bone = foot_m.is_left ? BoneId::Lfoot : BoneId::Rfoot;
+  pose_.setPos(bone, foot_m.toe_pos + ankle_rot * sizes_->ankle);
+  pose_.setRot(bone, ankle_rot);
 
   // TODO: this currently isn't possible with heel angle determined by IK. But
   // this will become relevant again if I add an animation to land on the
@@ -484,15 +481,15 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
 
 void WalkCycle::updateShoulders() {
   float angle = sampleMovement(walk_.shoulders, cycle_t_);
-  pose_.getBone(BoneId::Neck).setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+  pose_.setRot(BoneId::Neck, glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void WalkCycle::updateHands() {
   if (walk_.larm.anim) {
-    pose_.getBone(BoneId::Lhand).setPos(sampleMovement(walk_.larm, cycle_t_));
+    pose_.setPos(BoneId::Lhand, sampleMovement(walk_.larm, cycle_t_));
   }
   if (walk_.rarm.anim) {
-    pose_.getBone(BoneId::Rhand).setPos(sampleMovement(walk_.rarm, cycle_t_));
+    pose_.setPos(BoneId::Rhand, sampleMovement(walk_.rarm, cycle_t_));
   }
 }
 
