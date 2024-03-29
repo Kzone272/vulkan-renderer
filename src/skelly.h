@@ -11,7 +11,7 @@ struct MoveOptions {
   float max_speed = 200;
   float adjust_time = 500;  // milliseconds
   float max_rot_speed = 270;
-  float crouch_pct = 0.95;
+  float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
   float foot_dist = 5;
   float step_height = 5;
@@ -27,7 +27,6 @@ struct MoveOptions {
   float hands_forward = 0;
   vec3 lean_params = {10, 5, 0};
   float step_offset = 5;
-  float mod_blend = 0;
 };
 
 struct SkellySizes {
@@ -59,6 +58,11 @@ struct SkellySizes {
   float forearm;
   vec3 sho_pos;  // left shoulder
   vec3 hip_pos;  // left hip
+};
+
+struct MoveMods {
+  float mod_blend = 0;
+  float crouch_pct = 1;
 };
 
 struct FootMeta {
@@ -187,6 +191,7 @@ class Skelly {
 
   MoveOptions options_;
   SkellySizes sizes_;
+  MoveMods mods_;
 
   Object root_;
   BipedSkeleton skeleton_;

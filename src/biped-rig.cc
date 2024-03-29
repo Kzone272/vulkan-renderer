@@ -172,10 +172,10 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rsho_ = neck_->addChild(Object(ModelId::BallControl, control_t));
   rsho_->setPos(skeleton.rbicep_->getPos());
 
-  lhand_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  lhand_->setPos(skeleton.lhand_->posToAncestor(root_));
-  rhand_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  rhand_->setPos(skeleton.rhand_->posToAncestor(root_));
+  lhand_ = neck_->addChild(Object(ModelId::BallControl, control_t));
+  lhand_->setPos(skeleton.lhand_->posToAncestor(skeleton.torso_));
+  rhand_ = neck_->addChild(Object(ModelId::BallControl, control_t));
+  rhand_->setPos(skeleton.rhand_->posToAncestor(skeleton.torso_));
 
   mat4 pelvis_t = glm::scale(vec3(15, 1, 15));
   pelvis_ = cog_->addChild(Object(ModelId::BoxControl, pelvis_t));
@@ -230,9 +230,6 @@ void BipedRig::applyPose(const Pose& pose) {
     BoneId bone_id = static_cast<BoneId>(i);
     if (pose.bone_mask && !pose.bone_mask->contains(bone_id)) {
       continue;
-    }
-    if (bone_id == BoneId::Cog) {
-      std::println("applypos:{}:", toStr(pose.bone_ts[i].getPos()));
     }
     getBone(bone_id)->setTransform(pose.getBoneConst(bone_id));
   }

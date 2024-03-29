@@ -28,10 +28,19 @@ enum class BoneId : uint32_t {
   COUNT,
 };
 
+constexpr size_t kBoneCount = static_cast<size_t>(BoneId::COUNT);
+
 struct Pose {
+  Pose() = default;
+  Pose(PoseType type)
+      : type(type),
+        bone_ts(
+            kBoneCount, type == PoseType::Additive ? Transform::makeAdditive()
+                                                   : Transform()) {
+  }
+
   PoseType type = PoseType::Override;
-  std::vector<Transform> bone_ts =
-      std::vector<Transform>(static_cast<size_t>(BoneId::COUNT));
+  std::vector<Transform> bone_ts = std::vector<Transform>(kBoneCount);
   std::optional<std::set<BoneId>> bone_mask;
   std::map<const IkChain*, vec3> ik_dirs;
 

@@ -8,10 +8,11 @@ class Transform {
   Transform(const vec3& pos, const vec3& scale, const quat& rot)
       : pos_(pos), scale_(scale), rot_(rot) {
   }
-  Transform(const Transform& other) = default;
-  Transform(Transform&& other) = default;
-  Transform& operator=(const Transform& other) = default;
-  Transform& operator=(Transform&& other) = default;
+
+  static Transform makeAdditive() {
+    // Notably, scale should be 0, not 1.
+    return Transform(vec3(0), vec3(0), glm::identity<quat>());
+  }
 
   void setPos(const vec3& pos);
   void setScale(const vec3& scale);
@@ -27,7 +28,7 @@ class Transform {
  private:
   void updateMatrix();
 
-  bool dirty_ = false;
+  bool dirty_ = true;
   vec3 pos_ = vec3(0);
   vec3 scale_ = vec3(1);
   quat rot_ = glm::identity<quat>();

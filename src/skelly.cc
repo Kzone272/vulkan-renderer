@@ -33,7 +33,7 @@ void Skelly::makeBones() {
   rig_.makeRig(skeleton_, &root_);
   walk_.init(rig_);
 
-  tweak_pose_.type = PoseType::Additive;
+  tweak_pose_ = Pose(PoseType::Additive);
   tweak_pose_.bone_mask = std::set<BoneId>{BoneId::Cog};
 
   mod_pose_.type = PoseType::Override;
@@ -110,12 +110,10 @@ void Skelly::update(Time now, float delta_s) {
 
   pose_ = walk_.getPose(cycle_t_);
   tweakPose(now, delta_s);
-  // auto new_pose = Pose::blend(pose_, tweak_pose_, 0);
-  auto new_pose = Pose::blend(pose_, pose_, 0.5);
-  rig_.applyPose(new_pose);
-  // rig_.applyPose(pose_);
+  pose_ = Pose::blend(pose_, tweak_pose_, 1);
+  pose_ = Pose::blend(pose_, mod_pose_, mods_.mod_blend);
 
-  // rig_.applyPose(Pose::blend(new_pose_, mod_pose_, options_.mod_blend));
+  rig_.applyPose(pose_);
   rig_.updateSkeleton(skeleton_);
 }
 
@@ -317,6 +315,7 @@ void Skelly::updateLean(Time now, float delta_s) {
   }
 
   vec3 offset = root_.toLocal() * vec4(lean, 0);
+  offset.y += (mods_.crouch_pct - 1) * sizes_.pelvis_y;
 
   // Rotate COG based on lean amount.
   glm::quat rot = glm::rotation(
@@ -345,7 +344,7 @@ const Pose& WalkCycle::getPose(float cycle_t) {
 }
 
 void WalkCycle::updateCog() {
-  vec3 pos = vec3(0, move_->crouch_pct * sizes_->pelvis_y, 0);
+  vec3 pos = vec3(0, move_->max_leg_pct * sizes_->pelvis_y, 0);
   pos.y += sampleMovement(walk_.bounce, cycle_t_);
 
   pose_.getBone(BoneId::Cog).setPos(pos);
@@ -489,17 +488,11 @@ void WalkCycle::updateShoulders() {
 }
 
 void WalkCycle::updateHands() {
-  // This animation is in torso space, but the hands are in root space.
-  mat4 to_root = pose_.getBone(BoneId::Cog).matrix() *
-                 pose_.getBone(BoneId::Neck).matrix();
-
   if (walk_.larm.anim) {
-    vec3 root_hand = sampleMovement(walk_.larm, cycle_t_);
-    pose_.getBone(BoneId::Lhand).setPos(to_root * vec4(root_hand, 1));
+    pose_.getBone(BoneId::Lhand).setPos(sampleMovement(walk_.larm, cycle_t_));
   }
   if (walk_.rarm.anim) {
-    vec3 root_hand = sampleMovement(walk_.rarm, cycle_t_);
-    pose_.getBone(BoneId::Rhand).setPos(to_root * vec4(root_hand, 1));
+    pose_.getBone(BoneId::Rhand).setPos(sampleMovement(walk_.rarm, cycle_t_));
   }
 }
 
@@ -534,7 +527,7 @@ void Skelly::UpdateImgui() {
 
     ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
     ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
-    ImGui::SliderFloat("Crouch %", &options_.crouch_pct, 0.01, 1.2);
+    ImGui::SliderFloat("Max Leg %", &options_.max_leg_pct, 0.01, 1.2);
     if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
       makeBones();
     }
@@ -600,7 +593,8 @@ void Skelly::UpdateImgui() {
   }
 
   if (ImGui::BeginTabItem("Mods")) {
-    ImGui::SliderFloat("Mod Blend %", &options_.mod_blend, 0, 1);
+    ImGui::SliderFloat("Mod Blend %", &mods_.mod_blend, 0, 1);
+    ImGui::SliderFloat("Crouch %", &mods_.crouch_pct, 0, 1.2);
     ImGui::EndTabItem();
   }
 
