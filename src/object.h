@@ -27,6 +27,7 @@ class Object {
 
   // Lowest Common Ancestor
   static Object* lca(Object* o1, Object* o2);
+  static mat4 matFromTo(Object* src, Object* dst);
 
   void setParent(Object* parent);
   Object* getParent() {

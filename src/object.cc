@@ -244,3 +244,8 @@ Object* Object::lca(Object* o1, Object* o2) {
   }
   return lca;
 }
+
+mat4 Object::matFromTo(Object* src, Object* dst) {
+  auto* lca = Object::lca(src, dst);
+  return dst->toLocal(lca) * src->toAncestor(lca);
+}

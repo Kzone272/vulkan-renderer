@@ -98,11 +98,8 @@ void Skelly::makeBones() {
   tweak_pose_ = Pose(PoseType::Additive);
   tweak_pose_.bone_mask = std::set<BoneId>{BoneId::Cog};
 
-  mod_pose_.type = PoseType::Override;
-  mod_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
-  vec3 hands_pos(0, 100, 30);
-  mod_pose_.setPos(BoneId::Lhand, hands_pos);
-  mod_pose_.setPos(BoneId::Rhand, hands_pos);
+  hand_pose_.type = PoseType::Override;
+  hand_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
 }
 
 void Skelly::handleInput(const InputState& input) {
@@ -234,8 +231,9 @@ void Skelly::modifyPose(Pose& pose, float delta_s) {
   }
 
   updateLean(delta_s);
-  pose_ = Pose::blend(pose_, mod_pose_, mods_.mod_blend);
   pose_ = Pose::blend(pose_, tweak_pose_, 1);
+  updateHandPose(pose);
+  pose_ = Pose::blend(pose_, hand_pose_, mods_.hand_blend);
 }
 
 void Skelly::updateLean(float delta_s) {
@@ -262,6 +260,20 @@ void Skelly::updateLean(float delta_s) {
 
   tweak_pose_.setPos(BoneId::Cog, offset);
   tweak_pose_.setRot(BoneId::Cog, rot);
+}
+
+void Skelly::updateHandPose(Pose& pose) {
+  if (mods_.hand_blend == 0) {
+    return;
+  }
+
+  mat4 hip_to_hand = glm::inverse(pose.getMatrix(BoneId::Neck)) *
+                     pose.getMatrix(BoneId::Pelvis);
+  vec3 akimbo = sizes_.hip_pos + vec3(-5, 5, 0);
+  vec3 lhip = hip_to_hand * vec4(akimbo, 1);
+  vec3 rhip = hip_to_hand * vec4(vec3(-1, 1, 1) * akimbo, 1);
+  hand_pose_.setPos(BoneId::Lhand, lhip);
+  hand_pose_.setPos(BoneId::Rhand, rhip);
 }
 
 void Skelly::plantFoot(Pose& pose, FootMeta& foot_m) {
@@ -614,7 +626,7 @@ void Skelly::UpdateImgui() {
   }
 
   if (ImGui::BeginTabItem("Mods")) {
-    ImGui::SliderFloat("Mod Blend %", &mods_.mod_blend, 0, 1);
+    ImGui::SliderFloat("Hand Blend %", &mods_.hand_blend, 0, 1);
     ImGui::SliderFloat("Crouch %", &mods_.crouch_pct, 0, 1.2);
     ImGui::Checkbox("Plant Feet", &mods_.plant_feet);
     ImGui::EndTabItem();

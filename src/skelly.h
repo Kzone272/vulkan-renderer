@@ -60,7 +60,7 @@ struct SkellySizes {
 };
 
 struct MoveMods {
-  float mod_blend = 0;
+  float hand_blend = 0;
   float crouch_pct = 1;
   bool plant_feet = true;
 };
@@ -209,6 +209,7 @@ class Skelly {
   void updateCycle(float delta_s);
   void modifyPose(Pose& pose, float delta_s);
   void updateLean(float delta_s);
+  void updateHandPose(Pose& pose);
   void plantFoot(Pose& pose, FootMeta& foot_m);
 
   void cycleUi(Cycle& cycle);
@@ -222,7 +223,7 @@ class Skelly {
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
   Pose tweak_pose_ = {};
-  Pose mod_pose_ = {};
+  Pose hand_pose_ = {};
   BipedRig rig_ = {};
 
   float cycle_t_ = 0;
