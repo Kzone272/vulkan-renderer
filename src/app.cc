@@ -427,7 +427,7 @@ void App::updateObjects() {
 
   {
     Time start = Clock::now();
-    skelly_.update(frame_time_, time_delta_s_);
+    skelly_.update(time_delta_s_);
     Time end = Clock::now();
     stats_.skelly_total += FloatMs(end - start).count();
     stats_.skelly_num++;
@@ -564,7 +564,7 @@ void App::handleInput() {
         glm::rotate(getWasdDir(input_), glm::radians(follow_cam_.yaw));
   }
 
-  skelly_.handleInput(input_, frame_time_);
+  skelly_.handleInput(input_);
 }
 
 void App::updateProjectionMatrix() {

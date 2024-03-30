@@ -60,6 +60,13 @@ void Movement<T>::start(float cycle_dur) {
   anim = Animation<T>(spline, dur * cycle_dur, loop);
 }
 
+void Duration::update(float delta_s) {
+  t_ += delta_s / dur_s_;
+  if (t_ > 1) {
+    t_ = 1;
+  }
+}
+
 Skelly::Skelly() {
   root_.setPos(vec3(200, 0, 0));
   makeBones();
@@ -94,28 +101,7 @@ void Skelly::makeBones() {
   mod_pose_.setPos(BoneId::Rhand, hands_pos);
 }
 
-void Skelly::handleInput(const InputState& input, Time now) {
-  if (input.kb.pressed.contains(' ')) {
-    vec3 start = root_.getPos();
-
-    float speedz = 300;
-    float speedy = 600;
-    if (input.kb.down.contains(Keys::Shift)) {
-      speedz *= -1;
-    }
-    vec3 posb = start + vec3(0, speedy, speedz / 3);
-    vec3 end = start + vec3(0, 0, speedz);
-    vec3 posc = end + vec3(0, speedy, -speedz / 3);
-
-    vec3 posd = end + vec3(0, speedy / 4, speedz / 10);
-    vec3 end2 = end + vec3(0, 0, speedz / 3);
-    vec3 pose = end2 + vec3(0, speedy / 4, -speedz / 10);
-
-    auto spline = Spline<vec3>(
-        SplineType::Bezier, {start, posb, posc, end, posd, pose, end2});
-    // root_.addPosAnim(Animation<vec3>(spline, 800, now));
-  }
-
+void Skelly::handleInput(const InputState& input) {
   // Check if we should update velocity because max speed slider changed.
   // TODO: Use slider update directly.
   bool max_speed_changed = target_speed_ > 0.1f &&
@@ -142,13 +128,14 @@ void Skelly::handleInput(const InputState& input, Time now) {
       vec3 acc(0);
       vec3 curr_vel = vel_;
       if (vel_curve_) {
-        curr_vel = vel_curve_->sample(now);
-        acc = vel_curve_->sample(now, SampleType::Velocity) /
+        curr_vel = vel_curve_->sample(vel_dur_.t());
+        acc = vel_curve_->sample(vel_dur_.t(), SampleType::Velocity) /
               vel_curve_->dur_ms_ * 1000.f;
       }
       auto spline = Spline<vec3>(
           SplineType::Hermite, {curr_vel, acc, target_vel, vec3(0)});
-      vel_curve_ = Animation<vec3>(spline, adjust_time, now);
+      vel_curve_ = Animation<vec3>(spline, adjust_time);
+      vel_dur_ = {adjust_time / 1000};
     }
   }
 }
@@ -165,14 +152,12 @@ float Skelly::getPelvisHeight() {
   return sizes_.pelvis_y;
 }
 
-void Skelly::update(Time now, float delta_s) {
-  updateSpeed(now, delta_s);
-  // Root animate used for awkward jump animation I should probably delete.
-  root_.animate(now);
+void Skelly::update(float delta_s) {
+  updateSpeed(delta_s);
   updateCycle(delta_s);
 
   pose_ = walk_.getPose(cycle_t_);
-  tweakPose(now, delta_s);
+  tweakPose(delta_s);
   pose_ = Pose::blend(pose_, tweak_pose_, 1);
   pose_ = Pose::blend(pose_, mod_pose_, mods_.mod_blend);
 
@@ -202,12 +187,13 @@ void Skelly::updateCycle(float delta_s) {
   }
 }
 
-void Skelly::updateSpeed(Time now, float delta_s) {
+void Skelly::updateSpeed(float delta_s) {
   vec3 curr_vel = vel_;
 
   if (vel_curve_) {
-    vel_ = vel_curve_->sample(now);
-    if (now > vel_curve_->to_time_) {
+    vel_dur_.update(delta_s);
+    vel_ = vel_curve_->sample(vel_dur_.t());
+    if (vel_dur_.t() > 1) {
       vel_curve_.reset();
     }
     // Average old and new velocity for this frame's update.
@@ -239,15 +225,15 @@ void Skelly::updateSpeed(Time now, float delta_s) {
   }
 }
 
-void Skelly::tweakPose(Time now, float delta_s) {
-  updateLean(now, delta_s);
+void Skelly::tweakPose(float delta_s) {
+  updateLean(delta_s);
 }
 
-void Skelly::updateLean(Time now, float delta_s) {
+void Skelly::updateLean(float delta_s) {
   vec3 lean_target(0);
   if (vel_curve_) {
-    vec3 acc =
-        vel_curve_->sample(now, SampleType::Velocity) / vel_curve_->dur_ms_;
+    vec3 acc = vel_curve_->sample(vel_dur_.t(), SampleType::Velocity) /
+               vel_curve_->dur_ms_;
     lean_target = options_.lean * acc;
   }
   vec3 lean;

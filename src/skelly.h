@@ -5,7 +5,6 @@
 #include "input.h"
 #include "object.h"
 #include "second-order.h"
-#include "time-include.h"
 
 struct MoveOptions {
   float max_speed = 200;
@@ -161,13 +160,28 @@ class WalkCycle {
   FootMeta rfoot_m_ = {};
 };
 
+class Duration {
+ public:
+  Duration() = default;
+  Duration(float dur_s) : dur_s_(dur_s) {
+  }
+  void update(float delta_s);
+  float t() const {
+    return t_;
+  }
+
+ private:
+  float dur_s_ = 0;
+  float t_ = 0;
+};
+
 class Skelly {
  public:
   Skelly();
 
   void makeBones();
-  void handleInput(const InputState& input, Time now);
-  void update(Time now, float delta_s);
+  void handleInput(const InputState& input);
+  void update(float delta_s);
 
   vec3 getPos();
   Object* getObj();
@@ -180,11 +194,11 @@ class Skelly {
     int size_preset = 0;
   } ui_;
 
-  void updateSpeed(Time now, float delta_s);
+  void updateSpeed(float delta_s);
 
   void updateCycle(float delta_s);
-  void tweakPose(Time now, float delta_s);
-  void updateLean(Time now, float delta_s);
+  void tweakPose(float delta_s);
+  void updateLean(float delta_s);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);
@@ -208,6 +222,7 @@ class Skelly {
 
   vec2 input_dir_{0};
   std::optional<Animation<vec3>> vel_curve_;
+  Duration vel_dur_;
   vec3 vel_{0};
   float target_speed_ = 0;
   bool target_speed_changed_ = false;
