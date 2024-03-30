@@ -62,6 +62,7 @@ struct SkellySizes {
 struct MoveMods {
   float mod_blend = 0;
   float crouch_pct = 1;
+  bool plant_feet = true;
 };
 
 struct FootMeta {
@@ -93,6 +94,8 @@ struct Movement {
 struct Cycle {
   Movement<vec3> lstep;
   Movement<vec3> rstep;
+  Movement<vec3> lslide;
+  Movement<vec3> rslide;
   Movement<float> lheel;
   Movement<float> rheel;
   Movement<float> bounce;
@@ -108,13 +111,17 @@ class WalkCycle {
  public:
   WalkCycle() = default;
 
-  void init(BipedRig& rig);
-  void updateCycle(
-      const MoveOptions& move, const SkellySizes& sizes, float cycle_dur,
-      float target_speed);
+  void init(BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes);
+  void updateCycle(float cycle_dur, float target_speed);
   const Pose& getPose(float cycle_t);
   Cycle& getCycle() {
     return cycle_;
+  }
+  FootMeta& getLfoot() {
+    return lfoot_m_;
+  }
+  FootMeta& getRfoot() {
+    return rfoot_m_;
   }
 
  private:
@@ -127,6 +134,7 @@ class WalkCycle {
   void initFoot(FootMeta& foot_m, vec3 toe_pos);
   void plantFoot(FootMeta& foot_m);
   void swingFoot(FootMeta& foot_m, Movement<vec3>& move);
+  void slideFoot(FootMeta& foot_m, float move_offset, float move_dur);
   void updateShoulders();
   void updateHands();
 
@@ -135,6 +143,8 @@ class WalkCycle {
       // Durations should be in [0, 1]
       .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
       .rstep = {.offset = 0.55, .dur = 0.45},  // foot contact at 0
+      .lslide = {},  // Offset and dur set based on step movements.
+      .rslide = {},
       .lheel = {.offset = 0.05, .dur = 0.45},
       .rheel = {.offset = 0.55, .dur = 0.45},
       .bounce = {.offset = 0, .dur = 0.5, .loop = true},      // pelvis up/down
@@ -197,8 +207,9 @@ class Skelly {
   void updateSpeed(float delta_s);
 
   void updateCycle(float delta_s);
-  void tweakPose(float delta_s);
+  void modifyPose(Pose& pose, float delta_s);
   void updateLean(float delta_s);
+  void plantFoot(Pose& pose, FootMeta& foot_m);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);

@@ -47,8 +47,9 @@ struct Pose {
   void setRot(BoneId bone, const quat& rot);
   void setTransform(BoneId bone, const Transform& t);
 
-  const mat4& getMatrix(BoneId bone);
+  const vec3& getPos(BoneId bone) const;
   const Transform& getTransform(BoneId bone) const;
+  const mat4& getMatrix(BoneId bone);
 
   PoseType type = PoseType::Override;
   std::vector<Transform> bone_ts = std::vector<Transform>(kBoneCount);

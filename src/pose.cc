@@ -49,6 +49,11 @@ Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
   return p;
 }
 
+const vec3& Pose::getPos(BoneId bone) const {
+  DASSERT(bone < BoneId::COUNT);
+  return bone_ts[static_cast<uint32_t>(bone)].getPos();
+}
+
 const Transform& Pose::getTransform(BoneId bone) const {
   DASSERT(bone < BoneId::COUNT);
   DASSERT(!bone_mask || bone_mask->contains(bone));
