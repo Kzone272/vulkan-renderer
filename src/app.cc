@@ -108,7 +108,7 @@ void App::setupWorld() {
   room->setPos(vec3(300, 1, 300));
 
   auto* ball = world_.addChild(Object(ModelId::Sphere, glm::scale(vec3(100))));
-  ball->setPos(vec3(300, 100, -300));
+  ball->setPos(vec3(-300, 100, 600));
 
   loadMaterials();
   loadModels();

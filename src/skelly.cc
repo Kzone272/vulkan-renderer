@@ -10,7 +10,7 @@
 #include "time-utils.h"
 
 Skelly::Skelly() {
-  root_.setPos(vec3(200, 0, 200));
+  root_.setPos(vec3(200, 0, 0));
   makeBones();
   updateMovements();
   lean_so_ = std::make_unique<SecondOrder<vec3>>(options_.lean_params, vec3{0});
