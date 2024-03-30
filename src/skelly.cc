@@ -12,7 +12,6 @@
 Skelly::Skelly() {
   root_.setPos(vec3(200, 0, 0));
   makeBones();
-  updateMovements();
   lean_so_ = std::make_unique<SecondOrder<vec3>>(options_.lean_params, vec3{0});
 }
 
@@ -26,19 +25,22 @@ void Skelly::makeBones() {
   sizes_.wrist_d = sizes_.arm - sizes_.hand_l;
   sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
   sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
+  sizes_.sho_pos = vec3(-(sizes_.shoulders_w / 2 + 3), -5, 0);
+  sizes_.hip_pos = vec3(-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0);
 
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
   rig_.makeRig(skeleton_, &root_);
-  initFoot(lfoot_m_, rig_.lfoot_, rig_.ltoe_);
-  initFoot(rfoot_m_, rig_.rfoot_, rig_.rtoe_);
-  pose_ = rig_.getZeroPose();
+  walk_.init(rig_);
+
+  tweak_pose_ = Pose(PoseType::Additive);
+  tweak_pose_.bone_mask = std::set<BoneId>{BoneId::Cog};
 
   mod_pose_.type = PoseType::Override;
   mod_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
   vec3 hands_pos(0, 100, 30);
-  mod_pose_.getBone(BoneId::Lhand).setPos(hands_pos);
-  mod_pose_.getBone(BoneId::Rhand).setPos(hands_pos);
+  mod_pose_.setPos(BoneId::Lhand, hands_pos);
+  mod_pose_.setPos(BoneId::Rhand, hands_pos);
 }
 
 void Skelly::handleInput(const InputState& input, Time now) {
@@ -104,13 +106,14 @@ void Skelly::update(Time now, float delta_s) {
   updateSpeed(now, delta_s);
   // Root animate used for awkward jump animation I should probably delete.
   root_.animate(now);
-  updateCycle(now, delta_s);
-  updateCog(now, delta_s);
-  updatePelvis(now);
-  updateFeet(now);
-  updateShoulders(now);
-  updateHands(now);
-  rig_.applyPose(Pose::blend(pose_, mod_pose_, options_.mod_blend));
+  updateCycle(delta_s);
+
+  pose_ = walk_.getPose(cycle_t_);
+  tweakPose(now, delta_s);
+  pose_ = Pose::blend(pose_, tweak_pose_, 1);
+  pose_ = Pose::blend(pose_, mod_pose_, mods_.mod_blend);
+
+  rig_.applyPose(pose_);
   rig_.updateSkeleton(skeleton_);
 }
 
@@ -163,7 +166,18 @@ void Skelly::updateSpeed(Time now, float delta_s) {
   }
 }
 
-bool Skelly::inCycle(const auto& move, float t) {
+void Skelly::tweakPose(Time now, float delta_s) {
+  updateLean(now, delta_s);
+}
+
+template <class T>
+void Movement<T>::start(float cycle_dur) {
+  anim = Animation<T>(spline, dur * cycle_dur, loop);
+}
+
+namespace {
+
+bool inCycle(const auto& move, float t) {
   if (t < move.offset) {
     t += 1;
     DASSERT(t >= move.offset);
@@ -181,15 +195,33 @@ float getMoveT(const auto& move, float cycle_t) {
   return move_t;
 }
 
-bool Skelly::moveStarted(auto& move) {
-  return !inCycle(move, prev_cycle_t_) && inCycle(move, cycle_t_);
+bool moveStarted(auto& move, float cycle_t, float prev_cycle_t) {
+  return !inCycle(move, prev_cycle_t) && inCycle(move, cycle_t);
 }
 
-bool Skelly::moveStopped(auto& move) {
-  return inCycle(move, prev_cycle_t_) && !inCycle(move, cycle_t_);
+bool moveStopped(auto& move, float cycle_t, float prev_cycle_t) {
+  return inCycle(move, prev_cycle_t) && !inCycle(move, cycle_t);
 }
 
-void Skelly::updateCycle(Time now, float delta_s) {
+vec3 sampleMovement(Movement<vec3>& move, float cycle_t) {
+  if (move.anim) {
+    float anim_t = getMoveT(move, cycle_t);
+    return move.anim->sample(anim_t);
+  }
+  return vec3(0);
+}
+
+float sampleMovement(Movement<float>& move, float cycle_t) {
+  if (move.anim) {
+    float anim_t = getMoveT(move, cycle_t);
+    return move.anim->sample(anim_t);
+  }
+  return 0;
+}
+
+}  // namespace
+
+void Skelly::updateCycle(float delta_s) {
   // TODO: Don't update cycle when standing?
   // Maybe it should start once we take the first step, then stop once
   // velocity reaches zero?
@@ -206,80 +238,69 @@ void Skelly::updateCycle(Time now, float delta_s) {
       float step_dur = (step_l / target_speed_) * 1000.f;
       cycle_dur_ = std::min(1200.f, 2 * step_dur);
     }
-    updateMovements();
+
+    walk_.updateCycle(options_, sizes_, cycle_dur_, target_speed_);
   }
 }
 
-void Skelly::updateMovements() {
-  float bounce = std::pow(cycle_dur_ / 1000, 2) * options_.bounce;
-  walk_.bounce.spline =
+void WalkCycle::init(BipedRig& rig) {
+  root_ = rig.root_;
+  initFoot(lfoot_m_, rig.ltoe_->posToAncestor(root_));
+  initFoot(rfoot_m_, rig.rtoe_->posToAncestor(root_));
+  pose_ = rig.getZeroPose();
+}
+
+void WalkCycle::updateCycle(
+    const MoveOptions& move, const SkellySizes& sizes, float cycle_dur,
+    float target_speed) {
+  cycle_dur_ = cycle_dur;
+  target_speed_ = target_speed;
+  move_ = &move;
+  sizes_ = &sizes;
+
+  float bounce = std::pow(cycle_dur_ / 1000, 2) * move.bounce;
+  cycle_.bounce.spline =
       Spline<float>(SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
-  startMovement(walk_.bounce);
+  cycle_.bounce.start(cycle_dur);
 
-  float hip_sway = glm::radians(options_.hip_sway);
-  walk_.sway.spline = Spline<float>(
+  float hip_sway = glm::radians(move.hip_sway);
+  cycle_.sway.spline = Spline<float>(
       SplineType::Hermite, {-hip_sway, 0, hip_sway, 0, -hip_sway, 0});
-  startMovement(walk_.sway);
+  cycle_.sway.start(cycle_dur);
 
-  float hip_spin = glm::radians(options_.hip_spin);
-  walk_.spin.spline = Spline<float>(
+  float hip_spin = glm::radians(move.hip_spin);
+  cycle_.spin.spline = Spline<float>(
       SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
-  startMovement(walk_.spin);
+  cycle_.spin.start(cycle_dur);
 
-  float shoulder_rot = glm::radians(options_.shoulder_spin);
-  walk_.shoulders.spline = Spline<float>(
+  float shoulder_rot = glm::radians(move.shoulder_spin);
+  cycle_.shoulders.spline = Spline<float>(
       SplineType::Hermite,
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
-  startMovement(walk_.shoulders);
+  cycle_.shoulders.start(cycle_dur);
 
-  float hand_dist = options_.hand_height_pct * sizes_.wrist_d;
-  vec3 shoulder = skeleton_.lbicep_->getPos();
-  float hand_width = options_.arm_span_pct * sizes_.wrist_d;
+  float hand_dist = move.hand_height_pct * sizes.wrist_d;
+  float hand_width = move.arm_span_pct * sizes.wrist_d;
   vec3 back =
-      vec3(-hand_width, -hand_dist, -0.2 * hand_dist + options_.hands_forward) +
-      shoulder;
-  vec3 forward = vec3(
-                     -hand_width, -hand_dist + 5,
-                     0.4 * hand_dist + options_.hands_forward) +
-                 shoulder;
-  walk_.larm.spline = Spline<vec3>(
+      vec3(-hand_width, -hand_dist, -0.2 * hand_dist + move.hands_forward) +
+      sizes.sho_pos;
+  vec3 forward =
+      vec3(-hand_width, -hand_dist + 5, 0.4 * hand_dist + move.hands_forward) +
+      sizes.sho_pos;
+  cycle_.larm.spline = Spline<vec3>(
       SplineType::Hermite, {back, vec3(0), forward, vec3(0), back, vec3(0)});
-  startMovement(walk_.larm);
+  cycle_.larm.start(cycle_dur);
 
-  walk_.rarm.spline = walk_.larm.spline;
+  cycle_.rarm.spline = cycle_.larm.spline;
   // Flips right arm points on x axis.
   mat3 flip = mat3(glm::scale(vec3(-1, 1, 1)));
-  for (vec3& point : walk_.rarm.spline.points_) {
+  for (vec3& point : cycle_.rarm.spline.points_) {
     point = flip * point;
   }
-  startMovement(walk_.rarm);
+  cycle_.rarm.start(cycle_dur);
 }
 
-void Skelly::startMovement(auto& move) {
-  float dur = move.dur * cycle_dur_;
-  move.anim = Animation(move.spline, dur, move.loop);
-}
-
-vec3 Skelly::sampleMovement(Movement<vec3>& move) {
-  if (move.anim) {
-    float anim_t = getMoveT(move, cycle_t_);
-    return move.anim->sample(anim_t);
-  }
-  return vec3(0);
-}
-
-float Skelly::sampleMovement(Movement<float>& move) {
-  if (move.anim) {
-    float anim_t = getMoveT(move, cycle_t_);
-    return move.anim->sample(anim_t);
-  }
-  return 0;
-}
-
-void Skelly::updateCog(Time now, float delta_s) {
-  vec3 pos = vec3(0, options_.crouch_pct * sizes_.pelvis_y, 0);
-  pos.y += sampleMovement(walk_.bounce);
-
+void Skelly::updateLean(Time now, float delta_s) {
   vec3 lean_target(0);
   if (vel_curve_) {
     vec3 acc =
@@ -294,120 +315,138 @@ void Skelly::updateCog(Time now, float delta_s) {
   }
 
   vec3 offset = root_.toLocal() * vec4(lean, 0);
-  pos += offset;
+  offset.y += (mods_.crouch_pct - 1) * sizes_.pelvis_y;
 
   // Rotate COG based on lean amount.
   glm::quat rot = glm::rotation(
       glm::normalize(vec3(0, 1, 0)),
       glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
 
-  Transform& cog_t = pose_.getBone(BoneId::Cog);
-  cog_t.setPos(pos);
-  cog_t.setRot(rot);
+  tweak_pose_.setPos(BoneId::Cog, offset);
+  tweak_pose_.setRot(BoneId::Cog, rot);
 }
 
-void Skelly::updatePelvis(Time now) {
-  float sway = sampleMovement(walk_.sway);
-  float spin = sampleMovement(walk_.spin);
+const Pose& WalkCycle::getPose(float cycle_t) {
+  prev_cycle_t_ = cycle_t_;
+  cycle_t_ = cycle_t;
+
+  if (cycle_dur_ == 0) {
+    return pose_;
+  }
+
+  updateCog();
+  updatePelvis();
+  updateFeet();
+  updateShoulders();
+  updateHands();
+  return pose_;
+}
+
+void WalkCycle::updateCog() {
+  vec3 pos = vec3(0, move_->max_leg_pct * sizes_->pelvis_y, 0);
+  pos.y += sampleMovement(cycle_.bounce, cycle_t_);
+
+  pose_.setPos(BoneId::Cog, pos);
+}
+
+void WalkCycle::updatePelvis() {
+  float sway = sampleMovement(cycle_.sway, cycle_t_);
+  float spin = sampleMovement(cycle_.spin, cycle_t_);
 
   glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
                   glm::angleAxis(sway, vec3(0, 0, -1));
 
-  pose_.getBone(BoneId::Pelvis).setRot(rot);
+  pose_.setRot(BoneId::Pelvis, rot);
 }
 
-void Skelly::updateFeet(Time now) {
-  updateToeAngle(now, lfoot_m_, walk_.lheel);
-  updateToeAngle(now, rfoot_m_, walk_.rheel);
-  updateToe(rfoot_m_, now, walk_.rstep);
-  updateToe(lfoot_m_, now, walk_.lstep);
+void WalkCycle::updateFeet() {
+  updateToeAngle(lfoot_m_, cycle_.lheel);
+  updateToeAngle(rfoot_m_, cycle_.rheel);
+  updateToe(rfoot_m_, cycle_.rstep);
+  updateToe(lfoot_m_, cycle_.lstep);
 
-  mat4 to_root = pose_.getBone(BoneId::Cog).matrix() *
-                 pose_.getBone(BoneId::Pelvis).matrix();
-  vec3 lhip_pos = to_root * vec4(skeleton_.lfemur_->getPos(), 1);
-  vec3 rhip_pos = to_root * vec4(skeleton_.rfemur_->getPos(), 1);
+  mat4 to_root = pose_.getMatrix(BoneId::Cog) * pose_.getMatrix(BoneId::Pelvis);
+  vec3 lhip_pos = to_root * vec4(sizes_->hip_pos, 1);
+  vec3 rhip_pos = to_root * vec4(sizes_->hip_pos * vec3(-1, 1, 1), 1);
 
   updateAnkle(lhip_pos, lfoot_m_);
   updateAnkle(rhip_pos, rfoot_m_);
 }
 
-void Skelly::updateToeAngle(Time now, FootMeta& foot_m, Movement<float>& move) {
-  if (moveStarted(move)) {
+void WalkCycle::updateToeAngle(FootMeta& foot_m, Movement<float>& move) {
+  if (moveStarted(move, cycle_t_, prev_cycle_t_)) {
     move.spline = Spline<float>(
         SplineType::Hermite, {foot_m.toe_angle, foot_m.toe_angle * 3, 0, 0});
-    startMovement(move);
+    move.start(cycle_dur_);
   }
 
   if (move.anim && inCycle(move, cycle_t_)) {
-    foot_m.toe_angle = sampleMovement(move);
+    foot_m.toe_angle = sampleMovement(move, cycle_t_);
   } else {
     foot_m.toe_angle = 0;
   }
 }
 
-void Skelly::updateToe(FootMeta& foot_m, Time now, Movement<vec3>& move) {
-  if (moveStarted(move)) {
-    swingFoot(foot_m, now, move);
-  } else if (moveStopped(move) && move.anim) {
+void WalkCycle::updateToe(FootMeta& foot_m, Movement<vec3>& move) {
+  if (moveStarted(move, cycle_t_, prev_cycle_t_)) {
+    swingFoot(foot_m, move);
+  } else if (moveStopped(move, cycle_t_, prev_cycle_t_) && move.anim) {
     vec3 plant_pos = move.anim->sample(1);
     foot_m.toe_pos = plant_pos;
     plantFoot(foot_m);
   }
 
   if (move.anim && inCycle(move, cycle_t_)) {
-    foot_m.toe_pos = sampleMovement(move);
+    foot_m.toe_pos = sampleMovement(move, cycle_t_);
   } else {
-    foot_m.toe_pos = root_.posToLocal(foot_m.world_target);
+    foot_m.toe_pos = root_->posToLocal(foot_m.world_target);
   }
 }
 
-void Skelly::initFoot(FootMeta& foot_m, Object* foot, Object* toe) {
-  foot_m.foot = foot;
-  foot_m.toe = toe;
-  foot_m.toe_pos = foot_m.toe->posToAncestor(&root_);
+void WalkCycle::initFoot(FootMeta& foot_m, vec3 toe_pos) {
+  foot_m.toe_pos = toe_pos;
   foot_m.start_pos = foot_m.toe_pos;
   plantFoot(foot_m);
 }
 
-void Skelly::plantFoot(FootMeta& foot_m) {
+void WalkCycle::plantFoot(FootMeta& foot_m) {
   foot_m.planted = true;
-  foot_m.world_target = root_.posToWorld(foot_m.toe_pos);
+  foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
 }
 
-void Skelly::swingFoot(FootMeta& foot_m, Time now, Movement<vec3>& move) {
+void WalkCycle::swingFoot(FootMeta& foot_m, Movement<vec3>& move) {
   foot_m.planted = false;
 
   vec3 start = foot_m.toe_pos;
 
-  float forward = std::min(sizes_.leg * 0.2f, target_speed_ / 3);
-  vec3 step_offset =
-      foot_m.start_pos + vec3(0, 0, options_.step_offset);  // TODO
+  float forward = std::min(sizes_->leg * 0.2f, target_speed_ / 3);
+  vec3 step_offset = foot_m.start_pos + vec3(0, 0, move_->step_offset);  // TODO
   step_offset.x =
-      (foot_m.is_left ? -1 : 1) * options_.stance_w_pct * sizes_.pelvis_w / 2;
+      (foot_m.is_left ? -1 : 1) * move_->stance_w_pct * sizes_->pelvis_w / 2;
   vec3 end = vec3(0, 0, forward) + step_offset;
 
-  vec3 mid_pos = (start + end) / 2.f + vec3(0, options_.step_height, 0);
+  vec3 mid_pos = (start + end) / 2.f + vec3(0, move_->step_height, 0);
 
   vec3 path = end - start;
   vec3 swing_vel = 1.25f * path / (move.dur * cycle_dur_ / 1000);
   vec3 no_vel = vec3(0, 0, -target_speed_);
-  vec3 toe_drop = vec3(0, -options_.step_height / 2, -target_speed_);
+  vec3 toe_drop = vec3(0, -move_->step_height / 2, -target_speed_);
 
   move.spline = Spline<vec3>(
       SplineType::Hermite, {start, no_vel, mid_pos, swing_vel, end, toe_drop});
-  startMovement(move);
+  move.start(cycle_dur_);
 }
 
-void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
+void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   // If hip is too far from ankle, compute the angle to lift the ankle just
   // enough to compensate.
   auto point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
-  vec3 flat_ankle_pos = foot_m.toe_pos + point_foot * sizes_.ankle;
+  vec3 flat_ankle_pos = foot_m.toe_pos + point_foot * sizes_->ankle;
   float hip_to_ankle = glm::length(hip_pos - flat_ankle_pos);
-  float max_leg = 0.98 * (sizes_.ankle_d);
+  float max_leg = 0.98 * (sizes_->ankle_d);
   if (foot_m.planted && hip_to_ankle > max_leg) {
     float hip_to_toe = glm::length(foot_m.toe_pos - hip_pos);
-    float toe_to_ankle = glm::length(sizes_.ankle);
+    float toe_to_ankle = glm::length(sizes_->ankle);
     float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
     if (hip_to_toe > max_leg + toe_to_ankle) {
       // Target for toe is too far away. Point toes at target.
@@ -421,10 +460,9 @@ void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   glm::quat ankle_rot =
       point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
 
-  Transform& foot_t =
-      pose_.getBone(foot_m.is_left ? BoneId::Lfoot : BoneId::Rfoot);
-  foot_t.setPos(foot_m.toe_pos + ankle_rot * sizes_.ankle);
-  foot_t.setRot(ankle_rot);
+  BoneId bone = foot_m.is_left ? BoneId::Lfoot : BoneId::Rfoot;
+  pose_.setPos(bone, foot_m.toe_pos + ankle_rot * sizes_->ankle);
+  pose_.setRot(bone, ankle_rot);
 
   // TODO: this currently isn't possible with heel angle determined by IK. But
   // this will become relevant again if I add an animation to land on the
@@ -441,23 +479,17 @@ void Skelly::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   // }
 }
 
-void Skelly::updateShoulders(Time now) {
-  float angle = sampleMovement(walk_.shoulders);
-  pose_.getBone(BoneId::Neck).setRot(glm::angleAxis(angle, vec3(0, 1, 0)));
+void WalkCycle::updateShoulders() {
+  float angle = sampleMovement(cycle_.shoulders, cycle_t_);
+  pose_.setRot(BoneId::Neck, glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
-void Skelly::updateHands(Time now) {
-  // This animation is in torso space, but the hands are in root space.
-  mat4 to_root = pose_.getBone(BoneId::Cog).matrix() *
-                 pose_.getBone(BoneId::Neck).matrix();
-
-  if (walk_.larm.anim) {
-    vec3 root_hand = sampleMovement(walk_.larm);
-    pose_.getBone(BoneId::Lhand).setPos(to_root * vec4(root_hand, 1));
+void WalkCycle::updateHands() {
+  if (cycle_.larm.anim) {
+    pose_.setPos(BoneId::Lhand, sampleMovement(cycle_.larm, cycle_t_));
   }
-  if (walk_.rarm.anim) {
-    vec3 root_hand = sampleMovement(walk_.rarm);
-    pose_.getBone(BoneId::Rhand).setPos(to_root * vec4(root_hand, 1));
+  if (cycle_.rarm.anim) {
+    pose_.setPos(BoneId::Rhand, sampleMovement(cycle_.rarm, cycle_t_));
   }
 }
 
@@ -492,7 +524,7 @@ void Skelly::UpdateImgui() {
 
     ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
     ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
-    ImGui::SliderFloat("Crouch %", &options_.crouch_pct, 0.01, 1.2);
+    ImGui::SliderFloat("Max Leg %", &options_.max_leg_pct, 0.01, 1.2);
     if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
       makeBones();
     }
@@ -553,12 +585,13 @@ void Skelly::UpdateImgui() {
   }
 
   if (ImGui::BeginTabItem("Cycle")) {
-    cycleUi(walk_);
+    cycleUi(walk_.getCycle());
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("Mods")) {
-    ImGui::SliderFloat("Mod Blend %", &options_.mod_blend, 0, 1);
+    ImGui::SliderFloat("Mod Blend %", &mods_.mod_blend, 0, 1);
+    ImGui::SliderFloat("Crouch %", &mods_.crouch_pct, 0, 1.2);
     ImGui::EndTabItem();
   }
 

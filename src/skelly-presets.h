@@ -9,7 +9,7 @@ inline void moveDefault(MoveOptions& move) {
 inline void moveTightrope(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 120;
-  move.crouch_pct = 0.9;
+  move.max_leg_pct = 0.9;
   move.stance_w_pct = 0;
   move.hand_height_pct = 0.25;
   move.arm_span_pct = 0.9;
@@ -17,7 +17,7 @@ inline void moveTightrope(MoveOptions& move) {
 inline void movePreppy(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 240;
-  move.crouch_pct = 0.9;
+  move.max_leg_pct = 0.9;
   move.step_height = 15;
   move.bounce = 5;
   move.arm_span_pct = 0;
@@ -26,7 +26,7 @@ inline void movePreppy(MoveOptions& move) {
 inline void moveSnow(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 100;
-  move.crouch_pct = 0.9;
+  move.max_leg_pct = 0.9;
   move.step_height = 50;
   move.arm_span_pct = 0.25;
   move.hand_height_pct = 0.65;
@@ -45,7 +45,7 @@ inline void moveRunway(MoveOptions& move) {
 inline void moveCrouch(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 120;
-  move.crouch_pct = 0.65;
+  move.max_leg_pct = 0.65;
   move.stance_w_pct = 1.2;
   move.step_height = 15;
   move.arm_span_pct = 0.2;
@@ -55,7 +55,7 @@ inline void moveCrouch(MoveOptions& move) {
 inline void moveFlanders(MoveOptions& move) {
   move = MoveOptions{};
   move.max_speed = 165;
-  move.crouch_pct = 0.9;
+  move.max_leg_pct = 0.90;
   move.bounce = 4;
   move.hip_sway = 23;
   move.hip_spin = 4.5;
