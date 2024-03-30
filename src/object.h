@@ -25,6 +25,9 @@ class Object {
   Object(const Object& other) = delete;
   Object& operator=(const Object&& other) = delete;
 
+  // Lowest Common Ancestor
+  static Object* lca(Object* o1, Object* o2);
+
   void setParent(Object* parent);
   Object* getParent() {
     return parent_;

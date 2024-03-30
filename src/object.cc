@@ -216,3 +216,31 @@ void Object::getSceneObjects(
     child->getSceneObjects(transform, objs);
   }
 }
+
+Object* Object::lca(Object* o1, Object* o2) {
+  std::vector<Object*> o1_path;
+  std::vector<Object*> o2_path;
+
+  Object* parent = o1->parent_;
+  while (parent != nullptr) {
+    o1_path.push_back(parent);
+    parent = parent->parent_;
+  }
+  parent = o2->parent_;
+  while (parent != nullptr) {
+    o2_path.push_back(parent);
+    parent = parent->parent_;
+  }
+
+  Object* lca = nullptr;
+  for (auto it = std::make_pair(o1_path.rbegin(), o2_path.rbegin());
+       it.first != o1_path.rend() && it.second != o2_path.rend();
+       it.first++, it.second++) {
+    if (*it.first == *it.second) {
+      lca = *it.first;
+    } else {
+      break;
+    }
+  }
+  return lca;
+}

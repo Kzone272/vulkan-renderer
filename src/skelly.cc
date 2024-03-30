@@ -446,8 +446,8 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   glm::quat ankle_rot =
       point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
 
-  BoneId bone = foot_m.is_left ? BoneId::Lfoot : BoneId::Rfoot;
-  pose_.setPos(bone, foot_m.toe_pos + ankle_rot * sizes_->ankle);
+  BoneId bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
+  pose_.setPos(bone, foot_m.toe_pos);
   pose_.setRot(bone, ankle_rot);
 
   // TODO: this currently isn't possible with heel angle determined by IK. But

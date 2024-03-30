@@ -38,20 +38,22 @@ struct BipedSkeleton {
   float bicep_l_;
   float forearm_l_;
   vec3 toe_pos_;
+  vec3 ankle_pos_;
 };
 
 struct IkChain {
   IkChain() = default;
   IkChain(
-      Object* root, Object* target, Object* b1, Object* b2, float b1_l,
+      Object* start, Object* target, Object* b1, Object* b2, float b1_l,
       float b2_l, vec3 rot_axis);
   void solve();
-  // Positions in root's parent's space
-  vec3 rootPos();
+  // Positions in start's parent's space
+  vec3 startPos();
   vec3 targetPos();
 
-  Object* root;
+  Object* start;
   Object* target;
+  Object* lca;  // LCA of start and target
   // TODO: Support chain of bones.
   Object* b1;
   Object* b2;
@@ -86,10 +88,10 @@ struct BipedRig {
   Object* pelvis_;
   Object* lhip_;
   Object* rhip_;
-  Object* lfoot_;
-  Object* rfoot_;
   Object* ltoe_;
+  Object* lankle_;
   Object* rtoe_;
+  Object* rankle_;
 
   IkChain larm_;
   IkChain rarm_;

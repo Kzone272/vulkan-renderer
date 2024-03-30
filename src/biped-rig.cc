@@ -10,6 +10,7 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   bicep_l_ = sizes.bicep;
   forearm_l_ = sizes.forearm;
   toe_pos_ = sizes.toe;
+  ankle_pos_ = sizes.ankle;
 
   cog_ = root_->addChild(Object(ModelId::None, glm::scale(vec3(5))));
   cog_->setPos(vec3(0, sizes.pelvis_y, 0));
@@ -114,28 +115,30 @@ void solveTwoBoneIk(
 }  // namespace
 
 IkChain::IkChain(
-    Object* root, Object* target, Object* b1, Object* b2, float b1_l,
+    Object* start, Object* target, Object* b1, Object* b2, float b1_l,
     float b2_l, vec3 rot_axis)
-    : root(root),
+    : start(start),
       target(target),
+      lca(Object::lca(start, target)),
       b1(b1),
       b2(b2),
       b1_l(b1_l),
       b2_l(b2_l),
       rot_axis(rot_axis) {
-  point_zero = glm::normalize(targetPos() - rootPos());
+  DASSERT(lca != nullptr);
+  point_zero = glm::normalize(targetPos() - startPos());
 }
 
-vec3 IkChain::rootPos() {
-  return root->getPos();
+vec3 IkChain::startPos() {
+  return start->getPos();
 }
 vec3 IkChain::targetPos() {
-  return root->getParent()->posToLocal(target->getParent(), target->getPos());
+  return start->getParent()->posToLocal(lca, target->posToAncestor(lca));
 }
 
 void IkChain::solve() {
   solveTwoBoneIk(
-      *b1, b1_l, *b2, b2_l, rootPos(), targetPos(), point_zero, rot_axis);
+      *b1, b1_l, *b2, b2_l, startPos(), targetPos(), point_zero, rot_axis);
 }
 
 void BipedRig::updateSkeleton(BipedSkeleton& skl) {
@@ -148,11 +151,11 @@ void BipedRig::updateSkeleton(BipedSkeleton& skl) {
 
   skl.lfoot_->setRot(glm::identity<glm::quat>());
   auto l_flat = glm::quat_cast(skl.lfoot_->toLocal(root_));
-  skl.lfoot_->setRot(lfoot_->getRot() * l_flat);
+  skl.lfoot_->setRot(ltoe_->getRot() * l_flat);
 
   skl.rfoot_->setRot(glm::identity<glm::quat>());
   auto r_flat = glm::quat_cast(skl.rfoot_->toLocal(root_));
-  skl.rfoot_->setRot(rfoot_->getRot() * r_flat);
+  skl.rfoot_->setRot(rtoe_->getRot() * r_flat);
 }
 
 void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
@@ -186,16 +189,16 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rhip_ = pelvis_->addChild(Object(ModelId::BallControl, control_t));
   rhip_->setPos(skeleton.rfemur_->getPos());
 
-  lfoot_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  lfoot_->setPos(skeleton.lfoot_->posToAncestor(root_));
-  rfoot_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  rfoot_->setPos(skeleton.rfoot_->posToAncestor(root_));
-
   mat4 toe_t = glm::scale(vec3(3));
-  ltoe_ = lfoot_->addChild(Object(ModelId::BallControl, toe_t));
-  ltoe_->setPos(skeleton.toe_pos_);
-  rtoe_ = rfoot_->addChild(Object(ModelId::BallControl, toe_t));
-  rtoe_->setPos(skeleton.toe_pos_);
+  ltoe_ = root_->addChild(Object(ModelId::BallControl, toe_t));
+  ltoe_->setPos(skeleton.lfoot_->posToAncestor(root_, skeleton.toe_pos_));
+  rtoe_ = root_->addChild(Object(ModelId::BallControl, toe_t));
+  rtoe_->setPos(skeleton.rfoot_->posToAncestor(root_, skeleton.toe_pos_));
+
+  lankle_ = ltoe_->addChild(Object(ModelId::BallControl, control_t));
+  lankle_->setPos(skeleton.ankle_pos_);
+  rankle_ = rtoe_->addChild(Object(ModelId::BallControl, control_t));
+  rankle_->setPos(skeleton.ankle_pos_);
 
   zero_p_ = Pose::freeze(*this);
 
@@ -207,10 +210,10 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
       skeleton.forearm_l_, vec3(0, -1, 0));
 
   lleg_ = IkChain(
-      lhip_, lfoot_, skeleton.lfemur_, skeleton.lshin_, skeleton.femur_l_,
+      lhip_, lankle_, skeleton.lfemur_, skeleton.lshin_, skeleton.femur_l_,
       skeleton.shin_l_, vec3(1, 0, 0));
   rleg_ = IkChain(
-      rhip_, rfoot_, skeleton.rfemur_, skeleton.rshin_, skeleton.femur_l_,
+      rhip_, rankle_, skeleton.rfemur_, skeleton.rshin_, skeleton.femur_l_,
       skeleton.shin_l_, vec3(1, 0, 0));
 
   // Marks the root position/direction.
@@ -257,10 +260,10 @@ Object* BipedRig::getBone(BoneId bone) const {
       return rhand_;
     case BoneId::Pelvis:
       return pelvis_;
-    case BoneId::Lfoot:
-      return lfoot_;
-    case BoneId::Rfoot:
-      return rfoot_;
+    case BoneId::Ltoe:
+      return ltoe_;
+    case BoneId::Rtoe:
+      return rtoe_;
     default:
       ASSERT(false);
       return nullptr;
