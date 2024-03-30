@@ -9,6 +9,57 @@
 #include "skelly-presets.h"
 #include "time-utils.h"
 
+namespace {
+
+bool inCycle(const auto& move, float t) {
+  if (t < move.offset) {
+    t += 1;
+    DASSERT(t >= move.offset);
+  }
+  float end = move.offset + move.dur;
+  return t <= end;
+}
+
+float getMoveT(const auto& move, float cycle_t) {
+  float end = move.offset + move.dur;
+  float move_t = remapRange(cycle_t, move.offset, end, 0, 1);
+  if (move.loop) {
+    move_t = fmodClamp(move_t, 1);
+  }
+  return move_t;
+}
+
+bool moveStarted(auto& move, float cycle_t, float prev_cycle_t) {
+  return !inCycle(move, prev_cycle_t) && inCycle(move, cycle_t);
+}
+
+bool moveStopped(auto& move, float cycle_t, float prev_cycle_t) {
+  return inCycle(move, prev_cycle_t) && !inCycle(move, cycle_t);
+}
+
+vec3 sampleMovement(Movement<vec3>& move, float cycle_t) {
+  if (move.anim) {
+    float anim_t = getMoveT(move, cycle_t);
+    return move.anim->sample(anim_t);
+  }
+  return vec3(0);
+}
+
+float sampleMovement(Movement<float>& move, float cycle_t) {
+  if (move.anim) {
+    float anim_t = getMoveT(move, cycle_t);
+    return move.anim->sample(anim_t);
+  }
+  return 0;
+}
+
+}  // namespace
+
+template <class T>
+void Movement<T>::start(float cycle_dur) {
+  anim = Animation<T>(spline, dur * cycle_dur, loop);
+}
+
 Skelly::Skelly() {
   root_.setPos(vec3(200, 0, 0));
   makeBones();
@@ -102,6 +153,18 @@ void Skelly::handleInput(const InputState& input, Time now) {
   }
 }
 
+vec3 Skelly::getPos() {
+  return root_.getPos();
+}
+
+Object* Skelly::getObj() {
+  return &root_;
+}
+
+float Skelly::getPelvisHeight() {
+  return sizes_.pelvis_y;
+}
+
 void Skelly::update(Time now, float delta_s) {
   updateSpeed(now, delta_s);
   // Root animate used for awkward jump animation I should probably delete.
@@ -117,16 +180,26 @@ void Skelly::update(Time now, float delta_s) {
   rig_.updateSkeleton(skeleton_);
 }
 
-vec3 Skelly::getPos() {
-  return root_.getPos();
-}
+void Skelly::updateCycle(float delta_s) {
+  // TODO: Don't update cycle when standing?
+  // Maybe it should start once we take the first step, then stop once
+  // velocity reaches zero?
+  // if ((false) && glm::length(vel_) < 0.1f) {
+  //   cycle_t_ = 0;
+  // }
 
-Object* Skelly::getObj() {
-  return &root_;
-}
+  prev_cycle_t_ = cycle_t_;
+  cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
 
-float Skelly::getPelvisHeight() {
-  return sizes_.pelvis_y;
+  if (target_speed_changed_) {
+    if (target_speed_ != 0) {
+      float step_l = sizes_.leg * 0.76f;
+      float step_dur = (step_l / target_speed_) * 1000.f;
+      cycle_dur_ = std::min(1200.f, 2 * step_dur);
+    }
+
+    walk_.updateCycle(options_, sizes_, cycle_dur_, target_speed_);
+  }
 }
 
 void Skelly::updateSpeed(Time now, float delta_s) {
@@ -170,77 +243,30 @@ void Skelly::tweakPose(Time now, float delta_s) {
   updateLean(now, delta_s);
 }
 
-template <class T>
-void Movement<T>::start(float cycle_dur) {
-  anim = Animation<T>(spline, dur * cycle_dur, loop);
-}
-
-namespace {
-
-bool inCycle(const auto& move, float t) {
-  if (t < move.offset) {
-    t += 1;
-    DASSERT(t >= move.offset);
+void Skelly::updateLean(Time now, float delta_s) {
+  vec3 lean_target(0);
+  if (vel_curve_) {
+    vec3 acc =
+        vel_curve_->sample(now, SampleType::Velocity) / vel_curve_->dur_ms_;
+    lean_target = options_.lean * acc;
   }
-  float end = move.offset + move.dur;
-  return t <= end;
-}
-
-float getMoveT(const auto& move, float cycle_t) {
-  float end = move.offset + move.dur;
-  float move_t = remapRange(cycle_t, move.offset, end, 0, 1);
-  if (move.loop) {
-    move_t = fmodClamp(move_t, 1);
+  vec3 lean;
+  if (delta_s == 0) {
+    lean = lean_target;
+  } else {
+    lean = lean_so_->update(delta_s, lean_target);
   }
-  return move_t;
-}
 
-bool moveStarted(auto& move, float cycle_t, float prev_cycle_t) {
-  return !inCycle(move, prev_cycle_t) && inCycle(move, cycle_t);
-}
+  vec3 offset = root_.toLocal() * vec4(lean, 0);
+  offset.y += (mods_.crouch_pct - 1) * sizes_.pelvis_y;
 
-bool moveStopped(auto& move, float cycle_t, float prev_cycle_t) {
-  return inCycle(move, prev_cycle_t) && !inCycle(move, cycle_t);
-}
+  // Rotate COG based on lean amount.
+  glm::quat rot = glm::rotation(
+      glm::normalize(vec3(0, 1, 0)),
+      glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
 
-vec3 sampleMovement(Movement<vec3>& move, float cycle_t) {
-  if (move.anim) {
-    float anim_t = getMoveT(move, cycle_t);
-    return move.anim->sample(anim_t);
-  }
-  return vec3(0);
-}
-
-float sampleMovement(Movement<float>& move, float cycle_t) {
-  if (move.anim) {
-    float anim_t = getMoveT(move, cycle_t);
-    return move.anim->sample(anim_t);
-  }
-  return 0;
-}
-
-}  // namespace
-
-void Skelly::updateCycle(float delta_s) {
-  // TODO: Don't update cycle when standing?
-  // Maybe it should start once we take the first step, then stop once
-  // velocity reaches zero?
-  // if ((false) && glm::length(vel_) < 0.1f) {
-  //   cycle_t_ = 0;
-  // }
-
-  prev_cycle_t_ = cycle_t_;
-  cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
-
-  if (target_speed_changed_) {
-    if (target_speed_ != 0) {
-      float step_l = sizes_.leg * 0.76f;
-      float step_dur = (step_l / target_speed_) * 1000.f;
-      cycle_dur_ = std::min(1200.f, 2 * step_dur);
-    }
-
-    walk_.updateCycle(options_, sizes_, cycle_dur_, target_speed_);
-  }
+  tweak_pose_.setPos(BoneId::Cog, offset);
+  tweak_pose_.setRot(BoneId::Cog, rot);
 }
 
 void WalkCycle::init(BipedRig& rig) {
@@ -298,32 +324,6 @@ void WalkCycle::updateCycle(
     point = flip * point;
   }
   cycle_.rarm.start(cycle_dur);
-}
-
-void Skelly::updateLean(Time now, float delta_s) {
-  vec3 lean_target(0);
-  if (vel_curve_) {
-    vec3 acc =
-        vel_curve_->sample(now, SampleType::Velocity) / vel_curve_->dur_ms_;
-    lean_target = options_.lean * acc;
-  }
-  vec3 lean;
-  if (delta_s == 0) {
-    lean = lean_target;
-  } else {
-    lean = lean_so_->update(delta_s, lean_target);
-  }
-
-  vec3 offset = root_.toLocal() * vec4(lean, 0);
-  offset.y += (mods_.crouch_pct - 1) * sizes_.pelvis_y;
-
-  // Rotate COG based on lean amount.
-  glm::quat rot = glm::rotation(
-      glm::normalize(vec3(0, 1, 0)),
-      glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
-
-  tweak_pose_.setPos(BoneId::Cog, offset);
-  tweak_pose_.setRot(BoneId::Cog, rot);
 }
 
 const Pose& WalkCycle::getPose(float cycle_t) {
