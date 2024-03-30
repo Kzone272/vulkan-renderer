@@ -353,9 +353,9 @@ void App::updateTime() {
   time_s_ = FloatS(now - start_).count();
 
   auto time_delta = now - frame_time_;
-  time_delta_s_ = FloatS(time_delta).count();
-  time_delta_ms_ = FloatMs(time_delta).count();
-  frame_times_.push_back(time_delta_ms_);
+  time_delta_s_ = options_.time_scale * FloatS(time_delta).count();
+  time_delta_ms_ = options_.time_scale * FloatMs(time_delta).count();
+  frame_times_.push_back(FloatMs(time_delta).count());
 
   frame_time_ = now;
 
@@ -641,6 +641,7 @@ void App::updateImgui() {
   }
   if (ImGui::BeginTabItem("Objects")) {
     ImGui::Checkbox("Animate", &options_.animate);
+    ImGui::SliderFloat("Time Scale", &options_.time_scale, 0.1, 2);
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
       remakeGrid(options_.grid_size);

@@ -108,6 +108,7 @@ class App {
     int grid_size = 2;
     bool tetra_in = true;
     int tetra_steps = 2;
+    float time_scale = 1;
   } options_;
 
   enum class Floor {
