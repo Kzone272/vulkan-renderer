@@ -51,6 +51,8 @@ add_executable(main
   transform.cc
   pose.h
   pose.cc
+  imgui-helpers.h
+  imgui-helpers.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

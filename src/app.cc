@@ -16,6 +16,7 @@
 #include "animation.h"
 #include "asserts.h"
 #include "assets.h"
+#include "imgui-helpers.h"
 #include "maths.h"
 #include "primitives.h"
 #include "vec-maths.h"
@@ -641,7 +642,9 @@ void App::updateImgui() {
   }
   if (ImGui::BeginTabItem("Objects")) {
     ImGui::Checkbox("Animate", &options_.animate);
-    ImGui::SliderFloat("Time Scale", &options_.time_scale, 0.1, 2);
+    SliderFloatDefault(
+        "Time Scale", &options_.time_scale, 0.1, 2,
+        default_options_.time_scale);
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
       remakeGrid(options_.grid_size);

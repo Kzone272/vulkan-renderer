@@ -110,6 +110,7 @@ class App {
     int tetra_steps = 2;
     float time_scale = 1;
   } options_;
+  const Options default_options_ = {};
 
   enum class Floor {
     Viking,
