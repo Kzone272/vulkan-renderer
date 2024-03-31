@@ -74,7 +74,7 @@ void Duration::update(float delta_s) {
 Skelly::Skelly() {
   root_.setPos(vec3(200, 0, 0));
   makeBones();
-  lean_so_ = std::make_unique<SecondOrder<vec3>>(options_.lean_params, vec3{0});
+  lean_so_ = std::make_unique<SecondOrder<vec3>>(mods_.lean_params, vec3{0});
 }
 
 void Skelly::makeBones() {
@@ -244,7 +244,7 @@ void Skelly::updateLean(float delta_s) {
   if (vel_curve_) {
     vec3 acc = vel_curve_->sample(vel_dur_.t(), SampleType::Velocity) /
                vel_curve_->dur_ms_;
-    lean_target = options_.lean * acc;
+    lean_target = mods_.lean * acc;
   }
   vec3 lean;
   if (delta_s == 0) {
@@ -589,21 +589,14 @@ void Skelly::UpdateImgui() {
       makeBones();
     }
     ImGui::SliderFloat("Step Height", &options_.step_height, 0, 50);
-    ImGui::SliderFloat("Lean", &options_.lean, 0, 200);
+    ImGui::SliderFloat("Step Offset", &options_.step_offset, -50, 50);
     ImGui::SliderFloat("Bounce", &options_.bounce, 0, 10);
     ImGui::SliderFloat("Hip Sway", &options_.hip_sway, 0, 30);
     ImGui::SliderFloat("Hip Spin", &options_.hip_spin, 0, 45);
-    ImGui::SliderFloat("Heel Lift %", &options_.heel_lift_pct, 0, 2);
-    ImGui::SliderFloat("Heels Shift", &options_.heel_shift, 0, 90);
     ImGui::SliderFloat("Shoulder Spin", &options_.shoulder_spin, 0, 45);
     ImGui::SliderFloat("Arm Span %", &options_.arm_span_pct, -0.2, 1);
     ImGui::SliderFloat("Hand Height %", &options_.hand_height_pct, -1, 1);
     ImGui::SliderFloat("Hands Forward", &options_.hands_forward, -50, 50);
-    ImGui::SliderFloat("Step Offset", &options_.step_offset, -50, 50);
-    if (ImGui::SliderFloat3(
-            "Lean SO", (float*)&options_.lean_params, 0.001, 20, "%.5f")) {
-      lean_so_->updateParams(options_.lean_params);
-    }
 
     ImGui::EndTabItem();
   }
@@ -653,6 +646,11 @@ void Skelly::UpdateImgui() {
     ImGui::SliderFloat("Hand Blend %", &mods_.hand_blend, 0, 1);
     ImGui::SliderFloat("Crouch %", &mods_.crouch_pct, 0, 1.2);
     ImGui::Checkbox("Plant Feet", &mods_.plant_feet);
+    ImGui::SliderFloat("Lean", &mods_.lean, 0, 200);
+    if (ImGui::SliderFloat3(
+            "Lean SO", (float*)&mods_.lean_params, 0.001, 20, "%.5f")) {
+      lean_so_->updateParams(mods_.lean_params);
+    }
     ImGui::EndTabItem();
   }
 

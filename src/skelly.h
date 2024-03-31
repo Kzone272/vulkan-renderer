@@ -13,18 +13,14 @@ struct MoveOptions {
   float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
   float step_height = 5;
-  float lean = 10;
+  float step_offset = -15;
   float bounce = 2;
   float hip_sway = 6;
   float hip_spin = 8;
-  float heel_lift_pct = 0.75;
-  float heel_shift = 0;
   float shoulder_spin = 6;
   float arm_span_pct = 0.1;
   float hand_height_pct = 0.95;
   float hands_forward = 0;
-  vec3 lean_params = {10, 5, 0};
-  float step_offset = -15;
 };
 
 struct SkellySizes {
@@ -62,6 +58,8 @@ struct MoveMods {
   float hand_blend = 0;
   float crouch_pct = 1;
   bool plant_feet = true;
+  float lean = 10;
+  vec3 lean_params = {10, 5, 0};
 };
 
 struct FootMeta {
