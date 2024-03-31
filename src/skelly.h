@@ -12,7 +12,6 @@ struct MoveOptions {
   float max_rot_speed = 270;
   float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
-  float foot_dist = 5;
   float step_height = 5;
   float lean = 10;
   float bounce = 2;
@@ -25,7 +24,7 @@ struct MoveOptions {
   float hand_height_pct = 0.95;
   float hands_forward = 0;
   vec3 lean_params = {10, 5, 0};
-  float step_offset = 5;
+  float step_offset = -15;
 };
 
 struct SkellySizes {

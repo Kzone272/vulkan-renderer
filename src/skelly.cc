@@ -161,6 +161,9 @@ void Skelly::update(float delta_s) {
   pose_ = walk_.getPose(cycle_t_);
   modifyPose(pose_, delta_s);
 
+  updateHandPose(pose_);
+  pose_ = Pose::blend(pose_, hand_pose_, mods_.hand_blend);
+
   rig_.applyPose(pose_);
   rig_.updateSkeleton(skeleton_);
 }
@@ -234,8 +237,6 @@ void Skelly::modifyPose(Pose& pose, float delta_s) {
 
   updateLean(delta_s);
   pose_ = Pose::blend(pose_, add_pose_, 1);
-  updateHandPose(pose);
-  pose_ = Pose::blend(pose_, hand_pose_, mods_.hand_blend);
 }
 
 void Skelly::updateLean(float delta_s) {
@@ -458,22 +459,24 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   auto& step = foot_m.is_left ? cycle_.lstep : cycle_.rstep;
   auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
 
-  float forward = std::min(sizes_->leg * 0.2f, target_speed_ / 3);
+  slide.offset = std::fmod(step.offset + step.dur, 1);
+  slide.dur = 1 - step.dur;
+  float dur_s = cycle_dur_ / 1000 * slide.dur;
+  float stride = dur_s * target_speed_;
+
   vec3 step_offset = foot_m.start_pos + vec3(0, 0, move_->step_offset);
   step_offset.x =
       (foot_m.is_left ? -1 : 1) * move_->stance_w_pct * sizes_->pelvis_w / 2;
-  vec3 contact = vec3(0, 0, forward) + step_offset;
+  vec3 contact = vec3(0, 0, stride / 2) + step_offset;
 
   vec3 backward = {0, 0, -1};  // Move backwards in root space.
-  float move_offset = std::fmod(step.offset + step.dur, 1);
-  float move_dur = 1 - step.dur;
-  float dur_s = cycle_dur_ / 1000 * move_dur;
-  vec3 liftoff = contact + (dur_s * target_speed_ * backward);
+  vec3 liftoff = contact + (stride * backward);
 
   vec3 mid_pos = (contact + liftoff) / 2.f + vec3(0, move_->step_height, 0);
 
   vec3 path = contact - liftoff;
-  vec3 swing_vel = 1.25f * path / dur_s;
+  float step_dur_s = cycle_dur_ / 1000 * step.dur;
+  vec3 swing_vel = 1.25f * path / step_dur_s;
   vec3 no_vel = vec3(0, 0, -target_speed_);
   vec3 toe_drop = no_vel + vec3(0, -move_->step_height / 2, 0);
 
@@ -482,8 +485,6 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
       {liftoff, no_vel, mid_pos, swing_vel, contact, toe_drop});
   step.start(cycle_dur_);
 
-  slide.offset = move_offset;
-  slide.dur = move_dur;
   slide.spline = Spline<vec3>(SplineType::Linear, {contact, liftoff});
   slide.start(cycle_dur_);
 
