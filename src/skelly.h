@@ -128,12 +128,12 @@ class WalkCycle {
   void updateCog();
   void updatePelvis();
   void updateFeet();
-  void updateToeAngle(FootMeta& foot, Movement<float>& move);
-  void updateToe(FootMeta& foot_m, Movement<vec3>& move);
+  void updateToeAngle(FootMeta& foot);
+  void updateToe(FootMeta& foot_m);
   void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
   void initFoot(FootMeta& foot_m, vec3 toe_pos);
   void plantFoot(FootMeta& foot_m);
-  void swingFoot(FootMeta& foot_m, Movement<vec3>& move);
+  void swingFoot(FootMeta& foot_m);
   void slideFoot(FootMeta& foot_m, float move_offset, float move_dur);
   void updateShoulders();
   void updateHands();

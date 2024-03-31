@@ -379,10 +379,10 @@ void WalkCycle::updatePelvis() {
 }
 
 void WalkCycle::updateFeet() {
-  updateToeAngle(lfoot_m_, cycle_.lheel);
-  updateToeAngle(rfoot_m_, cycle_.rheel);
-  updateToe(rfoot_m_, cycle_.rstep);
-  updateToe(lfoot_m_, cycle_.lstep);
+  updateToeAngle(lfoot_m_);
+  updateToeAngle(rfoot_m_);
+  updateToe(rfoot_m_);
+  updateToe(lfoot_m_);
 
   mat4 to_root = pose_.getMatrix(BoneId::Cog) * pose_.getMatrix(BoneId::Pelvis);
   vec3 lhip_pos = to_root * vec4(sizes_->hip_pos, 1);
@@ -392,7 +392,8 @@ void WalkCycle::updateFeet() {
   updateAnkle(rhip_pos, rfoot_m_);
 }
 
-void WalkCycle::updateToeAngle(FootMeta& foot_m, Movement<float>& move) {
+void WalkCycle::updateToeAngle(FootMeta& foot_m) {
+  auto& move = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
   if (moveStarted(move, cycle_t_, prev_cycle_t_)) {
     move.spline = Spline<float>(
         SplineType::Hermite, {foot_m.toe_angle, foot_m.toe_angle * 3, 0, 0});
@@ -406,17 +407,18 @@ void WalkCycle::updateToeAngle(FootMeta& foot_m, Movement<float>& move) {
   }
 }
 
-void WalkCycle::updateToe(FootMeta& foot_m, Movement<vec3>& move) {
-  if (moveStarted(move, cycle_t_, prev_cycle_t_)) {
-    swingFoot(foot_m, move);
-  } else if (moveStopped(move, cycle_t_, prev_cycle_t_) && move.anim) {
-    foot_m.toe_pos = move.anim->sample(1);
+void WalkCycle::updateToe(FootMeta& foot_m) {
+  auto& step = foot_m.is_left ? cycle_.lstep : cycle_.rstep;
+  if (moveStarted(step, cycle_t_, prev_cycle_t_)) {
+    swingFoot(foot_m);
+  } else if (moveStopped(step, cycle_t_, prev_cycle_t_) && step.anim) {
+    foot_m.toe_pos = step.anim->sample(1);
     plantFoot(foot_m);
-    slideFoot(foot_m, std::fmod(move.offset + move.dur, 1), 1 - move.dur);
+    slideFoot(foot_m, std::fmod(step.offset + step.dur, 1), 1 - step.dur);
   }
 
-  if (move.anim && inCycle(move, cycle_t_)) {
-    foot_m.toe_pos = sampleMovement(move, cycle_t_);
+  if (step.anim && inCycle(step, cycle_t_)) {
+    foot_m.toe_pos = sampleMovement(step, cycle_t_);
   } else {
     auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
     foot_m.toe_pos = sampleMovement(slide, cycle_t_);
@@ -434,7 +436,9 @@ void WalkCycle::plantFoot(FootMeta& foot_m) {
   foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
 }
 
-void WalkCycle::swingFoot(FootMeta& foot_m, Movement<vec3>& move) {
+void WalkCycle::swingFoot(FootMeta& foot_m) {
+  auto& step = foot_m.is_left ? cycle_.lstep : cycle_.rstep;
+
   foot_m.planted = false;
 
   vec3 start = foot_m.toe_pos;
@@ -448,13 +452,13 @@ void WalkCycle::swingFoot(FootMeta& foot_m, Movement<vec3>& move) {
   vec3 mid_pos = (start + end) / 2.f + vec3(0, move_->step_height, 0);
 
   vec3 path = end - start;
-  vec3 swing_vel = 1.25f * path / (move.dur * cycle_dur_ / 1000);
+  vec3 swing_vel = 1.25f * path / (step.dur * cycle_dur_ / 1000);
   vec3 no_vel = vec3(0, 0, -target_speed_);
   vec3 toe_drop = vec3(0, -move_->step_height / 2, -target_speed_);
 
-  move.spline = Spline<vec3>(
+  step.spline = Spline<vec3>(
       SplineType::Hermite, {start, no_vel, mid_pos, swing_vel, end, toe_drop});
-  move.start(cycle_dur_);
+  step.start(cycle_dur_);
 }
 
 void WalkCycle::slideFoot(FootMeta& foot_m, float move_offset, float move_dur) {
