@@ -70,8 +70,13 @@ struct FootMeta {
   Object* toe;
   bool planted = false;
   bool is_left = false;
+  bool just_lifted = false;
   vec3 world_target;
   vec3 start_pos;
+  vec3 contact;
+  vec3 liftoff;
+  float step_offset = 0;
+  float step_dur = 1;
   float toe_angle = 0;  // Angle relative to floor
   vec3 toe_pos;
   vec3 toe_dir = {0, 0, 1};
@@ -125,6 +130,7 @@ class WalkCycle {
   }
 
  private:
+  void updateStep(FootMeta& foot_m);
   void updateCog();
   void updatePelvis();
   void updateFeet();
@@ -133,8 +139,6 @@ class WalkCycle {
   void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
   void initFoot(FootMeta& foot_m, vec3 toe_pos);
   void plantFoot(FootMeta& foot_m);
-  void swingFoot(FootMeta& foot_m);
-  void slideFoot(FootMeta& foot_m, float move_offset, float move_dur);
   void updateShoulders();
   void updateHands();
 
@@ -211,6 +215,7 @@ class Skelly {
   void updateLean(float delta_s);
   void updateHandPose(Pose& pose);
   void plantFoot(Pose& pose, FootMeta& foot_m);
+  void offsetFoot(FootMeta& foot_m);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);
@@ -222,7 +227,7 @@ class Skelly {
   Object root_ = {};
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
-  Pose tweak_pose_ = {};
+  Pose add_pose_ = {};
   Pose hand_pose_ = {};
   BipedRig rig_ = {};
 
@@ -231,6 +236,9 @@ class Skelly {
   float cycle_dur_ = 1000;
 
   WalkCycle walk_;
+
+  Movement<vec3> lstep_offset_;
+  Movement<vec3> rstep_offset_;
 
   vec2 input_dir_{0};
   std::optional<Animation<vec3>> vel_curve_;
