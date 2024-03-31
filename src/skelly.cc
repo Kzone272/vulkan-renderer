@@ -93,11 +93,9 @@ void Skelly::makeBones() {
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
   rig_.makeRig(skeleton_, &root_);
-  walk_.init(rig_, options_, sizes_);
-
-  add_pose_ = Pose(PoseType::Additive);
-  add_pose_.bone_mask =
-      std::set<BoneId>{BoneId::Cog, BoneId::Ltoe, BoneId::Rtoe};
+  idle_ = {rig_, idle_move_, sizes_};
+  idle_.updateCycle(1000, 0);
+  move_cycles_ = {idle_};
 
   hand_pose_.type = PoseType::Override;
   hand_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
@@ -124,8 +122,8 @@ void Skelly::handleInput(const InputState& input) {
       vel_ = target_vel;
     } else {
       float acc_force = options_.max_speed / options_.adjust_time;
-      float adjust_time =
-          std::max(200.f, glm::length(target_vel - vel_) / acc_force);
+      float adjust_time = std::min(
+          options_.adjust_time, glm::length(target_vel - vel_) / acc_force);
 
       vec3 acc(0);
       vec3 curr_vel = vel_;
@@ -158,8 +156,26 @@ void Skelly::update(float delta_s) {
   updateSpeed(delta_s);
   updateCycle(delta_s);
 
-  pose_ = walk_.getPose(cycle_t_);
-  modifyPose(pose_, delta_s);
+  if (move_transition_) {
+    DASSERT(move_cycles_.size() == 2);
+    move_transition_->update(delta_s);
+    float t = move_transition_->t();
+
+    auto p1 = pose_ = getCyclePose(move_cycles_[0], delta_s);
+    auto p2 = pose_ = getCyclePose(move_cycles_[1], delta_s);
+    pose_ = Pose::blend(p1, p2, t);
+
+    cycle_dur_ = glm::lerp(
+        move_cycles_[0].getCycleDur(), move_cycles_[1].getCycleDur(), t);
+
+    if (t >= 1) {
+      move_transition_.reset();
+      move_cycles_.erase(move_cycles_.begin());
+    }
+  } else {
+    DASSERT(move_cycles_.size() == 1);
+    pose_ = getCyclePose(move_cycles_[0], delta_s);
+  }
 
   updateHandPose(pose_);
   pose_ = Pose::blend(pose_, hand_pose_, mods_.hand_blend);
@@ -180,12 +196,27 @@ void Skelly::updateCycle(float delta_s) {
   cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
 
   if (target_speed_changed_) {
+    if (move_transition_) {
+      DASSERT(move_cycles_.size() == 2);
+      if (move_transition_->t() > 0.5) {
+        move_cycles_.erase(move_cycles_.begin());
+      } else {
+        move_cycles_.pop_back();
+      }
+    }
+
     if (target_speed_ != 0) {
       float step_l = sizes_.leg * 0.76f;
       float step_dur = (step_l / target_speed_) * 1000.f;
-      cycle_dur_ = std::min(1200.f, 2 * step_dur);
+      float cycle_dur = std::min(1200.f, 2 * step_dur);
+
+      WalkCycle cycle = {rig_, options_, sizes_};
+      cycle.updateCycle(cycle_dur, target_speed_);
+      move_cycles_.push_back(std::move(cycle));
+    } else {
+      move_cycles_.push_back(idle_);
     }
-    walk_.updateCycle(cycle_dur_, target_speed_);
+    move_transition_ = Duration(0.25);
   }
 }
 
@@ -227,19 +258,28 @@ void Skelly::updateSpeed(float delta_s) {
   }
 }
 
-void Skelly::modifyPose(Pose& pose, float delta_s) {
-  if (mods_.plant_feet) {
-    plantFoot(pose, walk_.getLfoot());
-    plantFoot(pose, walk_.getRfoot());
-    offsetFoot(walk_.getLfoot());
-    offsetFoot(walk_.getRfoot());
-  }
-
-  updateLean(delta_s);
-  pose_ = Pose::blend(pose_, add_pose_, 1);
+Pose Skelly::getCyclePose(WalkCycle& cycle, float delta_s) {
+  Pose pose = cycle.getPose(cycle_t_);
+  modifyPose(cycle, pose, delta_s);
+  return pose;
 }
 
-void Skelly::updateLean(float delta_s) {
+void Skelly::modifyPose(WalkCycle& cycle, Pose& pose, float delta_s) {
+  Pose add_pose = {PoseType::Additive};
+  add_pose.bone_mask =
+      std::set<BoneId>{BoneId::Cog, BoneId::Ltoe, BoneId::Rtoe};
+  if (mods_.plant_feet && cycle.getTargetSpeed() != 0) {
+    plantFoot(pose, cycle.getLfoot());
+    plantFoot(pose, cycle.getRfoot());
+    offsetFoot(add_pose, cycle.getLfoot());
+    offsetFoot(add_pose, cycle.getRfoot());
+  }
+
+  updateLean(add_pose, delta_s);
+  pose = Pose::blend(pose, add_pose, 1);
+}
+
+void Skelly::updateLean(Pose& add_pose, float delta_s) {
   vec3 lean_target(0);
   if (vel_curve_) {
     vec3 acc = vel_curve_->sample(vel_dur_.t(), SampleType::Velocity) /
@@ -261,11 +301,11 @@ void Skelly::updateLean(float delta_s) {
       glm::normalize(vec3(0, 1, 0)),
       glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
 
-  add_pose_.setPos(BoneId::Cog, offset);
-  add_pose_.setRot(BoneId::Cog, rot);
+  add_pose.setPos(BoneId::Cog, offset);
+  add_pose.setRot(BoneId::Cog, rot);
 }
 
-void Skelly::offsetFoot(FootMeta& foot_m) {
+void Skelly::offsetFoot(Pose& add_pose, FootMeta& foot_m) {
   auto& move = foot_m.is_left ? lstep_offset_ : rstep_offset_;
   if (foot_m.just_lifted) {
     vec3 root_pos = root_.posToLocal(foot_m.world_target);
@@ -278,7 +318,7 @@ void Skelly::offsetFoot(FootMeta& foot_m) {
 
   if (!foot_m.planted) {
     auto bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
-    add_pose_.setPos(bone, sampleMovement(move, cycle_t_));
+    add_pose.setPos(bone, sampleMovement(move, cycle_t_));
   }
 }
 
@@ -303,13 +343,13 @@ void Skelly::plantFoot(Pose& pose, FootMeta& foot_m) {
   }
 }
 
-void WalkCycle::init(
+WalkCycle::WalkCycle(
     BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes) {
   root_ = rig.root_;
   move_ = &move;
   sizes_ = &sizes;
-  initFoot(lfoot_m_, rig.ltoe_->posToAncestor(root_));
-  initFoot(rfoot_m_, rig.rtoe_->posToAncestor(root_));
+  initFoot(lfoot_m_, rig.getZeroPose().getPos(BoneId::Ltoe));
+  initFoot(rfoot_m_, rig.getZeroPose().getPos(BoneId::Rtoe));
   pose_ = rig.getZeroPose();
 }
 
@@ -464,7 +504,8 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   float dur_s = cycle_dur_ / 1000 * slide.dur;
   float stride = dur_s * target_speed_;
 
-  vec3 step_offset = foot_m.start_pos + vec3(0, 0, move_->step_offset);
+  // vec3 step_offset = foot_m.start_pos + vec3(0, 0, move_->step_offset);
+  vec3 step_offset = vec3(0, 0, move_->step_offset);
   step_offset.x =
       (foot_m.is_left ? -1 : 1) * move_->stance_w_pct * sizes_->pelvis_w / 2;
   vec3 contact = vec3(0, 0, stride / 2) + step_offset;
@@ -638,7 +679,7 @@ void Skelly::UpdateImgui() {
   }
 
   if (ImGui::BeginTabItem("Cycle")) {
-    cycleUi(walk_.getCycle());
+    cycleUi(move_cycles_[0].getCycle());
     ImGui::EndTabItem();
   }
 

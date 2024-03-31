@@ -13,7 +13,7 @@ struct MoveOptions {
   float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
   float step_height = 5;
-  float step_offset = -15;
+  float step_offset = 0;
   float bounce = 2;
   float hip_sway = 6;
   float hip_spin = 8;
@@ -112,10 +112,16 @@ struct Cycle {
 class WalkCycle {
  public:
   WalkCycle() = default;
+  WalkCycle(BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes);
 
-  void init(BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes);
   void updateCycle(float cycle_dur, float target_speed);
   const Pose& getPose(float cycle_t);
+  float getCycleDur() {
+    return cycle_dur_;
+  }
+  float getTargetSpeed() {
+    return target_speed_;
+  }
   Cycle& getCycle() {
     return cycle_;
   }
@@ -208,11 +214,12 @@ class Skelly {
   void updateSpeed(float delta_s);
 
   void updateCycle(float delta_s);
-  void modifyPose(Pose& pose, float delta_s);
-  void updateLean(float delta_s);
+  Pose getCyclePose(WalkCycle& cycle, float delta_s);
+  void modifyPose(WalkCycle& cycle, Pose& pose, float delta_s);
+  void updateLean(Pose& add_pose, float delta_s);
   void updateHandPose(Pose& pose);
   void plantFoot(Pose& pose, FootMeta& foot_m);
-  void offsetFoot(FootMeta& foot_m);
+  void offsetFoot(Pose& add_pose, FootMeta& foot_m);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);
@@ -224,7 +231,6 @@ class Skelly {
   Object root_ = {};
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
-  Pose add_pose_ = {};
   Pose hand_pose_ = {};
   BipedRig rig_ = {};
 
@@ -232,7 +238,11 @@ class Skelly {
   float prev_cycle_t_ = 0;
   float cycle_dur_ = 1000;
 
-  WalkCycle walk_;
+  std::vector<WalkCycle> move_cycles_;
+  std::optional<Duration> move_transition_;
+
+  WalkCycle idle_;
+  const MoveOptions idle_move_ = {.step_offset = 15};
 
   Movement<vec3> lstep_offset_;
   Movement<vec3> rstep_offset_;
