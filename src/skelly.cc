@@ -2,6 +2,7 @@
 
 #include <imgui/imgui.h>
 
+#include <memory>
 #include <print>
 
 #include "animation.h"
@@ -93,9 +94,8 @@ void Skelly::makeBones() {
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
   rig_.makeRig(skeleton_, &root_);
-  idle_ = {rig_, idle_move_, sizes_};
-  idle_.updateCycle(1000, 0);
-  move_cycles_ = {idle_};
+  idle_ = {rig_, idle_move_, sizes_, 1000, 0};
+  move_cycles_ = {WalkPoser(idle_, mods_, &root_)};
 
   hand_pose_.type = PoseType::Override;
   hand_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
@@ -122,8 +122,9 @@ void Skelly::handleInput(const InputState& input) {
       vel_ = target_vel;
     } else {
       float acc_force = options_.max_speed / options_.adjust_time;
-      float adjust_time = std::min(
-          options_.adjust_time, glm::length(target_vel - vel_) / acc_force);
+      float adjust_time = std::clamp(
+          glm::length(target_vel - vel_) / acc_force, 200.f,
+          options_.adjust_time);
 
       vec3 acc(0);
       vec3 curr_vel = vel_;
@@ -161,8 +162,8 @@ void Skelly::update(float delta_s) {
     move_transition_->update(delta_s);
     float t = move_transition_->t();
 
-    auto p1 = pose_ = getCyclePose(move_cycles_[0], delta_s);
-    auto p2 = pose_ = getCyclePose(move_cycles_[1], delta_s);
+    auto p1 = pose_ = move_cycles_[0].getPose(cycle_t_, delta_s);
+    auto p2 = pose_ = move_cycles_[1].getPose(cycle_t_, delta_s);
     pose_ = Pose::blend(p1, p2, t);
 
     cycle_dur_ = glm::lerp(
@@ -174,8 +175,12 @@ void Skelly::update(float delta_s) {
     }
   } else {
     DASSERT(move_cycles_.size() == 1);
-    pose_ = getCyclePose(move_cycles_[0], delta_s);
+    pose_ = move_cycles_[0].getPose(cycle_t_, delta_s);
   }
+
+  Pose lean_pose = {PoseType::Additive};
+  updateLean(lean_pose, delta_s);
+  pose_ = Pose::blend(pose_, lean_pose, 1);
 
   updateHandPose(pose_);
   pose_ = Pose::blend(pose_, hand_pose_, mods_.hand_blend);
@@ -210,13 +215,13 @@ void Skelly::updateCycle(float delta_s) {
       float step_dur = (step_l / target_speed_) * 1000.f;
       float cycle_dur = std::min(1200.f, 2 * step_dur);
 
-      WalkCycle cycle = {rig_, options_, sizes_};
-      cycle.updateCycle(cycle_dur, target_speed_);
-      move_cycles_.push_back(std::move(cycle));
+      move_cycles_.push_back(WalkPoser(
+          WalkCycle(rig_, options_, sizes_, cycle_dur, target_speed_), mods_,
+          &root_));
     } else {
-      move_cycles_.push_back(idle_);
+      move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
     }
-    move_transition_ = Duration(0.25);
+    move_transition_ = Duration(options_.blend_time);
   }
 }
 
@@ -258,27 +263,6 @@ void Skelly::updateSpeed(float delta_s) {
   }
 }
 
-Pose Skelly::getCyclePose(WalkCycle& cycle, float delta_s) {
-  Pose pose = cycle.getPose(cycle_t_);
-  modifyPose(cycle, pose, delta_s);
-  return pose;
-}
-
-void Skelly::modifyPose(WalkCycle& cycle, Pose& pose, float delta_s) {
-  Pose add_pose = {PoseType::Additive};
-  add_pose.bone_mask =
-      std::set<BoneId>{BoneId::Cog, BoneId::Ltoe, BoneId::Rtoe};
-  if (mods_.plant_feet && cycle.getTargetSpeed() != 0) {
-    plantFoot(pose, cycle.getLfoot());
-    plantFoot(pose, cycle.getRfoot());
-    offsetFoot(add_pose, cycle.getLfoot());
-    offsetFoot(add_pose, cycle.getRfoot());
-  }
-
-  updateLean(add_pose, delta_s);
-  pose = Pose::blend(pose, add_pose, 1);
-}
-
 void Skelly::updateLean(Pose& add_pose, float delta_s) {
   vec3 lean_target(0);
   if (vel_curve_) {
@@ -305,23 +289,6 @@ void Skelly::updateLean(Pose& add_pose, float delta_s) {
   add_pose.setRot(BoneId::Cog, rot);
 }
 
-void Skelly::offsetFoot(Pose& add_pose, FootMeta& foot_m) {
-  auto& move = foot_m.is_left ? lstep_offset_ : rstep_offset_;
-  if (foot_m.just_lifted) {
-    vec3 root_pos = root_.posToLocal(foot_m.world_target);
-    vec3 delta = root_pos - foot_m.liftoff;
-    move.offset = foot_m.step_offset;
-    move.dur = foot_m.step_dur;
-    move.spline = Spline<vec3>(SplineType::Linear, {delta, vec3(0)});
-    move.start(cycle_dur_);
-  }
-
-  if (!foot_m.planted) {
-    auto bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
-    add_pose.setPos(bone, sampleMovement(move, cycle_t_));
-  }
-}
-
 void Skelly::updateHandPose(Pose& pose) {
   if (mods_.hand_blend == 0) {
     return;
@@ -336,47 +303,99 @@ void Skelly::updateHandPose(Pose& pose) {
   hand_pose_.setPos(BoneId::Rhand, rhip);
 }
 
-void Skelly::plantFoot(Pose& pose, FootMeta& foot_m) {
+WalkPoser::WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root)
+    : walk_(walk), mods_(&mods), root_(root) {
+}
+
+Pose WalkPoser::getPose(float cycle_t, float delta_s) {
+  Pose pose = walk_.getPose(cycle_t);
+  if (!world_set_) {
+    setWorld(walk_.getLfoot());
+    setWorld(walk_.getRfoot());
+    world_set_ = true;
+  }
+
+  Pose add_pose = {PoseType::Additive};
+  add_pose.bone_mask =
+      std::set<BoneId>{BoneId::Cog, BoneId::Ltoe, BoneId::Rtoe};
+  if (mods_->plant_feet) {
+    plantFoot(pose, walk_.getLfoot());
+    plantFoot(pose, walk_.getRfoot());
+    offsetFoot(cycle_t, add_pose, walk_.getLfoot());
+    offsetFoot(cycle_t, add_pose, walk_.getRfoot());
+  }
+  pose = Pose::blend(pose, add_pose, 1);
+
+  return pose;
+}
+
+void WalkPoser::setWorld(FootMeta& foot_m) {
+  foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
+}
+
+void WalkPoser::plantFoot(Pose& pose, FootMeta& foot_m) {
+  if (foot_m.just_landed) {
+    foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
+    return;
+  }
   if (foot_m.planted) {
-    vec3 root_pos = root_.posToLocal(foot_m.world_target);
+    vec3 root_pos = root_->posToLocal(foot_m.world_target);
     pose.setPos(foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe, root_pos);
   }
 }
 
+void WalkPoser::offsetFoot(float cycle_t, Pose& add_pose, FootMeta& foot_m) {
+  auto& move = foot_m.is_left ? lstep_offset_ : rstep_offset_;
+  if (foot_m.just_lifted) {
+    vec3 root_pos = root_->posToLocal(foot_m.world_target);
+    vec3 delta = root_pos - foot_m.liftoff;
+    move.offset = foot_m.step_offset;
+    move.dur = foot_m.step_dur;
+    move.spline = Spline<vec3>(SplineType::Linear, {delta, vec3(0)});
+    move.start(walk_.getCycleDur());
+  }
+
+  if (!foot_m.planted) {
+    auto bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
+    add_pose.setPos(bone, sampleMovement(move, cycle_t));
+  }
+}
+
 WalkCycle::WalkCycle(
-    BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes) {
+    BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes,
+    float cycle_dur, float target_speed) {
   root_ = rig.root_;
   move_ = &move;
   sizes_ = &sizes;
   initFoot(lfoot_m_, rig.getZeroPose().getPos(BoneId::Ltoe));
   initFoot(rfoot_m_, rig.getZeroPose().getPos(BoneId::Rtoe));
   pose_ = rig.getZeroPose();
-}
-
-void WalkCycle::updateCycle(float cycle_dur, float target_speed) {
   cycle_dur_ = cycle_dur;
   target_speed_ = target_speed;
+  updateCycle();
+}
 
+void WalkCycle::updateCycle() {
   float bounce = std::pow(cycle_dur_ / 1000, 2) * move_->bounce;
   cycle_.bounce.spline =
       Spline<float>(SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
-  cycle_.bounce.start(cycle_dur);
+  cycle_.bounce.start(cycle_dur_);
 
   float hip_sway = glm::radians(move_->hip_sway);
   cycle_.sway.spline = Spline<float>(
       SplineType::Hermite, {-hip_sway, 0, hip_sway, 0, -hip_sway, 0});
-  cycle_.sway.start(cycle_dur);
+  cycle_.sway.start(cycle_dur_);
 
   float hip_spin = glm::radians(move_->hip_spin);
   cycle_.spin.spline = Spline<float>(
       SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
-  cycle_.spin.start(cycle_dur);
+  cycle_.spin.start(cycle_dur_);
 
   float shoulder_rot = glm::radians(move_->shoulder_spin);
   cycle_.shoulders.spline = Spline<float>(
       SplineType::Hermite,
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
-  cycle_.shoulders.start(cycle_dur);
+  cycle_.shoulders.start(cycle_dur_);
 
   float hand_dist = move_->hand_height_pct * sizes_->wrist_d;
   float hand_width = move_->arm_span_pct * sizes_->wrist_d;
@@ -389,7 +408,7 @@ void WalkCycle::updateCycle(float cycle_dur, float target_speed) {
       sizes_->sho_pos;
   cycle_.larm.spline = Spline<vec3>(
       SplineType::Hermite, {back, vec3(0), forward, vec3(0), back, vec3(0)});
-  cycle_.larm.start(cycle_dur);
+  cycle_.larm.start(cycle_dur_);
 
   cycle_.rarm.spline = cycle_.larm.spline;
   // Flips right arm points on x axis.
@@ -397,7 +416,7 @@ void WalkCycle::updateCycle(float cycle_dur, float target_speed) {
   for (vec3& point : cycle_.rarm.spline.points_) {
     point = flip * point;
   }
-  cycle_.rarm.start(cycle_dur);
+  cycle_.rarm.start(cycle_dur_);
 
   updateStep(lfoot_m_);
   updateStep(rfoot_m_);
@@ -470,11 +489,12 @@ void WalkCycle::updateToe(FootMeta& foot_m) {
   auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
 
   foot_m.just_lifted = moveStarted(step, cycle_t_, prev_cycle_t_);
+  foot_m.just_landed = moveStopped(step, cycle_t_, prev_cycle_t_);
   if (foot_m.just_lifted) {
     foot_m.planted = false;
-  } else if (moveStopped(step, cycle_t_, prev_cycle_t_) && step.anim) {
+  } else if (foot_m.just_landed && step.anim) {
     foot_m.toe_pos = step.anim->sample(1);
-    plantFoot(foot_m);
+    foot_m.planted = true;
   }
 
   if (step.anim && inCycle(step, cycle_t_)) {
@@ -487,12 +507,7 @@ void WalkCycle::updateToe(FootMeta& foot_m) {
 void WalkCycle::initFoot(FootMeta& foot_m, vec3 toe_pos) {
   foot_m.toe_pos = toe_pos;
   foot_m.start_pos = foot_m.toe_pos;
-  plantFoot(foot_m);
-}
-
-void WalkCycle::plantFoot(FootMeta& foot_m) {
   foot_m.planted = true;
-  foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
 }
 
 void WalkCycle::updateStep(FootMeta& foot_m) {
@@ -625,6 +640,7 @@ void Skelly::UpdateImgui() {
 
     ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
     ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
+    ImGui::SliderFloat("Anim Blend Time", &options_.blend_time, 0, 1);
     ImGui::SliderFloat("Max Leg %", &options_.max_leg_pct, 0.01, 1.2);
     if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
       makeBones();
@@ -678,10 +694,10 @@ void Skelly::UpdateImgui() {
     ImGui::EndTabItem();
   }
 
-  if (ImGui::BeginTabItem("Cycle")) {
-    cycleUi(move_cycles_[0].getCycle());
-    ImGui::EndTabItem();
-  }
+  // if (ImGui::BeginTabItem("Cycle")) {
+  //   cycleUi(move_cycles_[0].getCycle());
+  //   ImGui::EndTabItem();
+  // }
 
   if (ImGui::BeginTabItem("Mods")) {
     ImGui::SliderFloat("Hand Blend %", &mods_.hand_blend, 0, 1);

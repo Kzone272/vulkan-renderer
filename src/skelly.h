@@ -10,6 +10,7 @@ struct MoveOptions {
   float max_speed = 200;
   float adjust_time = 500;  // milliseconds
   float max_rot_speed = 270;
+  float blend_time = 0.5;  // seconds
   float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
   float step_height = 5;
@@ -68,6 +69,7 @@ struct FootMeta {
   bool planted = false;
   bool is_left = false;
   bool just_lifted = false;
+  bool just_landed = false;
   vec3 world_target;
   vec3 start_pos;
   vec3 contact;
@@ -112,9 +114,11 @@ struct Cycle {
 class WalkCycle {
  public:
   WalkCycle() = default;
-  WalkCycle(BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes);
+  WalkCycle(
+      BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes,
+      float cycle_dur, float target_speed);
 
-  void updateCycle(float cycle_dur, float target_speed);
+  void updateCycle();
   const Pose& getPose(float cycle_t);
   float getCycleDur() {
     return cycle_dur_;
@@ -141,7 +145,6 @@ class WalkCycle {
   void updateToe(FootMeta& foot_m);
   void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
   void initFoot(FootMeta& foot_m, vec3 toe_pos);
-  void plantFoot(FootMeta& foot_m);
   void updateShoulders();
   void updateHands();
 
@@ -175,6 +178,28 @@ class WalkCycle {
 
   FootMeta lfoot_m_ = {.is_left = true};
   FootMeta rfoot_m_ = {};
+};
+
+class WalkPoser {
+ public:
+  WalkPoser() = default;
+  WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root);
+  Pose getPose(float cycle_t, float delta_s);
+  float getCycleDur() {
+    return walk_.getCycleDur();
+  }
+
+ private:
+  void plantFoot(Pose& pose, FootMeta& foot_m);
+  void offsetFoot(float cycle_t, Pose& add_pose, FootMeta& foot_m);
+  void setWorld(FootMeta& foot_m);
+
+  WalkCycle walk_ = {};
+  Movement<vec3> lstep_offset_;
+  Movement<vec3> rstep_offset_;
+  const MoveMods* mods_ = nullptr;
+  Object* root_ = nullptr;
+  bool world_set_ = false;
 };
 
 class Duration {
@@ -214,12 +239,8 @@ class Skelly {
   void updateSpeed(float delta_s);
 
   void updateCycle(float delta_s);
-  Pose getCyclePose(WalkCycle& cycle, float delta_s);
-  void modifyPose(WalkCycle& cycle, Pose& pose, float delta_s);
   void updateLean(Pose& add_pose, float delta_s);
   void updateHandPose(Pose& pose);
-  void plantFoot(Pose& pose, FootMeta& foot_m);
-  void offsetFoot(Pose& add_pose, FootMeta& foot_m);
 
   void cycleUi(Cycle& cycle);
   void movementUi(const std::string& label, auto& move);
@@ -238,14 +259,11 @@ class Skelly {
   float prev_cycle_t_ = 0;
   float cycle_dur_ = 1000;
 
-  std::vector<WalkCycle> move_cycles_;
+  std::vector<WalkPoser> move_cycles_;
   std::optional<Duration> move_transition_;
 
   WalkCycle idle_;
   const MoveOptions idle_move_ = {.step_offset = 15};
-
-  Movement<vec3> lstep_offset_;
-  Movement<vec3> rstep_offset_;
 
   vec2 input_dir_{0};
   std::optional<Animation<vec3>> vel_curve_;
