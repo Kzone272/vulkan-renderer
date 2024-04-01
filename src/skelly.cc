@@ -611,10 +611,22 @@ void Skelly::UpdateImgui() {
   ImGui::Separator();
 
   ImGui::BeginTabBar("Skeleton Tabs");
-  if (ImGui::BeginTabItem("Movement")) {
+  if (ImGui::BeginTabItem("Move")) {
     ImGui::SliderFloat("Vel Adjust Time", &move_.adjust_time, 0, 1000);
     ImGui::SliderFloat("Max Rot Speed", &move_.max_rot_speed, 1, 360);
     ImGui::SliderFloat("Anim Blend Time", &move_.blend_time, 0, 1);
+
+    ImGui::Separator();
+
+    ImGui::Text("Mods");
+    ImGui::SliderFloat("Hand Blend %", &mods_.hand_blend, 0, 1);
+    SliderFloatDefault("Crouch %", &mods_.crouch_pct, 0, 1.2, 1);
+    ImGui::Checkbox("Plant Feet", &mods_.plant_feet);
+    ImGui::SliderFloat("Lean", &mods_.lean, 0, 200);
+    if (ImGui::SliderFloat3(
+            "Lean SO", (float*)&mods_.lean_params, 0.001, 20, "%.5f")) {
+      lean_so_->updateParams(mods_.lean_params);
+    }
 
     ImGui::EndTabItem();
   }
@@ -702,18 +714,6 @@ void Skelly::UpdateImgui() {
   if (ImGui::BeginTabItem("WalkCyc")) {
     if (cycleUi(walk_cycle_)) {
       move_cycles_.back().updateCycle(walk_, walk_cycle_);
-    }
-    ImGui::EndTabItem();
-  }
-
-  if (ImGui::BeginTabItem("Mods")) {
-    ImGui::SliderFloat("Hand Blend %", &mods_.hand_blend, 0, 1);
-    SliderFloatDefault("Crouch %", &mods_.crouch_pct, 0, 1.2, 1);
-    ImGui::Checkbox("Plant Feet", &mods_.plant_feet);
-    ImGui::SliderFloat("Lean", &mods_.lean, 0, 200);
-    if (ImGui::SliderFloat3(
-            "Lean SO", (float*)&mods_.lean_params, 0.001, 20, "%.5f")) {
-      lean_so_->updateParams(mods_.lean_params);
     }
     ImGui::EndTabItem();
   }
