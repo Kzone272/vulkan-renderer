@@ -324,7 +324,7 @@ Pose WalkPoser::getPose(float cycle_t, float delta_s) {
     world_set_ = true;
   }
 
-  if (mods_->plant_feet) {
+  if (walk_.getTargetSpeed() != 0 && mods_->plant_feet) {
     plantFoot(pose, walk_.getLfoot());
     plantFoot(pose, walk_.getRfoot());
     offsetFoot(cycle_t, walk_.getLfoot());
