@@ -597,6 +597,11 @@ void App::updateImgui() {
 
   ImGui::BeginTabBar("Misc Tabs");
   if (ImGui::BeginTabItem("General")) {
+    SliderFloatDefault(
+        "Time Scale", &options_.time_scale, 0.1, 2,
+        default_options_.time_scale);
+    ImGui::Separator();
+
     ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
     if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
       setGooch(ui_.gooch);
@@ -642,9 +647,6 @@ void App::updateImgui() {
   }
   if (ImGui::BeginTabItem("Objects")) {
     ImGui::Checkbox("Animate", &options_.animate);
-    SliderFloatDefault(
-        "Time Scale", &options_.time_scale, 0.1, 2,
-        default_options_.time_scale);
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
       remakeGrid(options_.grid_size);
