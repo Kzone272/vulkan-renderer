@@ -92,6 +92,11 @@ struct Swap {
   Pipeline* jf_draw;
   Pipeline* uv_sample_draw;
 
+  struct JfSdfPush {
+    float width = 1;
+    uint32_t mode = 0;
+  };
+
   void init(const VulkanState& vs);
   // This doesn't end the render pass so Renderer can draw whatever else it
   // wants before ending it.
@@ -101,7 +106,9 @@ struct Swap {
   void drawDepth(
       const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj);
   // Jump Flood Signed Distance Field
-  void drawJfSdf(const DrawState& ds, float width, vk::DescriptorSet image_set);
+  void drawJfSdf(
+      const DrawState& ds, float width, uint32_t mode,
+      vk::DescriptorSet image_set);
   void drawUvSample(
       const DrawState& ds, vk::DescriptorSet uv_image, vk::DescriptorSet image);
 };

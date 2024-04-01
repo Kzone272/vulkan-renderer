@@ -376,7 +376,7 @@ void Swap::init(const VulkanState& vs) {
   vk::PushConstantRange jf_push{
       .stageFlags = vk::ShaderStageFlagBits::eFragment,
       .offset = 0,
-      .size = sizeof(float),
+      .size = sizeof(JfSdfPush),
   };
   jf_draw = pass.makePipeline();
   *jf_draw = {
@@ -429,10 +429,12 @@ void Swap::drawDepth(
 }
 
 void Swap::drawJfSdf(
-    const DrawState& ds, float width, vk::DescriptorSet image_set) {
+    const DrawState& ds, float width, uint32_t mode,
+    vk::DescriptorSet image_set) {
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *jf_draw->pipeline);
-  ds.cmd.pushConstants<float>(
-      *jf_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, width);
+  JfSdfPush push = {width, mode};
+  ds.cmd.pushConstants<JfSdfPush>(
+      *jf_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, push);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *jf_draw->layout, 0, image_set,
       nullptr);

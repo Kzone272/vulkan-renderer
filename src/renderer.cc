@@ -1205,7 +1205,9 @@ void Renderer::recordCommandBuffer() {
     }
 
     if (frame_state_->draw_edges && !frame_state_->stained_glass) {
-      swap_.drawJfSdf(ds_, frame_state_->edge_w, jf_.lastOutputSet());
+      swap_.drawJfSdf(
+          ds_, frame_state_->edge_w, frame_state_->edges.i1.i,
+          jf_.lastOutputSet());
     }
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
