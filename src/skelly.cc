@@ -217,9 +217,15 @@ void Skelly::updateCycle(float delta_s) {
       float step_dur = (step_l / target_speed_) * 1000.f;
       float cycle_dur = std::clamp(2 * step_dur, 500.f, 1200.f);
 
-      move_cycles_.push_back(WalkPoser(
-          WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
-          &root_));
+      if (target_speed_ > 350) {
+        move_cycles_.push_back(WalkPoser(
+            WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), mods_,
+            &root_));
+      } else {
+        move_cycles_.push_back(WalkPoser(
+            WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
+            &root_));
+      }
     } else {
       move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
     }
@@ -602,11 +608,29 @@ void WalkCycle::updateHands() {
   }
 }
 
+bool WalkUi(WalkOptions& walk) {
+  bool changed = false;
+  changed |= ImGui::SliderFloat("Max Leg %", &walk.max_leg_pct, 0.01, 1.2);
+  changed |= ImGui::SliderFloat("Stance W %", &walk.stance_w_pct, 0, 2);
+  changed |= ImGui::SliderFloat("Step Height", &walk.step_height, 0, 50);
+  changed |= ImGui::SliderFloat("Step Offset", &walk.step_offset, -50, 50);
+  changed |= ImGui::SliderFloat("Bounce", &walk.bounce, 0, 10);
+  changed |= ImGui::SliderFloat("Hip Sway", &walk.hip_sway, 0, 30);
+  changed |= ImGui::SliderFloat("Hip Spin", &walk.hip_spin, 0, 45);
+  changed |= ImGui::SliderFloat("Shoulder Spin", &walk.shoulder_spin, 0, 45);
+  changed |= ImGui::SliderFloat("Arm Span %", &walk.arm_span_pct, -0.2, 1);
+  changed |= ImGui::SliderFloat("Hand Height %", &walk.hand_height_pct, -1, 1);
+  changed |= ImGui::SliderFloat("Hands Forward", &walk.hands_forward, -50, 50);
+
+  return changed;
+}
+
 void Skelly::UpdateImgui() {
   ImGui::Begin("Skeleton");
 
   if (ImGui::SliderFloat("Max Speed", &move_.max_speed, 0, 1000)) {
     walk_.speed = move_.max_speed;
+    run_.speed = move_.max_speed;
   }
   ImGui::Separator();
 
@@ -635,7 +659,7 @@ void Skelly::UpdateImgui() {
     bool changed = false;
     if (ImGui::Combo(
             "Size Presets", &ui_.size_preset,
-            "Default\0Tall\0Big\0Dwarf\0Chimp")) {
+            "Default\0Tall\0Big\0Dwarf\0Chimp\0")) {
       if (ui_.size_preset == 0) {
         sizeDefault(sizes_);
       } else if (ui_.size_preset == 1) {
@@ -670,7 +694,7 @@ void Skelly::UpdateImgui() {
     bool changed = false;
     if (ImGui::Combo(
             "Movement Presets", &ui_.move_preset,
-            "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
+            "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders\0")) {
       if (ui_.move_preset == 0) {
         moveDefault(walk_);
       } else if (ui_.move_preset == 1) {
@@ -690,19 +714,7 @@ void Skelly::UpdateImgui() {
       changed = true;
     }
 
-    changed |= ImGui::SliderFloat("Max Leg %", &walk_.max_leg_pct, 0.01, 1.2);
-    changed |= ImGui::SliderFloat("Stance W %", &walk_.stance_w_pct, 0, 2);
-    changed |= ImGui::SliderFloat("Step Height", &walk_.step_height, 0, 50);
-    changed |= ImGui::SliderFloat("Step Offset", &walk_.step_offset, -50, 50);
-    changed |= ImGui::SliderFloat("Bounce", &walk_.bounce, 0, 10);
-    changed |= ImGui::SliderFloat("Hip Sway", &walk_.hip_sway, 0, 30);
-    changed |= ImGui::SliderFloat("Hip Spin", &walk_.hip_spin, 0, 45);
-    changed |= ImGui::SliderFloat("Shoulder Spin", &walk_.shoulder_spin, 0, 45);
-    changed |= ImGui::SliderFloat("Arm Span %", &walk_.arm_span_pct, -0.2, 1);
-    changed |=
-        ImGui::SliderFloat("Hand Height %", &walk_.hand_height_pct, -1, 1);
-    changed |=
-        ImGui::SliderFloat("Hands Forward", &walk_.hands_forward, -50, 50);
+    changed |= WalkUi(walk_);
 
     if (changed) {
       move_cycles_.back().updateCycle(walk_, walk_cycle_);
@@ -715,6 +727,16 @@ void Skelly::UpdateImgui() {
     if (cycleUi(walk_cycle_)) {
       move_cycles_.back().updateCycle(walk_, walk_cycle_);
     }
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("Run")) {
+    WalkUi(run_);
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("RunCyc")) {
+    cycleUi(run_cycle_);
     ImGui::EndTabItem();
   }
 

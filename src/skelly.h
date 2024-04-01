@@ -109,7 +109,6 @@ struct Cycle {
   Movement<float> bounce;
   Movement<float> sway;
   Movement<float> spin;
-  Movement<float> heels_add;  // Mostly for debugging heel angle
   Movement<float> shoulders;
   Movement<vec3> larm;
   Movement<vec3> rarm;
@@ -235,6 +234,14 @@ class Skelly {
 
   MoveOptions move_ = {};
   WalkOptions walk_ = {};
+  WalkOptions run_ = {
+      .speed = 600,
+      .step_height = 20,
+      .bounce = 7,
+      .hip_spin = 20,
+      .shoulder_spin = 10,
+      .hand_height_pct = 0.4,
+  };
   SkellySizes sizes_ = {};
   MoveMods mods_ = {};
 
@@ -258,15 +265,28 @@ class Skelly {
       .rslide = {},
       .lheel = {.offset = 0.05, .dur = 0.45},
       .rheel = {.offset = 0.55, .dur = 0.45},
-      .bounce = {.offset = 0, .dur = 0.5, .loop = true},      // pelvis up/down
-      .sway = {.offset = 0, .dur = 1, .loop = true},          // z
-      .spin = {.offset = 0, .dur = 1, .loop = true},          // y
-      .heels_add = {.offset = 0.25, .dur = 1, .loop = true},  // x
-      .shoulders = {.offset = 0, .dur = 1, .loop = true},     // y
+      .bounce = {.offset = 0, .dur = 0.5, .loop = true},   // pelvis up/down
+      .sway = {.offset = 0, .dur = 1, .loop = true},       // z
+      .spin = {.offset = 0, .dur = 1, .loop = true},       // y
+      .shoulders = {.offset = 0, .dur = 1, .loop = true},  // y
       .larm = {.offset = 0.5, .dur = 1, .loop = true},
       .rarm = {.offset = 0, .dur = 1, .loop = true},
   };
   Cycle walk_cycle_ = default_walk_;
+  Cycle run_cycle_ = {
+      .lstep = {.offset = 0.85, .dur = 0.8},
+      .rstep = {.offset = 0.35, .dur = 0.8},
+      .lslide = {},
+      .rslide = {},
+      .lheel = {.offset = 0.85, .dur = 0.8},
+      .rheel = {.offset = 0.35, .dur = 0.8},
+      .bounce = {.offset = 0, .dur = 0.5, .loop = true},
+      .sway = {.offset = 0, .dur = 1, .loop = true},
+      .spin = {.offset = 0, .dur = 1, .loop = true},
+      .shoulders = {.offset = 0, .dur = 1, .loop = true},
+      .larm = {.offset = 0.5, .dur = 1, .loop = true},
+      .rarm = {.offset = 0, .dur = 1, .loop = true},
+  };
 
   std::vector<WalkPoser> move_cycles_;
   std::optional<Duration> move_transition_;
