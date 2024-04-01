@@ -15,6 +15,8 @@ file(GLOB shader_files
   sample-query.frag
   jf-step.frag
   jf-sdf.frag
+  voronoi-seed.frag
+  uv-sample.frag
 )
 
 set(shader_binary_dir "${PROJECT_BINARY_DIR}/shaders")

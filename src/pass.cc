@@ -256,6 +256,20 @@ void JumpFlood::init(const VulkanState& vs) {
           .push_ranges = {step_push},
       };
     }
+    if (!voronoi_seed_) {
+      vk::PushConstantRange tweak_push{
+          .stageFlags = vk::ShaderStageFlagBits::eFragment,
+          .offset = 0,
+          .size = sizeof(float),
+      };
+      voronoi_seed_ = pass.makePipeline();
+      *voronoi_seed_ = {
+          .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+          .frag_shader = vs.shaders.get("voronoi-seed.frag.spv"),
+          .desc_layouts = {input_lo_},
+          .push_ranges = {tweak_push},
+      };
+    }
 
     pass.init(vs);
   }
@@ -291,6 +305,28 @@ void JumpFlood::renderStep(
 
   ds.cmd.endRenderPass();
 
+  next();
+}
+
+void JumpFlood::initVoronoi(
+    const DrawState& ds, float tweak, vk::DescriptorSet image_set) {
+  passes_[next_].fbo.beginRp(ds);
+
+  ds.cmd.bindPipeline(
+      vk::PipelineBindPoint::eGraphics, *voronoi_seed_->pipeline);
+  ds.cmd.pushConstants<float>(
+      *voronoi_seed_->layout, vk::ShaderStageFlagBits::eFragment, 0, tweak);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *voronoi_seed_->layout, 0, {image_set},
+      nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+
+  ds.cmd.endRenderPass();
+
+  next();
+}
+
+void JumpFlood::next() {
   last_ = next_;
   next_ = (last_ + 1) % passes_.size();
 }
@@ -351,6 +387,13 @@ void Swap::init(const VulkanState& vs) {
       .enable_blending = true,
   };
 
+  uv_sample_draw = pass.makePipeline();
+  *uv_sample_draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("uv-sample.frag.spv"),
+      .desc_layouts = {sampler, sampler},
+  };
+
   pass.init(vs);
 }
 
@@ -393,6 +436,16 @@ void Swap::drawJfSdf(
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *jf_draw->layout, 0, image_set,
       nullptr);
+  ds.cmd.draw(3, 1, 0, 0);
+}
+
+void Swap::drawUvSample(
+    const DrawState& ds, vk::DescriptorSet uv_image, vk::DescriptorSet image) {
+  ds.cmd.bindPipeline(
+      vk::PipelineBindPoint::eGraphics, *uv_sample_draw->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *uv_sample_draw->layout, 0,
+      {uv_image, image}, nullptr);
   ds.cmd.draw(3, 1, 0, 0);
 }
 

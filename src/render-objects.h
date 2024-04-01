@@ -116,7 +116,9 @@ struct FrameState {
   };
   DebugView debug_view = DebugView::None;
   bool draw_edges = true;
+  bool stained_glass = false;
   float edge_w = 1;
+  float v_tweak = 0.1;
   DebugData edges{
       .f3 = 1,
       .f4 = 15,

@@ -615,6 +615,10 @@ void App::updateImgui() {
     ImGui::SliderFloat(
         "Edge Width", &frame_state_.edge_w, 0, 1000, "%.2f",
         ImGuiSliderFlags_Logarithmic);
+    ImGui::Checkbox("Stained Glass", &frame_state_.stained_glass);
+    ImGui::SliderFloat(
+        "Voronoi Tweak", &frame_state_.v_tweak, 0, 100, "%.7f",
+        ImGuiSliderFlags_Logarithmic);
     ImGui::EndTabItem();
   }
   if (ImGui::BeginTabItem("Edges")) {

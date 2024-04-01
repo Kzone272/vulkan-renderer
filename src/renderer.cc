@@ -1172,7 +1172,13 @@ void Renderer::recordCommandBuffer() {
   }
   scene_.render(ds_, frame_state_->objects, loaded_models_);
 
-  if (frame_state_->draw_edges) {
+  if (frame_state_->stained_glass) {
+    edges_.render(ds_, scene_.outputSet()->sets[1]);
+    float max_screen = std::max(vs_.swap_size.width, vs_.swap_size.height);
+    jf_.render(ds_, max_screen, edges_.outputSet()->sets[0]);
+    jf_.initVoronoi(ds_, frame_state_->v_tweak, jf_.lastOutputSet());
+    jf_.render(ds_, max_screen, jf_.lastOutputSet());
+  } else if (frame_state_->draw_edges) {
     edges_.render(ds_, scene_.outputSet()->sets[1]);
     jf_.render(ds_, frame_state_->edge_w, edges_.outputSet()->sets[0]);
   }
@@ -1185,7 +1191,12 @@ void Renderer::recordCommandBuffer() {
     swap_.startRender(ds_);
 
     if (frame_state_->debug_view == DebugView::None) {
-      swap_.drawImage(ds_, resolve_.outputSet()->sets[0]);
+      if (frame_state_->stained_glass) {
+        swap_.drawUvSample(
+            ds_, jf_.lastOutputSet(), resolve_.outputSet()->sets[0]);
+      } else {
+        swap_.drawImage(ds_, resolve_.outputSet()->sets[0]);
+      }
     } else if (frame_state_->debug_view == DebugView::Normals) {
       swap_.drawNormals(ds_, scene_.outputSet()->sets[1]);
     } else if (frame_state_->debug_view == DebugView::Depth) {
@@ -1193,7 +1204,7 @@ void Renderer::recordCommandBuffer() {
           ds_, scene_.outputSet()->sets[1], glm::inverse(frame_state_->proj));
     }
 
-    if (frame_state_->draw_edges) {
+    if (frame_state_->draw_edges && !frame_state_->stained_glass) {
       swap_.drawJfSdf(ds_, frame_state_->edge_w, jf_.lastOutputSet());
     }
 
