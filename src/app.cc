@@ -75,6 +75,7 @@ void App::initWindow() {
 void App::initImgui() {
   ImGui::CreateContext();
   ImGui_ImplSDL2_InitForVulkan(window_);
+  ImGui::GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
 }
 
 void App::initFrameState() {
