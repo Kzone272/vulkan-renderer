@@ -11,6 +11,10 @@ struct MoveOptions {
   float adjust_time = 500;  // milliseconds
   float max_rot_speed = 270;
   float blend_time = 0.5;  // seconds
+};
+
+struct WalkOptions {
+  float speed = 200;
   float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
   float step_height = 5;
@@ -115,16 +119,16 @@ class WalkCycle {
  public:
   WalkCycle() = default;
   WalkCycle(
-      BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes,
-      const Cycle& cycle, float cycle_dur, float target_speed);
+      BipedRig& rig, const WalkOptions& walk, const SkellySizes& sizes,
+      const Cycle& cycle, float cycle_dur);
 
-  void updateCycle(const Cycle& cycle);
+  void updateCycle(const WalkOptions& walk, const Cycle& cycle);
   const Pose& getPose(float cycle_t);
   float getCycleDur() {
     return cycle_dur_;
   }
   float getTargetSpeed() {
-    return target_speed_;
+    return walk_.speed;
   }
   FootMeta& getLfoot() {
     return lfoot_m_;
@@ -147,13 +151,12 @@ class WalkCycle {
   Cycle cycle_ = {};
   Pose pose_ = {};
   float cycle_dur_ = 0;
-  float target_speed_ = 0;
   float cycle_t_ = 0;
   float prev_cycle_t_ = 0;
 
   // TODO: Delete these maybe
   Object* root_ = nullptr;
-  const MoveOptions* move_ = nullptr;
+  WalkOptions walk_ = {};
   const SkellySizes* sizes_ = nullptr;
 
   FootMeta lfoot_m_ = {.is_left = true};
@@ -167,6 +170,9 @@ class WalkPoser {
   Pose getPose(float cycle_t, float delta_s);
   float getCycleDur() {
     return walk_.getCycleDur();
+  }
+  void updateCycle(const WalkOptions& walk, const Cycle& cycle) {
+    walk_.updateCycle(walk, cycle);
   }
 
  private:
@@ -224,12 +230,13 @@ class Skelly {
   void updateLean(float delta_s);
   void updateHandPose(Pose& pose);
 
-  void cycleUi(Cycle& cycle);
-  void movementUi(const std::string& label, auto& move);
+  bool cycleUi(Cycle& cycle);
+  bool movementUi(const std::string& label, auto& move);
 
-  MoveOptions options_;
-  SkellySizes sizes_;
-  MoveMods mods_;
+  MoveOptions move_ = {};
+  WalkOptions walk_ = {};
+  SkellySizes sizes_ = {};
+  MoveMods mods_ = {};
 
   Object root_ = {};
   BipedSkeleton skeleton_ = {};
@@ -242,7 +249,7 @@ class Skelly {
   float prev_cycle_t_ = 0;
   float cycle_dur_ = 1000;
 
-  Cycle walk_cycle_ = {
+  const Cycle default_walk_ = {
       // Offsets should be in [0, 1)
       // Durations should be in [0, 1]
       .lstep = {.offset = 0.05, .dur = 0.45},  // foot contact at 0.5
@@ -259,12 +266,13 @@ class Skelly {
       .larm = {.offset = 0.5, .dur = 1, .loop = true},
       .rarm = {.offset = 0, .dur = 1, .loop = true},
   };
+  Cycle walk_cycle_ = default_walk_;
 
   std::vector<WalkPoser> move_cycles_;
   std::optional<Duration> move_transition_;
 
   WalkCycle idle_;
-  const MoveOptions idle_move_ = {.step_offset = 15};
+  const WalkOptions idle_walk_ = {.speed = 0, .step_offset = 15};
 
   vec2 input_dir_{0};
   std::optional<Animation<vec3>> vel_curve_;

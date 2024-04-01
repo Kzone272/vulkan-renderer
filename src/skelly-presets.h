@@ -3,64 +3,64 @@
 #include "skelly.h"
 
 // Some presets for different walk cycles
-inline void moveDefault(MoveOptions& move) {
-  move = MoveOptions{};
+inline void moveDefault(WalkOptions& walk) {
+  walk = WalkOptions{};
 }
-inline void moveTightrope(MoveOptions& move) {
-  move = MoveOptions{};
-  move.max_speed = 120;
-  move.max_leg_pct = 0.9;
-  move.stance_w_pct = 0;
-  move.hand_height_pct = 0.25;
-  move.arm_span_pct = 0.9;
+inline void moveTightrope(WalkOptions& walk) {
+  walk = WalkOptions{};
+  walk.speed = 120;
+  walk.max_leg_pct = 0.9;
+  walk.stance_w_pct = 0;
+  walk.hand_height_pct = 0.25;
+  walk.arm_span_pct = 0.9;
 }
-inline void movePreppy(MoveOptions& move) {
-  move = MoveOptions{};
-  move.max_speed = 240;
-  move.max_leg_pct = 0.9;
-  move.step_height = 15;
-  move.bounce = 5;
-  move.arm_span_pct = 0;
-  move.hand_height_pct = 0.5;
+inline void movePreppy(WalkOptions& walk) {
+  walk = WalkOptions{};
+  walk.speed = 240;
+  walk.max_leg_pct = 0.9;
+  walk.step_height = 15;
+  walk.bounce = 5;
+  walk.arm_span_pct = 0;
+  walk.hand_height_pct = 0.5;
 }
-inline void moveSnow(MoveOptions& move) {
-  move = MoveOptions{};
-  move.max_speed = 100;
-  move.max_leg_pct = 0.9;
-  move.step_height = 50;
-  move.arm_span_pct = 0.25;
-  move.hand_height_pct = 0.65;
-  move.hands_forward = 15;
+inline void moveSnow(WalkOptions& walk) {
+  walk = WalkOptions{};
+  walk.speed = 100;
+  walk.max_leg_pct = 0.9;
+  walk.step_height = 50;
+  walk.arm_span_pct = 0.25;
+  walk.hand_height_pct = 0.65;
+  walk.hands_forward = 15;
 }
-inline void moveRunway(MoveOptions& move) {
-  move = MoveOptions{};
-  move.stance_w_pct = 0.2;
-  move.hip_sway = 12;
-  move.hip_spin = 10;
-  move.shoulder_spin = 12;
-  move.arm_span_pct = 0.5;
-  move.hand_height_pct = 0.9;
-  move.hands_forward = -15;
+inline void moveRunway(WalkOptions& walk) {
+  walk = WalkOptions{};
+  walk.stance_w_pct = 0.2;
+  walk.hip_sway = 12;
+  walk.hip_spin = 10;
+  walk.shoulder_spin = 12;
+  walk.arm_span_pct = 0.5;
+  walk.hand_height_pct = 0.9;
+  walk.hands_forward = -15;
 }
-inline void moveCrouch(MoveOptions& move) {
-  move = MoveOptions{};
-  move.max_speed = 120;
-  move.max_leg_pct = 0.65;
-  move.stance_w_pct = 1.2;
-  move.step_height = 15;
-  move.arm_span_pct = 0.2;
-  move.hand_height_pct = 0.5;
-  move.hands_forward = 15;
+inline void moveCrouch(WalkOptions& walk) {
+  walk = WalkOptions{};
+  walk.speed = 120;
+  walk.max_leg_pct = 0.65;
+  walk.stance_w_pct = 1.2;
+  walk.step_height = 15;
+  walk.arm_span_pct = 0.2;
+  walk.hand_height_pct = 0.5;
+  walk.hands_forward = 15;
 }
-inline void moveFlanders(MoveOptions& move) {
-  move = MoveOptions{};
-  move.max_speed = 165;
-  move.max_leg_pct = 0.90;
-  move.bounce = 4;
-  move.hip_sway = 23;
-  move.hip_spin = 4.5;
-  move.hand_height_pct = 0.53;
-  move.hands_forward = 0;
+inline void moveFlanders(WalkOptions& walk) {
+  walk = WalkOptions{};
+  walk.speed = 165;
+  walk.max_leg_pct = 0.90;
+  walk.bounce = 4;
+  walk.hip_sway = 23;
+  walk.hip_spin = 4.5;
+  walk.hand_height_pct = 0.53;
+  walk.hands_forward = 0;
 }
 
 // Some presets for different skeleton sizes

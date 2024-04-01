@@ -6,6 +6,7 @@
 #include <print>
 
 #include "animation.h"
+#include "imgui-helpers.h"
 #include "maths.h"
 #include "skelly-presets.h"
 #include "time-utils.h"
@@ -94,8 +95,9 @@ void Skelly::makeBones() {
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
   rig_.makeRig(skeleton_, &root_);
-  idle_ = {rig_, idle_move_, sizes_, walk_cycle_, 1000, 0};
+  idle_ = {rig_, idle_walk_, sizes_, walk_cycle_, 1000};
   move_cycles_ = {WalkPoser(idle_, mods_, &root_)};
+  move_transition_.reset();
 
   hand_pose_.type = PoseType::Override;
   hand_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
@@ -105,13 +107,13 @@ void Skelly::makeBones() {
 void Skelly::handleInput(const InputState& input) {
   // Check if we should update velocity because max speed slider changed.
   // TODO: Use slider update directly.
-  bool max_speed_changed = target_speed_ > 0.1f &&
-                           std::abs(target_speed_ - options_.max_speed) > 0.1f;
+  bool max_speed_changed =
+      target_speed_ > 0.1f && std::abs(target_speed_ - move_.max_speed) > 0.1f;
 
   target_speed_changed_ = false;
   if (glm::length(input.move.dir - input_dir_) > 0.1f || max_speed_changed) {
     input_dir_ = input.move.dir;
-    vec3 target_vel = options_.max_speed * vec3(input_dir_.x, 0, input_dir_.y);
+    vec3 target_vel = move_.max_speed * vec3(input_dir_.x, 0, input_dir_.y);
 
     float speed = glm::length(target_vel);
     if (std::abs(speed - target_speed_) > 0.1f) {
@@ -119,13 +121,12 @@ void Skelly::handleInput(const InputState& input) {
       target_speed_changed_ = true;
     }
 
-    if (options_.adjust_time == 0) {
+    if (move_.adjust_time == 0) {
       vel_ = target_vel;
     } else {
-      float acc_force = options_.max_speed / options_.adjust_time;
+      float acc_force = move_.max_speed / move_.adjust_time;
       float adjust_time = std::clamp(
-          glm::length(target_vel - vel_) / acc_force, 200.f,
-          options_.adjust_time);
+          glm::length(target_vel - vel_) / acc_force, 200.f, move_.adjust_time);
 
       vec3 acc(0);
       vec3 curr_vel = vel_;
@@ -217,13 +218,12 @@ void Skelly::updateCycle(float delta_s) {
       float cycle_dur = std::clamp(2 * step_dur, 500.f, 1200.f);
 
       move_cycles_.push_back(WalkPoser(
-          WalkCycle(
-              rig_, options_, sizes_, walk_cycle_, cycle_dur, target_speed_),
-          mods_, &root_));
+          WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
+          &root_));
     } else {
       move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
     }
-    move_transition_ = Duration(options_.blend_time);
+    move_transition_ = Duration(move_.blend_time);
   }
 }
 
@@ -254,7 +254,7 @@ void Skelly::updateSpeed(float delta_s) {
     float delta = angleDelta(current, target_angle);
 
     float angle = target_angle;
-    float change = delta_s * glm::radians(options_.max_rot_speed);
+    float change = delta_s * glm::radians(move_.max_rot_speed);
     if (std::abs(delta) > change) {
       float dir = (delta > 0) ? 1 : -1;
       angle = current + dir * change;
@@ -362,51 +362,49 @@ void WalkPoser::offsetFoot(float cycle_t, FootMeta& foot_m) {
 }
 
 WalkCycle::WalkCycle(
-    BipedRig& rig, const MoveOptions& move, const SkellySizes& sizes,
-    const Cycle& cycle, float cycle_dur, float target_speed) {
+    BipedRig& rig, const WalkOptions& walk, const SkellySizes& sizes,
+    const Cycle& cycle, float cycle_dur) {
   root_ = rig.root_;
-  move_ = &move;
   sizes_ = &sizes;
   lfoot_m_.planted = true;
   rfoot_m_.planted = true;
   pose_ = rig.getZeroPose();
   cycle_dur_ = cycle_dur;
-  target_speed_ = target_speed;
-  updateCycle(cycle);
+  updateCycle(walk, cycle);
 }
 
-void WalkCycle::updateCycle(const Cycle& cycle) {
+void WalkCycle::updateCycle(const WalkOptions& walk, const Cycle& cycle) {
+  walk_ = walk;
   cycle_ = cycle;
 
-  float bounce = std::pow(cycle_dur_ / 1000, 2) * move_->bounce;
+  float bounce = std::pow(cycle_dur_ / 1000, 2) * walk_.bounce;
   cycle_.bounce.spline =
       Spline<float>(SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
   cycle_.bounce.start(cycle_dur_);
 
-  float hip_sway = glm::radians(move_->hip_sway);
+  float hip_sway = glm::radians(walk_.hip_sway);
   cycle_.sway.spline = Spline<float>(
       SplineType::Hermite, {-hip_sway, 0, hip_sway, 0, -hip_sway, 0});
   cycle_.sway.start(cycle_dur_);
 
-  float hip_spin = glm::radians(move_->hip_spin);
+  float hip_spin = glm::radians(walk_.hip_spin);
   cycle_.spin.spline = Spline<float>(
       SplineType::Hermite, {-hip_spin, 0, hip_spin, 0, -hip_spin, 0});
   cycle_.spin.start(cycle_dur_);
 
-  float shoulder_rot = glm::radians(move_->shoulder_spin);
+  float shoulder_rot = glm::radians(walk_.shoulder_spin);
   cycle_.shoulders.spline = Spline<float>(
       SplineType::Hermite,
       {shoulder_rot, 0, -shoulder_rot, 0, shoulder_rot, 0});
   cycle_.shoulders.start(cycle_dur_);
 
-  float hand_dist = move_->hand_height_pct * sizes_->wrist_d;
-  float hand_width = move_->arm_span_pct * sizes_->wrist_d;
+  float hand_dist = walk_.hand_height_pct * sizes_->wrist_d;
+  float hand_width = walk_.arm_span_pct * sizes_->wrist_d;
   vec3 back =
-      vec3(-hand_width, -hand_dist, -0.2 * hand_dist + move_->hands_forward) +
+      vec3(-hand_width, -hand_dist, -0.2 * hand_dist + walk_.hands_forward) +
       sizes_->sho_pos;
   vec3 forward =
-      vec3(
-          -hand_width, -hand_dist + 5, 0.4 * hand_dist + move_->hands_forward) +
+      vec3(-hand_width, -hand_dist + 5, 0.4 * hand_dist + walk_.hands_forward) +
       sizes_->sho_pos;
   cycle_.larm.spline = Spline<vec3>(
       SplineType::Hermite, {back, vec3(0), forward, vec3(0), back, vec3(0)});
@@ -441,7 +439,7 @@ const Pose& WalkCycle::getPose(float cycle_t) {
 }
 
 void WalkCycle::updateCog() {
-  vec3 pos = vec3(0, move_->max_leg_pct * sizes_->pelvis_y, 0);
+  vec3 pos = vec3(0, walk_.max_leg_pct * sizes_->pelvis_y, 0);
   pos.y += sampleMovement(cycle_.bounce, cycle_t_);
 
   pose_.setPos(BoneId::Cog, pos);
@@ -513,23 +511,23 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   slide.offset = std::fmod(step.offset + step.dur, 1);
   slide.dur = 1 - step.dur;
   float dur_s = cycle_dur_ / 1000 * slide.dur;
-  float stride = dur_s * target_speed_;
+  float stride = dur_s * walk_.speed;
 
-  vec3 step_offset = vec3(0, 0, move_->step_offset);
+  vec3 step_offset = vec3(0, 0, walk_.step_offset);
   step_offset.x =
-      (foot_m.is_left ? -1 : 1) * move_->stance_w_pct * sizes_->pelvis_w / 2;
+      (foot_m.is_left ? -1 : 1) * walk_.stance_w_pct * sizes_->pelvis_w / 2;
   vec3 contact = vec3(0, 0, stride / 2) + step_offset;
 
   vec3 backward = {0, 0, -1};  // Move backwards in root space.
   vec3 liftoff = contact + (stride * backward);
 
-  vec3 mid_pos = (contact + liftoff) / 2.f + vec3(0, move_->step_height, 0);
+  vec3 mid_pos = (contact + liftoff) / 2.f + vec3(0, walk_.step_height, 0);
 
   vec3 path = contact - liftoff;
   float step_dur_s = cycle_dur_ / 1000 * step.dur;
   vec3 swing_vel = 1.25f * path / step_dur_s;
-  vec3 no_vel = vec3(0, 0, -target_speed_);
-  vec3 toe_drop = no_vel + vec3(0, -move_->step_height / 2, 0);
+  vec3 no_vel = vec3(0, 0, -walk_.speed);
+  vec3 toe_drop = no_vel + vec3(0, -walk_.step_height / 2, 0);
 
   step.spline = Spline<vec3>(
       SplineType::Hermite,
@@ -607,53 +605,22 @@ void WalkCycle::updateHands() {
 void Skelly::UpdateImgui() {
   ImGui::Begin("Skeleton");
 
-  ImGui::SliderFloat("Max Speed", &options_.max_speed, 0, 1000);
+  if (ImGui::SliderFloat("Max Speed", &move_.max_speed, 0, 1000)) {
+    walk_.speed = move_.max_speed;
+  }
   ImGui::Separator();
 
   ImGui::BeginTabBar("Skeleton Tabs");
   if (ImGui::BeginTabItem("Movement")) {
-    if (ImGui::Combo(
-            "Movement Presets", &ui_.move_preset,
-            "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
-      if (ui_.move_preset == 0) {
-        moveDefault(options_);
-      } else if (ui_.move_preset == 1) {
-        moveTightrope(options_);
-      } else if (ui_.move_preset == 2) {
-        movePreppy(options_);
-      } else if (ui_.move_preset == 3) {
-        moveSnow(options_);
-      } else if (ui_.move_preset == 4) {
-        moveRunway(options_);
-      } else if (ui_.move_preset == 5) {
-        moveCrouch(options_);
-      } else if (ui_.move_preset == 6) {
-        moveFlanders(options_);
-      }
-      makeBones();
-    }
-
-    ImGui::SliderFloat("Vel Adjust Time", &options_.adjust_time, 0, 1000);
-    ImGui::SliderFloat("Max Rot Speed", &options_.max_rot_speed, 1, 360);
-    ImGui::SliderFloat("Anim Blend Time", &options_.blend_time, 0, 1);
-    ImGui::SliderFloat("Max Leg %", &options_.max_leg_pct, 0.01, 1.2);
-    if (ImGui::SliderFloat("Stance W %", &options_.stance_w_pct, 0, 2)) {
-      makeBones();
-    }
-    ImGui::SliderFloat("Step Height", &options_.step_height, 0, 50);
-    ImGui::SliderFloat("Step Offset", &options_.step_offset, -50, 50);
-    ImGui::SliderFloat("Bounce", &options_.bounce, 0, 10);
-    ImGui::SliderFloat("Hip Sway", &options_.hip_sway, 0, 30);
-    ImGui::SliderFloat("Hip Spin", &options_.hip_spin, 0, 45);
-    ImGui::SliderFloat("Shoulder Spin", &options_.shoulder_spin, 0, 45);
-    ImGui::SliderFloat("Arm Span %", &options_.arm_span_pct, -0.2, 1);
-    ImGui::SliderFloat("Hand Height %", &options_.hand_height_pct, -1, 1);
-    ImGui::SliderFloat("Hands Forward", &options_.hands_forward, -50, 50);
+    ImGui::SliderFloat("Vel Adjust Time", &move_.adjust_time, 0, 1000);
+    ImGui::SliderFloat("Max Rot Speed", &move_.max_rot_speed, 1, 360);
+    ImGui::SliderFloat("Anim Blend Time", &move_.blend_time, 0, 1);
 
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("Sizes")) {
+    bool changed = false;
     if (ImGui::Combo(
             "Size Presets", &ui_.size_preset,
             "Default\0Tall\0Big\0Dwarf\0Chimp")) {
@@ -668,12 +635,10 @@ void Skelly::UpdateImgui() {
       } else if (ui_.size_preset == 4) {
         sizeChimp(sizes_);
       }
-      std::println("change size");
-      makeBones();
+      changed = true;
     }
     ImGui::Separator();
 
-    bool changed = false;
     changed |= ImGui::SliderFloat("Height", &sizes_.height, 1, 250);
     changed |= ImGui::SliderFloat("Leg", &sizes_.leg, 1, sizes_.height);
     changed |= ImGui::SliderFloat("Femur", &sizes_.femur_pct, 0.05, 1);
@@ -689,14 +654,61 @@ void Skelly::UpdateImgui() {
     ImGui::EndTabItem();
   }
 
-  if (ImGui::BeginTabItem("Walk Cycle")) {
-    cycleUi(walk_cycle_);
+  if (ImGui::BeginTabItem("WalkOpt")) {
+    bool changed = false;
+    if (ImGui::Combo(
+            "Movement Presets", &ui_.move_preset,
+            "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders")) {
+      if (ui_.move_preset == 0) {
+        moveDefault(walk_);
+      } else if (ui_.move_preset == 1) {
+        moveTightrope(walk_);
+      } else if (ui_.move_preset == 2) {
+        movePreppy(walk_);
+      } else if (ui_.move_preset == 3) {
+        moveSnow(walk_);
+      } else if (ui_.move_preset == 4) {
+        moveRunway(walk_);
+      } else if (ui_.move_preset == 5) {
+        moveCrouch(walk_);
+      } else if (ui_.move_preset == 6) {
+        moveFlanders(walk_);
+      }
+      move_.max_speed = walk_.speed;
+      changed = true;
+    }
+
+    changed |= ImGui::SliderFloat("Max Leg %", &walk_.max_leg_pct, 0.01, 1.2);
+    changed |= ImGui::SliderFloat("Stance W %", &walk_.stance_w_pct, 0, 2);
+    changed |= ImGui::SliderFloat("Step Height", &walk_.step_height, 0, 50);
+    changed |= ImGui::SliderFloat("Step Offset", &walk_.step_offset, -50, 50);
+    changed |= ImGui::SliderFloat("Bounce", &walk_.bounce, 0, 10);
+    changed |= ImGui::SliderFloat("Hip Sway", &walk_.hip_sway, 0, 30);
+    changed |= ImGui::SliderFloat("Hip Spin", &walk_.hip_spin, 0, 45);
+    changed |= ImGui::SliderFloat("Shoulder Spin", &walk_.shoulder_spin, 0, 45);
+    changed |= ImGui::SliderFloat("Arm Span %", &walk_.arm_span_pct, -0.2, 1);
+    changed |=
+        ImGui::SliderFloat("Hand Height %", &walk_.hand_height_pct, -1, 1);
+    changed |=
+        ImGui::SliderFloat("Hands Forward", &walk_.hands_forward, -50, 50);
+
+    if (changed) {
+      move_cycles_.back().updateCycle(walk_, walk_cycle_);
+    }
+
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("WalkCyc")) {
+    if (cycleUi(walk_cycle_)) {
+      move_cycles_.back().updateCycle(walk_, walk_cycle_);
+    }
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("Mods")) {
     ImGui::SliderFloat("Hand Blend %", &mods_.hand_blend, 0, 1);
-    ImGui::SliderFloat("Crouch %", &mods_.crouch_pct, 0, 1.2);
+    SliderFloatDefault("Crouch %", &mods_.crouch_pct, 0, 1.2, 1);
     ImGui::Checkbox("Plant Feet", &mods_.plant_feet);
     ImGui::SliderFloat("Lean", &mods_.lean, 0, 200);
     if (ImGui::SliderFloat3(
@@ -710,15 +722,22 @@ void Skelly::UpdateImgui() {
   ImGui::End();
 }
 
-void Skelly::cycleUi(Cycle& cycle) {
-  movementUi("lstep", cycle.lstep);
-  movementUi("rstep", cycle.rstep);
-  movementUi("lheel", cycle.lheel);
-  movementUi("rheel", cycle.rheel);
-  movementUi("bounce", cycle.bounce);
+bool Skelly::cycleUi(Cycle& cycle) {
+  bool changed = false;
+  changed |= movementUi("lstep", cycle.lstep);
+  changed |= movementUi("rstep", cycle.rstep);
+  changed |= movementUi("lheel", cycle.lheel);
+  changed |= movementUi("rheel", cycle.rheel);
+  changed |= movementUi("bounce", cycle.bounce);
+  if (ImGui::Button("Reset")) {
+    walk_cycle_ = default_walk_;
+    changed = true;
+  }
+  return changed;
 }
 
-void Skelly::movementUi(const std::string& label, auto& move) {
+bool Skelly::movementUi(const std::string& label, auto& move) {
+  bool changed = false;
   ImGui::PushID(label.c_str());
 
   ImGui::Text("%s: Offset | Duration", label.c_str());
@@ -730,6 +749,7 @@ void Skelly::movementUi(const std::string& label, auto& move) {
   if (ImGui::SliderFloat2("", vals, 0, 1)) {
     move.offset = vals[0];
     move.dur = vals[1];
+    changed = true;
   }
   ImGui::PopID();  // offsetdur
 
@@ -755,4 +775,5 @@ void Skelly::movementUi(const std::string& label, auto& move) {
   ImGui::PopID();                           // bar
 
   ImGui::PopID();  // label
+  return changed;
 }
