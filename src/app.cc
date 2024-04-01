@@ -617,7 +617,7 @@ void App::updateImgui() {
         ImGuiSliderFlags_Logarithmic);
     ImGui::Checkbox("Stained Glass", &frame_state_.stained_glass);
     ImGui::SliderFloat(
-        "Voronoi Tweak", &frame_state_.v_tweak, 0, 100, "%.7f",
+        "Voronoi Tweak", &frame_state_.v_tweak, 0, 1000, "%.7f",
         ImGuiSliderFlags_Logarithmic);
     ImGui::EndTabItem();
   }

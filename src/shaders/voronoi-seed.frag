@@ -14,6 +14,15 @@ float rand(vec2 pos){
   return fract(sin(dot(pos, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// Hash functions from: https://www.shadertoy.com/view/ldB3zc
+float hash1( float n ) {
+  return fract(sin(n)*43758.5453);
+}
+vec2 hash2( vec2  p ) {
+  p = vec2( dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)) );
+  return fract(sin(p)*43758.5453);
+}
+
 void main() {
   ivec2 size = textureSize(image, 0);
   vec2 samp = texture(image, fragUv).xy;
@@ -21,12 +30,12 @@ void main() {
     outColor = vec2(-1.0);
   } else {
     float dist = length(vec2(size) * (samp - fragUv)) / length(vec2(size));
-    float minProb = .0001;
-    float maxProb = 0.02;
-    float x = clamp(maxProb - (0.01 * pow(dist * 100.0, 0.8)), minProb, maxProb);
-    vec2 param = fragUv;
-    double prob = rand(param);
-    if (double(x) > prob) {
+    const vec2 block = vec2(2);
+    vec2 scaled = fragUv * size / block;
+    vec2 within = fract(scaled);
+    vec2 point = hash2(floor(scaled));
+
+    if (length(within - point) < 0.1 && pow(dist, 0.1) * tweak < rand(point)) {
       outColor = fragUv;
     } else {
       outColor = vec2(-1.0);
