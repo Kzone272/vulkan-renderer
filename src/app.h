@@ -145,10 +145,18 @@ class App {
   std::unique_ptr<Renderer> renderer_;
   Object world_;
   Object grid_;
+  Object* floor_ = nullptr;
   Skelly skelly_;
 
-  std::map<ModelId, MaterialId> default_mats_;
-  MaterialId gooch_mat_;
+  struct Materials {
+    MaterialId cube = kMaterialIdNone;
+    MaterialId bone = kMaterialIdNone;
+    MaterialId control = kMaterialIdNone;
+    MaterialId viking = kMaterialIdNone;
+    MaterialId drawing = kMaterialIdNone;
+    MaterialId voronoi = kMaterialIdNone;
+    MaterialId gooch = kMaterialIdNone;
+  } mats_;
   std::vector<MaterialId> floor_mats_;
 
 #ifdef DEBUG

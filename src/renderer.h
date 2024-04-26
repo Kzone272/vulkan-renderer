@@ -30,8 +30,8 @@ class Renderer {
   void drawFrame(FrameState* frame_state);
   void resizeWindow(uint32_t width, uint32_t height);
   MaterialId useMaterial(const MaterialInfo& mat_info);
-  void useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id);
-  void setModelMaterial(ModelId model_id, MaterialId material_id);
+  // TODO: Also return a non-enum model id?
+  void useMesh(ModelId model_id, const Mesh& mesh);
   // TODO: Return a TextureId instead.
   Texture* getDrawingTexture();
   Texture* getVoronoiTexture();

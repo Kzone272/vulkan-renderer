@@ -84,6 +84,26 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   rhand_->setPos(flip3 * hand_pos);
 }
 
+void BipedSkeleton::setMaterial(MaterialId material) {
+  root_->setMaterial(material);
+  cog_->setMaterial(material);
+  pelvis_->setMaterial(material);
+  torso_->setMaterial(material);
+  lbicep_->setMaterial(material);
+  lforearm_->setMaterial(material);
+  lhand_->setMaterial(material);
+  rbicep_->setMaterial(material);
+  rforearm_->setMaterial(material);
+  rhand_->setMaterial(material);
+  head_->setMaterial(material);
+  lfemur_->setMaterial(material);
+  lshin_->setMaterial(material);
+  lfoot_->setMaterial(material);
+  rfemur_->setMaterial(material);
+  rshin_->setMaterial(material);
+  rfoot_->setMaterial(material);
+}
+
 namespace {
 
 // Returns pair of angles for bone1 and bone2.
@@ -219,6 +239,24 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   // Marks the root position/direction.
   mat4 root_control_t = glm::scale(vec3(10, 1, 30));
   root_->addChild(Object(ModelId::BoxControl, root_control_t));
+}
+
+void BipedRig::setMaterial(MaterialId material) {
+  root_->setMaterial(material);
+  cog_->setMaterial(material);
+  neck_->setMaterial(material);
+  head_->setMaterial(material);
+  lsho_->setMaterial(material);
+  rsho_->setMaterial(material);
+  lhand_->setMaterial(material);
+  rhand_->setMaterial(material);
+  pelvis_->setMaterial(material);
+  lhip_->setMaterial(material);
+  rhip_->setMaterial(material);
+  ltoe_->setMaterial(material);
+  lankle_->setMaterial(material);
+  rtoe_->setMaterial(material);
+  rankle_->setMaterial(material);
 }
 
 void BipedRig::solveIk() {

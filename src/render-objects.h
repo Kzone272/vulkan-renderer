@@ -87,9 +87,11 @@ struct MaterialInfo {
   MaterialData data;
 };
 typedef uint32_t MaterialId;
+inline const uint32_t kMaterialIdNone = -1;
 
 struct SceneObject {
-  ModelId model;
+  ModelId model = ModelId::None;
+  MaterialId material = kMaterialIdNone;
   mat4 transform;
 };
 

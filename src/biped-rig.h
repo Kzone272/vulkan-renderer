@@ -3,6 +3,7 @@
 #include "glm-include.h"
 #include "object.h"
 #include "pose.h"
+#include "render-objects.h"
 
 struct SkellySizes;
 struct BipedRig;
@@ -14,6 +15,7 @@ struct BipedSkeleton {
   BipedSkeleton& operator=(const BipedSkeleton& other) = delete;
 
   void makeBones(const SkellySizes& sizes, Object* root);
+  void setMaterial(MaterialId material);
 
   Object* root_;
   Object* cog_;
@@ -69,6 +71,7 @@ struct IkChain {
 struct BipedRig {
   BipedRig() = default;
   void makeRig(const BipedSkeleton& skeleton, Object* root);
+  void setMaterial(MaterialId material);
   Pose getZeroPose() {
     return zero_p_;
   }

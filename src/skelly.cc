@@ -104,6 +104,11 @@ void Skelly::makeBones() {
   lean_pose_.bone_mask = {BoneId::Cog};
 }
 
+void Skelly::setMaterials(MaterialId bone_mat, MaterialId control_mat) {
+  skeleton_.setMaterial(bone_mat);
+  rig_.setMaterial(control_mat);
+}
+
 void Skelly::handleInput(const InputState& input) {
   // Check if we should update velocity because max speed slider changed.
   // TODO: Use slider update directly.

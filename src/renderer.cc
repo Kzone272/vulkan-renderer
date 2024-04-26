@@ -92,18 +92,9 @@ MaterialId Renderer::useMaterial(const MaterialInfo& mat_info) {
   return loaded_materials_.size() - 1;
 }
 
-void Renderer::useMesh(ModelId model_id, const Mesh& mesh, MaterialId mat_id) {
+void Renderer::useMesh(ModelId model_id, const Mesh& mesh) {
   auto model = loadMesh(mesh);
-  model->material = loaded_materials_[mat_id].get();
   loaded_models_[model_id] = std::move(model);
-}
-
-void Renderer::setModelMaterial(ModelId model_id, MaterialId mat_id) {
-  ASSERT(mat_id < loaded_materials_.size());
-  auto model = loaded_models_.find(model_id);
-  ASSERT(model != loaded_models_.end());
-
-  model->second->material = loaded_materials_[mat_id].get();
 }
 
 // TODO: Return a TextureId instead.
@@ -1170,7 +1161,7 @@ void Renderer::recordCommandBuffer() {
   if (frame_state_->update_drawing) {
     drawing_.render(ds_);
   }
-  scene_.render(ds_, frame_state_->objects, loaded_models_);
+  scene_.render(ds_, frame_state_->objects, loaded_models_, loaded_materials_);
 
   if (frame_state_->stained_glass) {
     edges_.render(ds_, scene_.outputSet()->sets[1]);

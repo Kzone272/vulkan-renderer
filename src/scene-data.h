@@ -7,7 +7,7 @@
 struct Texture;
 
 struct Material {
-  Texture* diffuse;
+  Texture* diffuse = nullptr;
   Buffer ubo;
   vk::DescriptorSet desc_set;
 };
@@ -17,9 +17,8 @@ struct Model {
   vk::UniqueDeviceMemory vert_buf_mem;
   vk::UniqueBuffer ind_buf;
   vk::UniqueDeviceMemory ind_buf_mem;
-  uint32_t index_count;
-  uint32_t vertex_count;
-  Material* material;
+  uint32_t index_count = 0;
+  uint32_t vertex_count = 0;
 };
 
 template <class T>

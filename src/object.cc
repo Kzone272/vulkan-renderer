@@ -129,8 +129,8 @@ vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
   return toLocal(ancestor) * vec4(pos, 1);
 }
 
-std::vector<ModelId> Object::getModels() {
-  std::vector<ModelId> models{model_};
+std::vector<std::pair<Object*, ModelId>> Object::getModels() {
+  std::vector<std::pair<Object*, ModelId>> models = {{this, model_}};
   for (auto* child : children_) {
     auto child_models = child->getModels();
     models.insert(models.end(), child_models.begin(), child_models.end());
@@ -209,6 +209,7 @@ void Object::getSceneObjects(
   if (model_ != ModelId::None) {
     objs.push_back({
         model_,
+        material_,
         transform * model_transform_,
     });
   }

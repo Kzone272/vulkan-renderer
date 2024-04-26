@@ -98,10 +98,14 @@ void App::initFrameState() {
 }
 
 void App::setupWorld() {
+  loadMaterials();
+
   world_.addChild(skelly_.getObj());
+  skelly_.setMaterials(mats_.bone, mats_.control);
   world_.addChild(&grid_);
   remakeGrid(options_.grid_size);
-  world_.addChild(Object(ModelId::Floor));
+  floor_ = world_.addChild(Object(ModelId::Floor));
+  floor_->setMaterial(floor_mats_[ui_.floor]);
 
   auto* car = world_.addChild(Object(ModelId::Pony));
   car->setPos(vec3(-300, -1, 0));
@@ -111,8 +115,8 @@ void App::setupWorld() {
 
   auto* ball = world_.addChild(Object(ModelId::Sphere, glm::scale(vec3(100))));
   ball->setPos(vec3(-300, 100, 600));
+  ball->setMaterial(mats_.cube);
 
-  loadMaterials();
   loadModels();
   loadPrimitives();
 
@@ -134,40 +138,32 @@ void App::setupWorld() {
 }
 
 void App::loadMaterials() {
-  auto cube_mat = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
-  auto bone_mat = renderer_->useMaterial({.data{.color1{0.9, 0.2, 0.1}}});
-  auto control_mat = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
-  auto viking_mat = renderer_->useMaterial({
+  mats_.cube = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
+  mats_.bone = renderer_->useMaterial({.data{.color1{0.9, 0.2, 0.1}}});
+  mats_.control = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
+  mats_.viking = renderer_->useMaterial({
       .diffuse_path = "assets/textures/viking_room.png",
       .data{.color1{0.2, 0.2, 0.2}},
   });
-  auto drawing_mat = renderer_->useMaterial({
+  mats_.drawing = renderer_->useMaterial({
       .diffuse_texture = renderer_->getDrawingTexture(),
       .data{.color1{0.2, 0.2, 0.2}},
   });
-  auto voronoi_mat = renderer_->useMaterial({
+  mats_.voronoi = renderer_->useMaterial({
       .diffuse_texture = renderer_->getVoronoiTexture(),
       .data{.color1{0.2, 0.2, 0.2}},
   });
-  floor_mats_ = {viking_mat, drawing_mat, voronoi_mat};
-  gooch_mat_ = renderer_->useMaterial({.data{
+  floor_mats_ = {mats_.viking, mats_.drawing, mats_.voronoi};
+  mats_.gooch = renderer_->useMaterial({.data{
       .type = MaterialData::Type::Gooch,
       .color1{fromHex(0xff8d83)},
       .color2{fromHex(0x8e9ce2)},
   }});
-
-  default_mats_.insert({ModelId::Cube, cube_mat});
-  default_mats_.insert({ModelId::Bone, bone_mat});
-  default_mats_.insert({ModelId::BoxControl, control_mat});
-  default_mats_.insert({ModelId::BallControl, control_mat});
-  default_mats_.insert({ModelId::Floor, floor_mats_[ui_.floor]});
-  default_mats_.insert({ModelId::Tetra, cube_mat});
 }
 
 void App::loadModels() {
   auto models = world_.getModels();
-  std::set<ModelId> model_set(models.begin(), models.end());
-  for (auto id : model_set) {
+  for (auto& [object, id] : models) {
     if (id == ModelId::None) {
       continue;
     }
@@ -177,14 +173,15 @@ void App::loadModels() {
     }
     auto& info = it->second;
     auto mat_id = renderer_->useMaterial({.diffuse_path = info.texture_path});
+    object->setMaterial(mat_id);
+
     Mesh mesh = loadObj(info.obj_path);
-    renderer_->useMesh(id, mesh, mat_id);
-    default_mats_.insert({id, mat_id});
+    renderer_->useMesh(id, mesh);
   }
 }
 
 void App::useMesh(ModelId model, const Mesh& mesh) {
-  renderer_->useMesh(model, mesh, default_mats_[model]);
+  renderer_->useMesh(model, mesh);
 }
 
 void App::loadPrimitives() {
@@ -198,16 +195,6 @@ void App::loadPrimitives() {
   useMesh(ModelId::Sphere, makeSphere(20));
 }
 
-void App::setGooch(bool on) {
-  std::vector<ModelId> gooch_models = {
-      ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
-      ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
-  };
-  for (auto& model : gooch_models) {
-    renderer_->setModelMaterial(model, on ? gooch_mat_ : default_mats_[model]);
-  }
-}
-
 void App::remakeGrid(int grid) {
   grid_.clearChildren();
 
@@ -216,6 +203,7 @@ void App::remakeGrid(int grid) {
       ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       mat4 model_t = glm::scale(vec3(100));
       auto* obj = grid_.addChild(Object(id, model_t));
+      obj->setMaterial(mats_.cube);
       obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
     }
   }
@@ -580,6 +568,18 @@ void App::flattenObjectTree() {
   frame_state_.objects.clear();
   mat4 identity(1);
   world_.getSceneObjects(identity, frame_state_.objects);
+
+  static const std::set<ModelId> gooch_models = {
+      ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
+      ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
+  };
+  if (ui_.gooch) {
+    for (auto& object : frame_state_.objects) {
+      if (auto it = gooch_models.contains(object.model)) {
+        object.material = mats_.gooch;
+      }
+    }
+  }
 }
 
 void App::updateImgui() {
@@ -604,12 +604,9 @@ void App::updateImgui() {
     ImGui::Separator();
 
     ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
-    if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
-      setGooch(ui_.gooch);
-    }
+    ImGui::Checkbox("Gooch", &ui_.gooch);
     if (ImGui::SliderInt("Floor", &ui_.floor, 0, (int)Floor::NumFloors - 1)) {
-      MaterialId floor = floor_mats_[ui_.floor];
-      renderer_->setModelMaterial(ModelId::Floor, floor);
+      floor_->setMaterial(floor_mats_[ui_.floor]);
     }
     ImGui::Checkbox("Edges", &frame_state_.draw_edges);
     ImGui::SliderFloat(

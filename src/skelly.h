@@ -4,6 +4,7 @@
 #include "glm-include.h"
 #include "input.h"
 #include "object.h"
+#include "render-objects.h"
 #include "second-order.h"
 
 struct MoveOptions {
@@ -209,6 +210,7 @@ class Skelly {
   Skelly();
 
   void makeBones();
+  void setMaterials(MaterialId bone_mat, MaterialId control_mat);
   void handleInput(const InputState& input);
   void update(float delta_s);
 

@@ -43,6 +43,10 @@ class Object {
   const Transform& getTransform() const;
   const mat4& matrix();
 
+  void setMaterial(MaterialId material) {
+    material_ = material;
+  }
+
   // Transform from this object's space to an ancestor.
   mat4 toAncestor(Object* ancestor);
   vec3 posToAncestor(Object* ancestor, vec3 pos = vec3(0, 0, 0));
@@ -67,13 +71,12 @@ class Object {
   const std::vector<Object*>& children();
   void clearChildren();
 
-  std::vector<ModelId> getModels();
+  std::vector<std::pair<Object*, ModelId>> getModels();
   void getSceneObjects(const mat4& parent, std::vector<SceneObject>& objs);
 
  private:
-  void updateTransform();
-
   ModelId model_;
+  MaterialId material_ = kMaterialIdNone;
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
 
