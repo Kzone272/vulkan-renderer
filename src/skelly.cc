@@ -388,6 +388,7 @@ void WalkCycle::updateCycle(const WalkOptions& walk, const Cycle& cycle) {
   walk_ = walk;
   cycle_ = cycle;
 
+  base_pelvis_y_ = walk_.max_leg_pct * sizes_->pelvis_y;
   float bounce = std::pow(cycle_dur_ / 1000, 2) * walk_.bounce;
   cycle_.bounce.spline =
       Spline<float>(SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
@@ -450,7 +451,7 @@ const Pose& WalkCycle::getPose(float cycle_t) {
 }
 
 void WalkCycle::updateCog() {
-  vec3 pos = vec3(0, walk_.max_leg_pct * sizes_->pelvis_y, 0);
+  vec3 pos = vec3(0, base_pelvis_y_, 0);
   pos.y += sampleMovement(cycle_.bounce, cycle_t_);
 
   pose_.setPos(BoneId::Cog, pos);
@@ -518,6 +519,7 @@ void WalkCycle::updateToe(FootMeta& foot_m) {
 void WalkCycle::updateStep(FootMeta& foot_m) {
   auto& step = foot_m.is_left ? cycle_.lstep : cycle_.rstep;
   auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
+  auto& lift = foot_m.is_left ? cycle_.llift : cycle_.rlift;
 
   slide.offset = std::fmod(step.offset + step.dur, 1);
   slide.dur = 1 - step.dur;
@@ -552,6 +554,23 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   foot_m.liftoff = liftoff;
   foot_m.step_offset = step.offset;
   foot_m.step_dur = step.dur;
+
+  float min_knee_angle = glm::radians(5.f);
+  float max_leg = sizes_->femur + cos(min_knee_angle) * sizes_->shin;
+  float leg_vertical = base_pelvis_y_ + sizes_->hip_pos.y - sizes_->ankle.y;
+  float flat_ankle_z = -sqrt(max_leg * max_leg - leg_vertical * leg_vertical);
+  float flat_toe_z = flat_ankle_z + sizes_->toe.z + walk_.step_offset;
+
+  float slide_end = slide.offset + slide.dur;
+  float flat_t =
+      remapRange(flat_toe_z, liftoff.z, contact.z, slide.offset, slide_end);
+  float heel_lift_dur = slide_end - flat_t;
+  flat_t = fmodClamp(flat_t, 1);
+
+  lift.spline = Spline<float>(SplineType::Linear, {0, glm::radians(45.f)});
+  lift.offset = flat_t;
+  lift.dur = heel_lift_dur;
+  lift.start(cycle_dur_);
 }
 
 void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
@@ -560,29 +579,38 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   auto point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
   vec3 flat_ankle_pos = foot_m.toe_pos + point_foot * sizes_->ankle;
   float hip_to_ankle = glm::length(hip_pos - flat_ankle_pos);
-  float max_leg = 0.98 * (sizes_->ankle_d);
+  float max_leg = 0.97 * (sizes_->ankle_d);
   // Only start lifting the heel when close to taking a step.
   const auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
   float slide_t = getMoveT(slide, cycle_t_);
   if (slide_t > 0.5 && slide_t < 1 && hip_to_ankle > max_leg) {
-    float hip_to_toe = glm::length(foot_m.toe_pos - hip_pos);
-    float toe_to_ankle = glm::length(sizes_->ankle);
-    float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
-    if (hip_to_toe > max_leg + toe_to_ankle) {
+    vec3 ball_pos = foot_m.toe_pos + point_foot * (sizes_->ball - sizes_->toe);
+    float hip_to_ball = glm::length(ball_pos - hip_pos);
+    float ball_to_ankle = glm::length(sizes_->ball);
+    float flat_angle = cosineLaw(ball_to_ankle, hip_to_ball, hip_to_ankle);
+    if (hip_to_ball > max_leg + ball_to_ankle) {
       // Target for toe is too far away. Point toes at target.
-      foot_m.toe_angle = flat_angle;
+      // foot_m.toe_angle = flat_angle;
     } else {
-      float lift_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
-      foot_m.toe_angle = flat_angle - lift_angle;
+      float lift_angle = cosineLaw(ball_to_ankle, hip_to_ball, max_leg);
+      // foot_m.toe_angle = flat_angle - lift_angle;
     }
   }
 
-  glm::quat ankle_rot =
-      point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
+  auto& lift = foot_m.is_left ? cycle_.llift : cycle_.rlift;
+  if (inCycle(lift, cycle_t_)) {
+    foot_m.toe_angle = sampleMovement(lift, cycle_t_);
+    // std::println("{}", foot_m.toe_angle);
+  }
 
-  BoneId bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
-  pose_.setPos(bone, foot_m.toe_pos);
-  pose_.setRot(bone, ankle_rot);
+  glm::quat ankle_rot = glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
+
+  BoneId toe_bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
+  BoneId ball_bone = foot_m.is_left ? BoneId::Lball : BoneId::Rball;
+  pose_.setPos(toe_bone, foot_m.toe_pos);
+  // pose_.setRot(toe_bone, point_foot * ankle_rot); // all toe
+  pose_.setRot(toe_bone, point_foot);
+  pose_.setRot(ball_bone, ankle_rot);
 
   // TODO: this currently isn't possible with heel angle determined by IK. But
   // this will become relevant again if I add an animation to land on the

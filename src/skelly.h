@@ -40,12 +40,15 @@ struct SkellySizes {
   float arm = 70;
   float bicep_pct = 0.5;
   // Constants
-  vec3 ankle = vec3(0, 10, -18);  // from toe to ankle
-  vec3 toe = -ankle;              // from ankle to toe
-  float pelvis_h = 15;            // height above hip
-  float head_h = 25;              // length between shoulders and head
-  float neck = 10;                // length between shoulders and head
-  float foot_l = 25;              // Toe to heel
+  float foot_l = 25;                      // Toe to heel
+  float toes_l = 8;                       // Toe to ball
+  vec3 ankle = vec3(0, 5, -18);           // from toe to ankle
+  vec3 toe = -ankle;                      // from ankle to toe
+  vec3 ball = toe + vec3(0, 0, -toes_l);  // from ankle to ball of foot
+  vec3 heel = toe + vec3(0, 0, -foot_l);  // from ankle to heel
+  float pelvis_h = 15;                    // height above hip
+  float head_h = 25;                      // length between shoulders and head
+  float neck = 10;                        // length between shoulders and head
   float hand_l = 10;
   // Driven by params above.
   float pelvis_y;
@@ -107,6 +110,8 @@ struct Cycle {
   Movement<vec3> rslide;
   Movement<float> lheel;
   Movement<float> rheel;
+  Movement<float> llift;
+  Movement<float> rlift;
   Movement<float> bounce;
   Movement<float> sway;
   Movement<float> spin;
@@ -158,6 +163,7 @@ class WalkCycle {
   Object* root_ = nullptr;
   WalkOptions walk_ = {};
   const SkellySizes* sizes_ = nullptr;
+  float base_pelvis_y_ = 0;
 
   FootMeta lfoot_m_ = {.is_left = true};
   FootMeta rfoot_m_ = {};

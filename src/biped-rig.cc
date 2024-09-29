@@ -10,7 +10,8 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   bicep_l_ = sizes.bicep;
   forearm_l_ = sizes.forearm;
   toe_pos_ = sizes.toe;
-  ankle_pos_ = sizes.ankle;
+  ball_pos_ = sizes.ball;
+  heel_pos_ = sizes.heel;
 
   cog_ = root_->addChild(Object(ModelId::None, glm::scale(vec3(5))));
   cog_->setPos(vec3(0, sizes.pelvis_y, 0));
@@ -54,12 +55,19 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   vec3 shin_pos = vec3(0, -sizes.femur, 0);
   lshin_->setPos(shin_pos);
 
-  mat4 foot_t = glm::translate(-sizes.ankle + vec3(-1, 0, 0)) *
-                glm::scale(vec3(13, 4, sizes.foot_l)) *
-                glm::translate(vec3(0, 0, -0.5));
+  mat4 foot_t = glm::translate(sizes.heel + vec3(-2, 0, 0)) *
+                glm::scale(vec3(12, 4, sizes.foot_l - sizes.toes_l)) *
+                glm::translate(vec3(0, 0, 0.5));
   lfoot_ = lshin_->addChild(Object(ModelId::Bone, foot_t));
   vec3 foot_pos = vec3(0, -sizes.shin, 0);
   lfoot_->setPos(foot_pos);
+
+  mat4 toes_t = glm::translate(vec3(-2, 0, 0)) *
+                glm::scale(vec3(12, 4, sizes.toes_l)) *
+                glm::translate(vec3(0, 0, 0.5));
+  ltoes_ = lfoot_->addChild(Object(ModelId::Bone, toes_t));
+  vec3 toes_pos = sizes.ball;
+  ltoes_->setPos(toes_pos);
 
   // Add opposite limbs with flipped positions.
   mat4 flip = glm::scale(vec3(-1, 1, 1));
@@ -73,6 +81,9 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
 
   rfoot_ = rshin_->addChild(Object(ModelId::Bone, flip * foot_t));
   rfoot_->setPos(flip3 * foot_pos);
+
+  rtoes_ = rfoot_->addChild(Object(ModelId::Bone, flip * toes_t));
+  rtoes_->setPos(flip3 * toes_pos);
 
   rbicep_ = torso_->addChild(Object(ModelId::Bone, flip * bicep_t));
   rbicep_->setPos(flip3 * sizes.sho_pos);
@@ -99,9 +110,11 @@ void BipedSkeleton::setMaterial(MaterialId material) {
   lfemur_->setMaterial(material);
   lshin_->setMaterial(material);
   lfoot_->setMaterial(material);
+  ltoes_->setMaterial(material);
   rfemur_->setMaterial(material);
   rshin_->setMaterial(material);
   rfoot_->setMaterial(material);
+  rtoes_->setMaterial(material);
 }
 
 namespace {
@@ -171,11 +184,15 @@ void BipedRig::updateSkeleton(BipedSkeleton& skl) {
 
   skl.lfoot_->setRot(glm::identity<glm::quat>());
   auto l_flat = glm::quat_cast(skl.lfoot_->toLocal(root_));
-  skl.lfoot_->setRot(ltoe_->getRot() * l_flat);
+  skl.lfoot_->setRot(ltoe_->getRot() * lball_->getRot() * l_flat);
+
+  skl.ltoes_->setRot(glm::inverse(lball_->getRot()));
 
   skl.rfoot_->setRot(glm::identity<glm::quat>());
   auto r_flat = glm::quat_cast(skl.rfoot_->toLocal(root_));
-  skl.rfoot_->setRot(rtoe_->getRot() * r_flat);
+  skl.rfoot_->setRot(rtoe_->getRot() * rball_->getRot() * r_flat);
+
+  skl.rtoes_->setRot(glm::inverse(rball_->getRot()));
 }
 
 void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
@@ -209,16 +226,26 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rhip_ = pelvis_->addChild(Object(ModelId::BallControl, control_t));
   rhip_->setPos(skeleton.rfemur_->getPos());
 
-  mat4 toe_t = glm::scale(vec3(3));
-  ltoe_ = root_->addChild(Object(ModelId::BallControl, toe_t));
+  mat4 ball_t = glm::scale(vec3(3));
+  ltoe_ = root_->addChild(Object(ModelId::BallControl, ball_t));
   ltoe_->setPos(skeleton.lfoot_->posToAncestor(root_, skeleton.toe_pos_));
-  rtoe_ = root_->addChild(Object(ModelId::BallControl, toe_t));
+  rtoe_ = root_->addChild(Object(ModelId::BallControl, ball_t));
   rtoe_->setPos(skeleton.rfoot_->posToAncestor(root_, skeleton.toe_pos_));
 
-  lankle_ = ltoe_->addChild(Object(ModelId::BallControl, control_t));
-  lankle_->setPos(skeleton.ankle_pos_);
-  rankle_ = rtoe_->addChild(Object(ModelId::BallControl, control_t));
-  rankle_->setPos(skeleton.ankle_pos_);
+  lheel_ = ltoe_->addChild(Object(ModelId::BallControl, ball_t));
+  lheel_->setPos(skeleton.heel_pos_ - skeleton.toe_pos_);
+  rheel_ = rtoe_->addChild(Object(ModelId::BallControl, ball_t));
+  rheel_->setPos(skeleton.heel_pos_ - skeleton.toe_pos_);
+
+  lball_ = lheel_->addChild(Object(ModelId::BallControl, ball_t));
+  lball_->setPos(skeleton.ball_pos_ - skeleton.heel_pos_);
+  rball_ = rheel_->addChild(Object(ModelId::BallControl, ball_t));
+  rball_->setPos(skeleton.ball_pos_ - skeleton.heel_pos_);
+
+  lankle_ = lball_->addChild(Object(ModelId::BallControl, control_t));
+  lankle_->setPos(-skeleton.ball_pos_);
+  rankle_ = rball_->addChild(Object(ModelId::BallControl, control_t));
+  rankle_->setPos(-skeleton.ball_pos_);
 
   zero_p_ = Pose::freeze(*this);
 
@@ -254,8 +281,12 @@ void BipedRig::setMaterial(MaterialId material) {
   lhip_->setMaterial(material);
   rhip_->setMaterial(material);
   ltoe_->setMaterial(material);
+  lheel_->setMaterial(material);
+  lball_->setMaterial(material);
   lankle_->setMaterial(material);
   rtoe_->setMaterial(material);
+  rheel_->setMaterial(material);
+  rball_->setMaterial(material);
   rankle_->setMaterial(material);
 }
 
@@ -302,6 +333,10 @@ Object* BipedRig::getBone(BoneId bone) const {
       return ltoe_;
     case BoneId::Rtoe:
       return rtoe_;
+    case BoneId::Lball:
+      return lball_;
+    case BoneId::Rball:
+      return rball_;
     default:
       ASSERT(false);
       return nullptr;
