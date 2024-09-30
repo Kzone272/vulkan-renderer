@@ -157,7 +157,7 @@ class Renderer {
   vk::UniqueSampler nearest_sampler_;
   vk::UniqueSampler clamp_sampler_;
   vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
-  vk::SampleCountFlagBits scene_samples_ = vk::SampleCountFlagBits::e4;
+  vk::SampleCountFlagBits scene_samples_ = vk::SampleCountFlagBits::e1;
 
   // The members in this struct should never change after handing it out, or
   // problems are likely to occur.
@@ -181,7 +181,7 @@ class Renderer {
   SampleQuery sample_query_;
 
 #ifdef DEBUG
-  const bool enable_validation_layers_ = true;
+  const bool enable_validation_layers_ = false;
 #else
   const bool enable_validation_layers_ = false;
 #endif  // DEBUG

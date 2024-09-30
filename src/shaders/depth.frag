@@ -14,8 +14,8 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
   vec4 normDepth = texelFetch(image, ivec2(textureSize(image) * fragUv), 0);
-  vec2 clipXy = vec2(fragUv * 2) - 1;
-  vec4 vpos = getViewPos(vec3(clipXy, normDepth.a), inv_proj);
+  vec3 clipPos = getClipPos(fragUv, normDepth.w);
+  vec4 vpos = getViewPos(clipPos, inv_proj);
 
   outColor = vec4(vec3(fract(vpos.z / 500)), 1);
 }

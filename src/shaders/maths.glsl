@@ -14,3 +14,7 @@ vec4 getViewPos(vec3 cpos, mat4 inv_proj) {
   vpos /= vpos.w;
   return vpos;
 }
+
+vec3 getClipPos(vec2 uvPos, float z) {
+  return vec3(2 * uvPos - 1, z);
+}

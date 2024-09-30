@@ -47,11 +47,17 @@ struct Edges {
   std::vector<DynamicBuf> debugs;
   DescLayout* inputs;
   DescLayout* sample_points_;
-  Pipeline* draw;
+  Pipeline* fxaa_draw;
+  Pipeline* msaa_draw;
+
+  Pass pre_pass;
+  DescLayout* pre_inputs;
+  Pipeline* pre_draw;
+  bool use_msaa = false;
 
   void init(
       const VulkanState& vs, DescLayout* scene_output,
-      DescLayout* sample_points,
+      vk::SampleCountFlagBits scene_samples, DescLayout* sample_points,
       // TODO: This is gross. This should probably be a Ubo owned by Edges.
       const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
   DescLayout* outputSet() {
@@ -59,6 +65,8 @@ struct Edges {
   }
   void update(const DrawState& ds, const DebugData& debug);
   void render(const DrawState& ds, vk::DescriptorSet norm_depth_set);
+  void renderMsaa(const DrawState& ds, vk::DescriptorSet norm_depth_set);
+  void renderNormal(const DrawState& ds, vk::DescriptorSet norm_depth_set);
 };
 
 class JumpFlood {

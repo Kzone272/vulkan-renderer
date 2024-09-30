@@ -10,6 +10,7 @@ struct VulkanState {
   vk::DescriptorPool desc_pool;
   vk::Sampler linear_sampler;
   vk::Sampler clamp_sampler;
+  vk::Sampler nearest_sampler;
   vk::PhysicalDeviceProperties device_props;
   vk::PhysicalDeviceMemoryProperties mem_props;
   Shaders shaders;

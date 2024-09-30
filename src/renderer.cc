@@ -130,7 +130,7 @@ void Renderer::initVulkan() {
   voronoi_.init(vs_);
   scene_.init(vs_, scene_samples_);
   edges_.init(
-      vs_, scene_.outputSet(), sample_query_.outputSet(),
+      vs_, scene_.outputSet(), scene_samples_, sample_query_.outputSet(),
       uboInfos(scene_.globals));
   jf_.init(vs_);
   swap_.init(vs_);
@@ -943,8 +943,10 @@ void Renderer::createSamplers() {
   auto nearest_ci = ci;
   nearest_ci.magFilter = vk::Filter::eNearest;
   nearest_ci.minFilter = vk::Filter::eNearest;
+  nearest_ci.mipmapMode = vk::SamplerMipmapMode::eNearest,
   nearest_ci.anisotropyEnable = VK_FALSE;
   nearest_sampler_ = device_->createSamplerUnique(nearest_ci).value;
+  vs_.nearest_sampler = *nearest_sampler_;
 }
 
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
@@ -1174,19 +1176,23 @@ void Renderer::recordCommandBuffer() {
     jf_.render(ds_, frame_state_->edge_w, edges_.outputSet()->sets[0]);
   }
 
-  if (frame_state_->debug_view == DebugView::None) {
+  if (scene_samples_ != vk::SampleCountFlagBits::e1 &&
+      frame_state_->debug_view == DebugView::None) {
     resolve_.render(ds_, scene_.outputSet()->sets[0]);
   }
 
   {
     swap_.startRender(ds_);
 
+    auto scene_output = scene_samples_ == vk::SampleCountFlagBits::e1
+                            ? scene_.outputSet()->sets[0]
+                            : resolve_.outputSet()->sets[0];
+
     if (frame_state_->debug_view == DebugView::None) {
       if (frame_state_->stained_glass) {
-        swap_.drawUvSample(
-            ds_, jf_.lastOutputSet(), resolve_.outputSet()->sets[0]);
+        swap_.drawUvSample(ds_, jf_.lastOutputSet(), scene_output);
       } else {
-        swap_.drawImage(ds_, resolve_.outputSet()->sets[0]);
+        swap_.drawImage(ds_, scene_output);
       }
     } else if (frame_state_->debug_view == DebugView::Normals) {
       swap_.drawNormals(ds_, scene_.outputSet()->sets[1]);
@@ -1231,8 +1237,10 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
 
+  // This sucks.
   scene_.pass.fbo.resize(vs_, vs_.swap_size);
   edges_.pass.fbo.resize(vs_, vs_.swap_size);
+  edges_.pre_pass.fbo.resize(vs_, vs_.swap_size);
   jf_.resize(vs_);
   resolve_.pass.fbo.resize(vs_, vs_.swap_size);
 
