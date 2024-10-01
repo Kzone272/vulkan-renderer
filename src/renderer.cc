@@ -1237,16 +1237,11 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
 
-  // This sucks.
-  scene_.pass.fbo.resize(vs_, vs_.swap_size);
-  edges_.pass.fbo.resize(vs_, vs_.swap_size);
-  edges_.pre_pass.fbo.resize(vs_, vs_.swap_size);
+  scene_.resize(vs_);
+  edges_.resize(vs_);
   jf_.resize(vs_);
-  resolve_.pass.fbo.resize(vs_, vs_.swap_size);
-
-  swap_.pass.fbo.swap_format = vs_.swap_format;
-  swap_.pass.fbo.swap_views = vs_.swap_views;
-  swap_.pass.fbo.resize(vs_, vs_.swap_size);
+  resolve_.resize(vs_);
+  swap_.resize(vs_);
 
   window_resized_ = false;
 }
