@@ -130,7 +130,7 @@ void Renderer::initVulkan() {
   voronoi_.init(vs_);
   scene_.init(vs_, scene_samples_);
   edges_.init(
-      vs_, scene_.outputSet(), scene_samples_, sample_query_.outputSet(),
+      vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
       uboInfos(scene_.globals));
   jf_.init(vs_);
   swap_.init(vs_);
@@ -392,8 +392,8 @@ void Renderer::pickPhysicalDevice() {
   ASSERT(physical_device_);
   vs_.device_props = physical_device_.getProperties();
   vs_.mem_props = physical_device_.getMemoryProperties();
-  msaa_samples_ = getMaxSampleCount();
-  std::println("max msaa samples: {}", (int)msaa_samples_);
+  max_samples_ = getMaxSampleCount();
+  std::println("max msaa samples: {}", (int)max_samples_);
 
 #ifdef DEBUG
   std::println("Supported formats ({})", swapchain_support_.formats.size());
@@ -1176,17 +1176,15 @@ void Renderer::recordCommandBuffer() {
     jf_.render(ds_, frame_state_->edge_w, edges_.outputSet()->sets[0]);
   }
 
-  if (scene_samples_ != vk::SampleCountFlagBits::e1 &&
-      frame_state_->debug_view == DebugView::None) {
+  if (scene_uses_msaa_ && frame_state_->debug_view == DebugView::None) {
     resolve_.render(ds_, scene_.outputSet()->sets[0]);
   }
 
   {
     swap_.startRender(ds_);
 
-    auto scene_output = scene_samples_ == vk::SampleCountFlagBits::e1
-                            ? scene_.outputSet()->sets[0]
-                            : resolve_.outputSet()->sets[0];
+    auto scene_output = scene_uses_msaa_ ? resolve_.outputSet()->sets[0]
+                                    : scene_.outputSet()->sets[0];
 
     if (frame_state_->debug_view == DebugView::None) {
       if (frame_state_->stained_glass) {

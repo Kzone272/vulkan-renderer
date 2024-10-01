@@ -179,10 +179,10 @@ void Scene::render(
 }
 
 void Edges::init(
-    const VulkanState& vs, DescLayout* scene_output,
-    vk::SampleCountFlagBits scene_samples, DescLayout* sample_points,
+    const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
+    DescLayout* sample_points,
     const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
-  use_msaa = scene_samples != vk::SampleCountFlagBits::e1;
+  this->use_msaa = use_msaa;
 
   // Pre-pass setup
   pre_pass.fbo = {
@@ -280,25 +280,24 @@ void Edges::renderMsaa(const DrawState& ds, vk::DescriptorSet norm_depth_set) {
 
 void Edges::renderNormal(
     const DrawState& ds, vk::DescriptorSet norm_depth_set) {
-  pre_pass.fbo.beginRp(ds);
-
-  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pre_draw->pipeline);
-  ds.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *pre_draw->layout, 0,
-      {inputs->sets[ds.frame], norm_depth_set}, nullptr);
-  ds.cmd.draw(3, 1, 0, 0);
-
-  ds.cmd.endRenderPass();
-
-  pass.fbo.beginRp(ds);
-
-  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *fxaa_draw->pipeline);
-  ds.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *fxaa_draw->layout, 0,
-      {inputs->sets[ds.frame], pre_pass.fbo.output_set.sets[0]}, nullptr);
-  ds.cmd.draw(3, 1, 0, 0);
-
-  ds.cmd.endRenderPass();
+  {
+    pre_pass.fbo.beginRp(ds);
+    ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pre_draw->pipeline);
+    ds.cmd.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, *pre_draw->layout, 0,
+        {inputs->sets[ds.frame], norm_depth_set}, nullptr);
+    ds.cmd.draw(3, 1, 0, 0);
+    ds.cmd.endRenderPass();
+  }
+  {
+    pass.fbo.beginRp(ds);
+    ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *fxaa_draw->pipeline);
+    ds.cmd.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, *fxaa_draw->layout, 0,
+        {inputs->sets[ds.frame], pre_pass.fbo.output_set.sets[0]}, nullptr);
+    ds.cmd.draw(3, 1, 0, 0);
+    ds.cmd.endRenderPass();
+  }
 }
 
 void JumpFlood::init(const VulkanState& vs) {

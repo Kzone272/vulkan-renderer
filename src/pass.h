@@ -59,8 +59,8 @@ struct Edges {
   bool use_msaa = false;
 
   void init(
-      const VulkanState& vs, DescLayout* scene_output,
-      vk::SampleCountFlagBits scene_samples, DescLayout* sample_points,
+      const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
+      DescLayout* sample_points,
       // TODO: This is gross. This should probably be a Ubo owned by Edges.
       const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
   DescLayout* outputSet() {

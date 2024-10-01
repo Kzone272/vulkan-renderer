@@ -156,8 +156,9 @@ class Renderer {
   vk::UniqueSampler linear_sampler_;
   vk::UniqueSampler nearest_sampler_;
   vk::UniqueSampler clamp_sampler_;
-  vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
-  vk::SampleCountFlagBits scene_samples_ = vk::SampleCountFlagBits::e1;
+  vk::SampleCountFlagBits max_samples_ = vk::SampleCountFlagBits::e1;
+  const vk::SampleCountFlagBits scene_samples_ = vk::SampleCountFlagBits::e1;
+  const bool scene_uses_msaa_ = scene_samples_ != vk::SampleCountFlagBits::e1;
 
   // The members in this struct should never change after handing it out, or
   // problems are likely to occur.
