@@ -245,7 +245,6 @@ void Edges::init(
   std::vector<vk::WriteDescriptorSet> writes;
   inputs->updateUboBind(0, scene_globals, writes);
   inputs->updateUboBind(1, uboInfos(debugs), writes);
-
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
