@@ -179,16 +179,20 @@ void Scene::render(
 }
 
 void Edges::init(
-    const VulkanState& vs, DescLayout* scene_output, DescLayout* sample_points,
+    const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
+    DescLayout* sample_points,
     const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
-  pass.fbo = {
+  this->use_msaa = use_msaa;
+
+  // Pre-pass setup
+  pre_pass.fbo = {
       .size = vs.swap_size,
-      .color_fmts = {vk::Format::eR32G32Sfloat},
+      .color_fmts = {vk::Format::eR8Uint},
       .make_output_set = true,
-      .output_sampler = vs.clamp_sampler,
+      .output_sampler = vs.nearest_sampler,
   };
 
-  inputs = pass.makeDescLayout();
+  inputs = pre_pass.makeDescLayout();
   *inputs = {
       .binds =
           {{.type = vk::DescriptorType::eUniformBuffer},
@@ -196,14 +200,40 @@ void Edges::init(
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  draw = pass.makePipeline();
-  *draw = {
+  pre_draw = pre_pass.makePipeline();
+  *pre_draw = {
       .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
-      .frag_shader = vs.shaders.get("edges.frag.spv"),
-      .desc_layouts = {inputs, scene_output, sample_points},
+      .frag_shader = vs.shaders.get("edges-prepass.frag.spv"),
+      .desc_layouts = {inputs, scene_output},
       .vert_in = {},
   };
-  sample_points_ = sample_points;
+  pre_pass.init(vs);
+
+  pass.fbo = {
+      .size = vs.swap_size,
+      .color_fmts = {vk::Format::eR32G32Sfloat},
+      .make_output_set = true,
+      .output_sampler = vs.clamp_sampler,
+  };
+
+  fxaa_draw = pass.makePipeline();
+  *fxaa_draw = {
+      .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+      .frag_shader = vs.shaders.get("edges-fxaa.frag.spv"),
+      .desc_layouts = {inputs, &pre_pass.fbo.output_set},
+      .vert_in = {},
+  };
+
+  if (use_msaa) {
+    msaa_draw = pass.makePipeline();
+    *msaa_draw = {
+        .vert_shader = vs.shaders.get("fullscreen.vert.spv"),
+        .frag_shader = vs.shaders.get("edges.frag.spv"),
+        .desc_layouts = {inputs, scene_output, sample_points},
+        .vert_in = {},
+    };
+    sample_points_ = sample_points;
+  }
 
   pass.init(vs);
 
@@ -227,16 +257,46 @@ void Edges::update(const DrawState& ds, const DebugData& debug) {
 }
 
 void Edges::render(const DrawState& ds, vk::DescriptorSet norm_depth_set) {
+  if (use_msaa) {
+    renderMsaa(ds, norm_depth_set);
+  } else {
+    renderNormal(ds, norm_depth_set);
+  }
+}
+
+void Edges::renderMsaa(const DrawState& ds, vk::DescriptorSet norm_depth_set) {
   pass.fbo.beginRp(ds);
 
-  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *msaa_draw->pipeline);
   ds.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *draw->layout, 0,
+      vk::PipelineBindPoint::eGraphics, *msaa_draw->layout, 0,
       {inputs->sets[ds.frame], norm_depth_set, sample_points_->sets[0]},
       nullptr);
   ds.cmd.draw(3, 1, 0, 0);
 
   ds.cmd.endRenderPass();
+}
+
+void Edges::renderNormal(
+    const DrawState& ds, vk::DescriptorSet norm_depth_set) {
+  {
+    pre_pass.fbo.beginRp(ds);
+    ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pre_draw->pipeline);
+    ds.cmd.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, *pre_draw->layout, 0,
+        {inputs->sets[ds.frame], norm_depth_set}, nullptr);
+    ds.cmd.draw(3, 1, 0, 0);
+    ds.cmd.endRenderPass();
+  }
+  {
+    pass.fbo.beginRp(ds);
+    ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *fxaa_draw->pipeline);
+    ds.cmd.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics, *fxaa_draw->layout, 0,
+        {inputs->sets[ds.frame], pre_pass.fbo.output_set.sets[0]}, nullptr);
+    ds.cmd.draw(3, 1, 0, 0);
+    ds.cmd.endRenderPass();
+  }
 }
 
 void JumpFlood::init(const VulkanState& vs) {

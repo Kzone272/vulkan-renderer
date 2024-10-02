@@ -5,6 +5,8 @@ file(GLOB shader_files
   scene.frag
   fullscreen.vert
   edges.frag
+  edges-prepass.frag
+  edges-fxaa.frag
   sample.frag
   circle.frag
   voronoi.vert

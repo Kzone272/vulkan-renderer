@@ -130,7 +130,7 @@ void Renderer::initVulkan() {
   voronoi_.init(vs_);
   scene_.init(vs_, scene_samples_);
   edges_.init(
-      vs_, scene_.outputSet(), sample_query_.outputSet(),
+      vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
       uboInfos(scene_.globals));
   jf_.init(vs_);
   swap_.init(vs_);
@@ -392,8 +392,8 @@ void Renderer::pickPhysicalDevice() {
   ASSERT(physical_device_);
   vs_.device_props = physical_device_.getProperties();
   vs_.mem_props = physical_device_.getMemoryProperties();
-  msaa_samples_ = getMaxSampleCount();
-  std::println("max msaa samples: {}", (int)msaa_samples_);
+  max_samples_ = getMaxSampleCount();
+  std::println("max msaa samples: {}", (int)max_samples_);
 
 #ifdef DEBUG
   std::println("Supported formats ({})", swapchain_support_.formats.size());
@@ -943,8 +943,10 @@ void Renderer::createSamplers() {
   auto nearest_ci = ci;
   nearest_ci.magFilter = vk::Filter::eNearest;
   nearest_ci.minFilter = vk::Filter::eNearest;
+  nearest_ci.mipmapMode = vk::SamplerMipmapMode::eNearest,
   nearest_ci.anisotropyEnable = VK_FALSE;
   nearest_sampler_ = device_->createSamplerUnique(nearest_ci).value;
+  vs_.nearest_sampler = *nearest_sampler_;
 }
 
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
@@ -1174,19 +1176,21 @@ void Renderer::recordCommandBuffer() {
     jf_.render(ds_, frame_state_->edge_w, edges_.outputSet()->sets[0]);
   }
 
-  if (frame_state_->debug_view == DebugView::None) {
+  if (scene_uses_msaa_ && frame_state_->debug_view == DebugView::None) {
     resolve_.render(ds_, scene_.outputSet()->sets[0]);
   }
 
   {
     swap_.startRender(ds_);
 
+    auto scene_output = scene_uses_msaa_ ? resolve_.outputSet()->sets[0]
+                                    : scene_.outputSet()->sets[0];
+
     if (frame_state_->debug_view == DebugView::None) {
       if (frame_state_->stained_glass) {
-        swap_.drawUvSample(
-            ds_, jf_.lastOutputSet(), resolve_.outputSet()->sets[0]);
+        swap_.drawUvSample(ds_, jf_.lastOutputSet(), scene_output);
       } else {
-        swap_.drawImage(ds_, resolve_.outputSet()->sets[0]);
+        swap_.drawImage(ds_, scene_output);
       }
     } else if (frame_state_->debug_view == DebugView::Normals) {
       swap_.drawNormals(ds_, scene_.outputSet()->sets[1]);
@@ -1231,14 +1235,11 @@ void Renderer::recreateSwapchain() {
   swapchain_support_ = querySwapchainSupport(physical_device_);
   createSwapchain();
 
-  scene_.pass.fbo.resize(vs_, vs_.swap_size);
-  edges_.pass.fbo.resize(vs_, vs_.swap_size);
+  scene_.resize(vs_);
+  edges_.resize(vs_);
   jf_.resize(vs_);
-  resolve_.pass.fbo.resize(vs_, vs_.swap_size);
-
-  swap_.pass.fbo.swap_format = vs_.swap_format;
-  swap_.pass.fbo.swap_views = vs_.swap_views;
-  swap_.pass.fbo.resize(vs_, vs_.swap_size);
+  resolve_.resize(vs_);
+  swap_.resize(vs_);
 
   window_resized_ = false;
 }

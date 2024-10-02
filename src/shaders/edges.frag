@@ -2,6 +2,7 @@
 
 #include "structs.glsl"
 #include "maths.glsl"
+#include "edge-maths.glsl"
 
 layout(location = 0) in vec2 fragUv;
 
@@ -16,16 +17,6 @@ layout(set = 2, binding = 0) uniform sampler2DMS samplePoints;
 
 layout(location = 0) out vec2 outColor;
 
-
-bool edgeBetween(vec3 aNorm, vec3 aPos, vec3 bNorm, vec3 bPos) {
-  float cosang = abs(dot(aNorm, bNorm));
-  float plane_d = abs(dot(aNorm, bPos - aPos));
-
-  const float depth_thresh = debug.f3;
-  const float angle_thresh = abs(cos(radians(debug.f4)));
-
-  return cosang < angle_thresh || plane_d > depth_thresh;
-}
 
 void main() {
   ivec2 iSize = textureSize(normDepthSampler);
@@ -53,7 +44,6 @@ void main() {
   vec2 uvs[num];
   ivec2 iUv = ivec2(fPx);
   for (int i = 0; i < numNbs; i++) {
-    vec2 clipXy = vec2(fragUv * 2) - 1;
     for (int j = 0; j < nSamples; j++) {
       const int ind = i * nSamples + j;
       ivec2 nbUv = iUv + nbs[i];
@@ -69,9 +59,12 @@ void main() {
       norms[ind] = samp;
       uvs[ind] = (vec2(iUv) + subsamps[j]);
       worlds[ind] = getViewPos(
-          vec3(clipXy + 2.f * nbs[i] / size, samp.w), global.inv_proj).xyz;
+          getClipPos(fragUv + nbs[i] / size, samp.w), global.inv_proj).xyz;
     }
   }
+
+  const float depth_thresh = debug.f3;
+  const float angle_thresh = abs(cos(radians(debug.f4)));
 
   int nEdges = 0;
   vec2 edgeAcc = vec2(0);
@@ -91,7 +84,9 @@ void main() {
         // Exact same value from a different subsample of the same pixel.
         continue;
       }
-      if (edgeBetween(norms[i].xyz, worlds[i], norms[j].xyz, worlds[j])) {
+      if (edgeBetween(
+            norms[i].xyz, worlds[i], norms[j].xyz, worlds[j],
+            depth_thresh, angle_thresh)) {
         nSubEdges++;
         subEdgeAcc += (uvs[i] + uvs[j]) / 2.f;
       }

@@ -11,6 +11,8 @@ const std::set<std::string> kShaders{
     "scene.frag.spv",
     "fullscreen.vert.spv",
     "edges.frag.spv",
+    "edges-prepass.frag.spv",
+    "edges-fxaa.frag.spv",
     "circle.frag.spv",
     "sample.frag.spv",
     "voronoi.vert.spv",

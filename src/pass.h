@@ -35,6 +35,9 @@ struct Scene {
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
+  void resize(const VulkanState& vs) {
+    pass.fbo.resize(vs, vs.swap_size);
+  }
   void update(const DrawState& ds, const FrameState& fs);
   void render(
       const DrawState& ds, std::vector<SceneObject>& objects,
@@ -47,18 +50,30 @@ struct Edges {
   std::vector<DynamicBuf> debugs;
   DescLayout* inputs;
   DescLayout* sample_points_;
-  Pipeline* draw;
+  Pipeline* fxaa_draw;
+  Pipeline* msaa_draw;
+
+  Pass pre_pass;
+  DescLayout* pre_inputs;
+  Pipeline* pre_draw;
+  bool use_msaa = false;
 
   void init(
-      const VulkanState& vs, DescLayout* scene_output,
+      const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
       DescLayout* sample_points,
       // TODO: This is gross. This should probably be a Ubo owned by Edges.
       const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
+  void resize(const VulkanState& vs) {
+    pass.fbo.resize(vs, vs.swap_size);
+    pre_pass.fbo.resize(vs, vs.swap_size);
+  }
   void update(const DrawState& ds, const DebugData& debug);
   void render(const DrawState& ds, vk::DescriptorSet norm_depth_set);
+  void renderMsaa(const DrawState& ds, vk::DescriptorSet norm_depth_set);
+  void renderNormal(const DrawState& ds, vk::DescriptorSet norm_depth_set);
 };
 
 class JumpFlood {
@@ -100,6 +115,11 @@ struct Swap {
   };
 
   void init(const VulkanState& vs);
+  void resize(const VulkanState& vs) {
+    pass.fbo.swap_format = vs.swap_format;
+    pass.fbo.swap_views = vs.swap_views;
+    pass.fbo.resize(vs, vs.swap_size);
+  }
   // This doesn't end the render pass so Renderer can draw whatever else it
   // wants before ending it.
   void startRender(const DrawState& ds);
@@ -145,6 +165,9 @@ struct Resolve {
   void init(const VulkanState& vs);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
+  }
+  void resize(const VulkanState& vs) {
+    pass.fbo.resize(vs, vs.swap_size);
   }
   void render(const DrawState& ds, vk::DescriptorSet image_set);
 };
