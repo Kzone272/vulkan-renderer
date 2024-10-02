@@ -8,3 +8,6 @@ bool edgeBetween(
 
   return cosang < angle_thresh || plane_d > depth_thresh;
 }
+
+const uint EDGE_UP = 1;
+const uint EDGE_LEFT = 2;

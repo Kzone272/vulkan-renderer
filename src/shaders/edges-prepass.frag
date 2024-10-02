@@ -25,15 +25,12 @@ void main() {
   vec2 uvW = fragUv + vec2(-pixel.x, 0); // West
 
   vec4 sampM = texture(normDepthSampler, uvM);
-  vec3 normM = sampM.xyz;
   vec3 worldM = getViewPos(getClipPos(uvM, sampM.w), global.inv_proj).xyz;
 
   vec4 sampN = texture(normDepthSampler, uvN);
-  vec3 normN = sampN.xyz;
   vec3 worldN = getViewPos(getClipPos(uvN, sampN.w), global.inv_proj).xyz;
 
   vec4 sampW = texture(normDepthSampler, uvW);
-  vec3 normW = sampW.xyz;
   vec3 worldW = getViewPos(getClipPos(uvW, sampW.w), global.inv_proj).xyz;
 
   const float depth_thresh = debug.f3;
@@ -42,11 +39,11 @@ void main() {
   outColor = 0;
 
   if (edgeBetween(
-        normM, worldM, normN, worldN, depth_thresh, angle_thresh)) {
-    outColor |= 1;
+        sampM.xyz, worldM, sampN.xyz, worldN, depth_thresh, angle_thresh)) {
+    outColor |= EDGE_UP;
   }
   if (edgeBetween(
-        normM, worldM, normW, worldW, depth_thresh, angle_thresh)) {
-    outColor |= 128;
+        sampM.xyz, worldM, sampW.xyz, worldW, depth_thresh, angle_thresh)) {
+    outColor |= EDGE_LEFT;
   }
 }

@@ -1,6 +1,7 @@
 #version 450
 
 #include "structs.glsl"
+#include "edge-maths.glsl"
 
 layout(location = 0) in vec2 fragUv;
 
@@ -24,22 +25,33 @@ void main() {
   vec2 pixel = 1 / size;
 
   uint samp = texture(prepassSampler, fragUv).r;
+  bool edgeLeft = bool(samp & EDGE_LEFT);
+  bool edgeUp = bool(samp & EDGE_UP);
   if (!bool(samp)) {
     outColor = vec2(-1);
     return;
   }
 
-  bool vert = bool(samp & 128);
-  uint dirMask = vert ? 128 : 1;
+  bool vert = edgeLeft;
+  if (edgeLeft && edgeUp) {
+    uint sampN = texture(prepassSampler, fragUv + vec2(0, -pixel.y)).r;
+    uint sampS = texture(prepassSampler, fragUv + vec2(0, pixel.y)).r;
+    uint sampW = texture(prepassSampler, fragUv + vec2(-pixel.x, 0)).r;
+    uint sampE = texture(prepassSampler, fragUv + vec2(pixel.x, 0)).r;
+    uint numVert = ((sampN & EDGE_LEFT) + (sampS & EDGE_LEFT)) / EDGE_LEFT;
+    uint numHor = ((sampW & EDGE_UP) + (sampE & EDGE_UP)) / EDGE_UP;
+    vert = numVert > numHor;
+  }
+  uint dirMask = vert ? EDGE_LEFT : EDGE_UP;
 
   vec2 dir = pixel * (vert ? vec2(0, 1) : vec2(1, 0));
   vec2 orthoDir = pixel * (vert ? vec2(1, 0) : vec2(0, 1));
   vec2 uvPos = fragUv + dir;
   vec2 uvNeg = fragUv - dir;
 
+  // Basically the FXAA algorithm, but ignoring luma.
   bool donePos = false;
   bool doneNeg = false;
-
   for (int i = 0; i < ITERS; i++) {
     if (!donePos) {
       uint sampPos = texture(prepassSampler, uvPos).r;
