@@ -184,13 +184,15 @@ void BipedRig::updateSkeleton(BipedSkeleton& skl) {
 
   skl.lfoot_->setRot(glm::identity<glm::quat>());
   auto l_flat = glm::quat_cast(skl.lfoot_->toLocal(root_));
-  skl.lfoot_->setRot(ltoe_->getRot() * lball_->getRot() * l_flat);
+  skl.lfoot_->setRot(
+      ltoe_->getRot() * lheel_->getRot() * lball_->getRot() * l_flat);
 
   skl.ltoes_->setRot(glm::inverse(lball_->getRot()));
 
   skl.rfoot_->setRot(glm::identity<glm::quat>());
   auto r_flat = glm::quat_cast(skl.rfoot_->toLocal(root_));
-  skl.rfoot_->setRot(rtoe_->getRot() * rball_->getRot() * r_flat);
+  skl.rfoot_->setRot(
+      rtoe_->getRot() * rheel_->getRot() * rball_->getRot() * r_flat);
 
   skl.rtoes_->setRot(glm::inverse(rball_->getRot()));
 }
@@ -337,6 +339,10 @@ Object* BipedRig::getBone(BoneId bone) const {
       return lball_;
     case BoneId::Rball:
       return rball_;
+    case BoneId::Lheel:
+      return lheel_;
+    case BoneId::Rheel:
+      return rheel_;
     default:
       ASSERT(false);
       return nullptr;

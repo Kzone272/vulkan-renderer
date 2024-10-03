@@ -18,7 +18,7 @@ struct WalkOptions {
   float speed = 200;
   float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
-  float step_height = 5;
+  float step_height = 10;
   float step_offset = 0;
   float bounce = 2;
   float hip_sway = 6;
@@ -110,8 +110,12 @@ struct Cycle {
   Movement<vec3> rslide;
   Movement<float> lheel;
   Movement<float> rheel;
-  Movement<float> llift;
-  Movement<float> rlift;
+  Movement<float> ltoe;
+  Movement<float> rtoe;
+  Movement<float> lball;
+  Movement<float> rball;
+  Movement<float> ldrop;
+  Movement<float> rdrop;
   Movement<float> bounce;
   Movement<float> sway;
   Movement<float> spin;
@@ -245,7 +249,7 @@ class Skelly {
   WalkOptions run_ = {
       .speed = 600,
       .step_height = 20,
-      .bounce = 7,
+      .bounce = 10,
       .hip_spin = 20,
       .shoulder_spin = 10,
       .hand_height_pct = 0.4,

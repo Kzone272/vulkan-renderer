@@ -468,8 +468,8 @@ void WalkCycle::updatePelvis() {
 }
 
 void WalkCycle::updateFeet() {
-  updateToeAngle(lfoot_m_);
-  updateToeAngle(rfoot_m_);
+  // updateToeAngle(lfoot_m_);
+  // updateToeAngle(rfoot_m_);
   updateToe(rfoot_m_);
   updateToe(lfoot_m_);
 
@@ -519,7 +519,10 @@ void WalkCycle::updateToe(FootMeta& foot_m) {
 void WalkCycle::updateStep(FootMeta& foot_m) {
   auto& step = foot_m.is_left ? cycle_.lstep : cycle_.rstep;
   auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
-  auto& lift = foot_m.is_left ? cycle_.llift : cycle_.rlift;
+  auto& ball = foot_m.is_left ? cycle_.lball : cycle_.rball;
+  auto& toe = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
+  auto& heel = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
+  auto& drop = foot_m.is_left ? cycle_.ldrop : cycle_.rdrop;
 
   slide.offset = std::fmod(step.offset + step.dur, 1);
   slide.dur = 1 - step.dur;
@@ -567,10 +570,30 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   float heel_lift_dur = slide_end - flat_t;
   flat_t = fmodClamp(flat_t, 1);
 
-  lift.spline = Spline<float>(SplineType::Linear, {0, glm::radians(45.f)});
-  lift.offset = flat_t;
-  lift.dur = heel_lift_dur;
-  lift.start(cycle_dur_);
+  float lift_angle = glm::radians(60.f);
+  ball.spline = Spline<float>(SplineType::Linear, {0, 0.66f * lift_angle, 0});
+  ball.offset = flat_t;
+  ball.dur = heel_lift_dur;
+  ball.start(cycle_dur_);
+
+  toe.spline = Spline<float>(SplineType::Linear, {0, lift_angle});
+  float toe_dur = 0.5 * heel_lift_dur;
+  toe.offset = fmodClamp(flat_t + toe_dur, 1);
+  toe.dur = toe_dur;
+  toe.start(cycle_dur_);
+
+  float land_angle = glm::radians(-15.f);
+  heel.spline = Spline<float>(
+      SplineType::Linear, {lift_angle, land_angle});
+  heel.offset = step.offset;
+  heel.dur = step.dur;
+  heel.start(cycle_dur_);
+
+  drop.spline = Spline<float>(
+      SplineType::Linear, {land_angle, 0});
+  drop.offset = slide.offset;
+  drop.dur = 0.1;
+  drop.start(cycle_dur_);
 }
 
 void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
@@ -597,20 +620,39 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
     }
   }
 
-  auto& lift = foot_m.is_left ? cycle_.llift : cycle_.rlift;
-  if (inCycle(lift, cycle_t_)) {
-    foot_m.toe_angle = sampleMovement(lift, cycle_t_);
+  float ball_angle = 0;
+  auto& ball = foot_m.is_left ? cycle_.lball : cycle_.rball;
+  if (inCycle(ball, cycle_t_)) {
+    // foot_m.toe_angle = sampleMovement(ball, cycle_t_);
+    ball_angle = sampleMovement(ball, cycle_t_);
     // std::println("{}", foot_m.toe_angle);
   }
+  float foot_angle = 0;
+  auto& toe_anim = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
+  if (inCycle(toe_anim, cycle_t_)) {
+    foot_angle = sampleMovement(toe_anim, cycle_t_);
+  }
+  auto& heel_anim = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
+  if (inCycle(heel_anim, cycle_t_)) {
+    foot_angle = sampleMovement(heel_anim, cycle_t_);
+  }
+  auto& drop_anim = foot_m.is_left ? cycle_.ldrop : cycle_.rdrop;
+  if (inCycle(drop_anim, cycle_t_)) {
+    foot_angle = sampleMovement(drop_anim, cycle_t_);
+  }
 
-  glm::quat ankle_rot = glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
+  glm::quat ball_rot = glm::angleAxis(ball_angle, vec3(1, 0, 0));
+  glm::quat toe_rot = glm::angleAxis(std::max(0.f, foot_angle), vec3(1, 0, 0));
+  glm::quat heel_rot = glm::angleAxis(std::min(0.f, foot_angle), vec3(1, 0, 0));
 
   BoneId toe_bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
+  BoneId heel_bone = foot_m.is_left ? BoneId::Lheel : BoneId::Rheel;
   BoneId ball_bone = foot_m.is_left ? BoneId::Lball : BoneId::Rball;
   pose_.setPos(toe_bone, foot_m.toe_pos);
-  // pose_.setRot(toe_bone, point_foot * ankle_rot); // all toe
-  pose_.setRot(toe_bone, point_foot);
-  pose_.setRot(ball_bone, ankle_rot);
+  // pose_.setRot(toe_bone, point_foot * ball_rot); // all toe
+  pose_.setRot(toe_bone, point_foot * toe_rot);
+  pose_.setRot(heel_bone, heel_rot);
+  pose_.setRot(ball_bone, ball_rot);
 
   // TODO: this currently isn't possible with heel angle determined by IK. But
   // this will become relevant again if I add an animation to land on the
