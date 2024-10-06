@@ -561,7 +561,8 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
 
   float min_knee_angle = glm::radians(5.f);
   float max_leg = sizes_->femur + cos(min_knee_angle) * sizes_->shin;
-  float leg_vertical = base_pelvis_y_ + sizes_->hip_pos.y - sizes_->ankle.y;
+  vec2 hip_pos = vec2(0, base_pelvis_y_ + sizes_->hip_pos.y);
+  float leg_vertical = hip_pos.y - sizes_->ankle.y;
   float flat_ankle_z = -sqrt(max_leg * max_leg - leg_vertical * leg_vertical);
   float flat_toe_z = flat_ankle_z + sizes_->toe.z + walk_.step_offset;
 
@@ -571,7 +572,25 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   float heel_lift_dur = slide_end - flat_t;
   flat_t = fmodClamp(flat_t, 1);
 
-  float lift_angle = glm::radians(60.f);
+  vec2 end_toe = vec2(liftoff.z, 0);
+  vec2 end_ankle = end_toe + sizes_->ankle.zy;
+  float toe_to_ankle = glm::length(sizes_->ankle);
+  float hip_to_ankle = glm::length(hip_pos - end_ankle);
+
+  float lift_angle = 0;
+  if (hip_to_ankle > max_leg + toe_to_ankle) {
+    // Target for toe is too far away. Error.
+    std::println("Steps are too long!");
+    ASSERT(false);
+  } else {
+    float hip_to_toe = glm::length(end_toe - hip_pos);
+    float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
+    float max_leg_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
+    // Adding 10 degrees looks good, and hopefully prevents some knee locking.
+    lift_angle = flat_angle - max_leg_angle + glm::radians(10.f);
+    lift_angle = std::clamp(lift_angle, 0.f, glm::radians(80.f));
+  }
+
   ball.spline = Spline<float>(SplineType::Linear, {0, 0.66f * lift_angle, 0});
   ball.offset = flat_t;
   ball.dur = heel_lift_dur;
@@ -583,14 +602,14 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   toe.dur = toe_dur;
   toe.start(cycle_dur_);
 
-  float land_angle = glm::radians(-15.f);
+  float contact_angle = -std::min(glm::radians(30.f), 0.5f * lift_angle);
   heel.spline = Spline<float>(
-      SplineType::Hermite, {lift_angle, lift_angle / 2, land_angle, 0});
+      SplineType::Hermite, {lift_angle, lift_angle / 2, contact_angle, 0});
   heel.offset = step.offset;
   heel.dur = step.dur;
   heel.start(cycle_dur_);
 
-  drop.spline = Spline<float>(SplineType::Linear, {land_angle, 0});
+  drop.spline = Spline<float>(SplineType::Linear, {contact_angle, 0});
   drop.offset = slide.offset;
   drop.dur = 0.1;
   drop.start(cycle_dur_);
@@ -623,9 +642,7 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   float ball_angle = 0;
   auto& ball = foot_m.is_left ? cycle_.lball : cycle_.rball;
   if (inCycle(ball, cycle_t_)) {
-    // foot_m.toe_angle = sampleMovement(ball, cycle_t_);
     ball_angle = sampleMovement(ball, cycle_t_);
-    // std::println("{}", foot_m.toe_angle);
   }
   float foot_angle = 0;
   auto& toe_anim = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
@@ -649,24 +666,9 @@ void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
   BoneId heel_bone = foot_m.is_left ? BoneId::Lheel : BoneId::Rheel;
   BoneId ball_bone = foot_m.is_left ? BoneId::Lball : BoneId::Rball;
   pose_.setPos(toe_bone, foot_m.toe_pos);
-  // pose_.setRot(toe_bone, point_foot * ball_rot); // all toe
   pose_.setRot(toe_bone, point_foot * toe_rot);
   pose_.setRot(heel_bone, heel_rot);
   pose_.setRot(ball_bone, ball_rot);
-
-  // TODO: this currently isn't possible with heel angle determined by IK. But
-  // this will become relevant again if I add an animation to land on the
-  // heel.
-  // if (foot_m.toe_angle < 0) {
-  //   // Lift up foot if it would go through the ground.
-  //   float above = foot_m.toe_pos.y;
-  //   float heel_y =
-  //       glm::rotate(vec2(-sizes_.foot_l, 0),
-  //       glm::radians(foot_m.toe_angle)).y;
-  //   float lift = std::max(heel_y - above, 0.f);
-  //   foot_m.foot->setPos(foot_m.foot->getPos() + vec3(0, lift, 0));
-  //   // TODO: Move foot back so heel doesn't slide forward
-  // }
 }
 
 void WalkCycle::updateShoulders() {
