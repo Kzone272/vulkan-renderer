@@ -130,8 +130,9 @@ void Skelly::handleInput(const InputState& input) {
       vel_ = target_vel;
     } else {
       float acc_force = move_.max_speed / move_.adjust_time;
-      float adjust_time = std::clamp(
-          glm::length(target_vel - vel_) / acc_force, 200.f, move_.adjust_time);
+      float adjust_time =
+          move_.max_speed == 0 ? 0 : glm::length(target_vel - vel_) / acc_force;
+      adjust_time = std::clamp(adjust_time, 200.f, move_.adjust_time);
 
       vec3 acc(0);
       vec3 curr_vel = vel_;
@@ -543,7 +544,7 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   float step_dur_s = cycle_dur_ / 1000 * step.dur;
   vec3 swing_vel = 1.25f * path / step_dur_s;
   vec3 no_vel = vec3(0, 0, -walk_.speed);
-  vec3 toe_drop = no_vel + vec3(0, -walk_.step_height / 2, 0);
+  vec3 toe_drop = no_vel + vec3(0, -1.5 * walk_.step_height, 0);
 
   step.spline = Spline<vec3>(
       SplineType::Hermite,
@@ -584,13 +585,12 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
 
   float land_angle = glm::radians(-15.f);
   heel.spline = Spline<float>(
-      SplineType::Linear, {lift_angle, land_angle});
+      SplineType::Hermite, {lift_angle, lift_angle / 2, land_angle, 0});
   heel.offset = step.offset;
   heel.dur = step.dur;
   heel.start(cycle_dur_);
 
-  drop.spline = Spline<float>(
-      SplineType::Linear, {land_angle, 0});
+  drop.spline = Spline<float>(SplineType::Linear, {land_angle, 0});
   drop.offset = slide.offset;
   drop.dur = 0.1;
   drop.start(cycle_dur_);
