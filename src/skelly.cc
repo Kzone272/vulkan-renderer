@@ -324,7 +324,7 @@ void Skelly::updateHandPose(Pose& pose) {
 
 WalkPoser::WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root)
     : walk_(walk), mods_(&mods), root_(root) {
-  add_pose_.bone_mask = {BoneId::Ltoe, BoneId::Rtoe};
+  add_pose_.bone_mask = {BoneId::Lankle, BoneId::Rankle};
 }
 
 Pose WalkPoser::getPose(float cycle_t, float delta_s) {
@@ -336,8 +336,8 @@ Pose WalkPoser::getPose(float cycle_t, float delta_s) {
   }
 
   if (walk_.getTargetSpeed() != 0 && mods_->plant_feet) {
-    plantFoot(pose, walk_.getLfoot());
-    plantFoot(pose, walk_.getRfoot());
+    plantFoot(walk_.getLfoot());
+    plantFoot(walk_.getRfoot());
     offsetFoot(cycle_t, walk_.getLfoot());
     offsetFoot(cycle_t, walk_.getRfoot());
     pose = Pose::blend(pose, add_pose_, 1);
@@ -350,14 +350,15 @@ void WalkPoser::setWorld(FootMeta& foot_m) {
   foot_m.world_target = root_->posToWorld(foot_m.toe_pos);
 }
 
-void WalkPoser::plantFoot(Pose& pose, FootMeta& foot_m) {
+void WalkPoser::plantFoot(FootMeta& foot_m) {
   if (foot_m.just_landed) {
     setWorld(foot_m);
     return;
   }
   if (foot_m.planted) {
     vec3 root_pos = root_->posToLocal(foot_m.world_target);
-    pose.setPos(foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe, root_pos);
+    auto ankle_bone = foot_m.is_left ? BoneId::Lankle : BoneId::Rankle;
+    add_pose_.setPos(ankle_bone, root_pos - foot_m.toe_pos);
   }
 }
 
@@ -373,7 +374,7 @@ void WalkPoser::offsetFoot(float cycle_t, FootMeta& foot_m) {
   }
 
   if (!foot_m.planted) {
-    auto bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
+    auto bone = foot_m.is_left ? BoneId::Lankle : BoneId::Rankle;
     add_pose_.setPos(bone, sampleMovement(move, cycle_t));
   }
 }
@@ -618,18 +619,33 @@ void WalkCycle::updateAnkle(FootMeta& foot_m) {
     foot_angle = sampleMovement(drop_anim, cycle_t_);
   }
 
-  glm::quat point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
-  glm::quat ball_rot = glm::angleAxis(ball_angle, vec3(1, 0, 0));
   // Negative angles rotate from the heel, postive angles from the toe.
-  glm::quat toe_rot = glm::angleAxis(std::max(0.f, foot_angle), vec3(1, 0, 0));
-  glm::quat heel_rot = glm::angleAxis(std::min(0.f, foot_angle), vec3(1, 0, 0));
+  float toe_angle = std::max(0.f, foot_angle);
+  float heel_angle = std::min(0.f, foot_angle);
+  glm::quat toe_rot = glm::angleAxis(toe_angle, vec3(1, 0, 0));
+  glm::quat heel_rot = glm::angleAxis(heel_angle, vec3(1, 0, 0));
 
-  BoneId toe_bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
-  BoneId heel_bone = foot_m.is_left ? BoneId::Lheel : BoneId::Rheel;
+  vec2 ball_to_ankle = -1.f * sizes_->ball.zy;
+  vec2 heel_to_ball = sizes_->ball.zy - sizes_->heel.zy;
+  vec2 toe_to_heel = sizes_->heel.zy - sizes_->toe.zy;
+
+  // Calculate the position of the ankle from the toe, given the hierarchy:
+  //   ankle -> ball -> heel -> toe
+  // Note: rotate() uses CCW angles. My animations use CW angles.
+  vec2 ankle_2d = glm::rotate(ball_to_ankle, -ball_angle);
+  ankle_2d = glm::rotate(ankle_2d + heel_to_ball, -heel_angle);
+  ankle_2d = glm::rotate(ankle_2d + toe_to_heel, -toe_angle);
+
+  glm::quat point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
+  glm::quat ball_rot = glm::angleAxis(-ball_angle, vec3(1, 0, 0));
+  glm::quat ankle_rot = glm::angleAxis(ball_angle + foot_angle, vec3(1, 0, 0));
+
+  vec3 ankle = point_foot * vec3(0, ankle_2d.yx) + foot_m.toe_pos;
+
+  BoneId ankle_bone = foot_m.is_left ? BoneId::Lankle : BoneId::Rankle;
   BoneId ball_bone = foot_m.is_left ? BoneId::Lball : BoneId::Rball;
-  pose_.setPos(toe_bone, foot_m.toe_pos);
-  pose_.setRot(toe_bone, point_foot * toe_rot);
-  pose_.setRot(heel_bone, heel_rot);
+  pose_.setPos(ankle_bone, ankle);
+  pose_.setRot(ankle_bone, ankle_rot);
   pose_.setRot(ball_bone, ball_rot);
 }
 

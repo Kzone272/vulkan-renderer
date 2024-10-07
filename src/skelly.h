@@ -185,7 +185,7 @@ class WalkPoser {
   }
 
  private:
-  void plantFoot(Pose& pose, FootMeta& foot_m);
+  void plantFoot(FootMeta& foot_m);
   void offsetFoot(float cycle_t, FootMeta& foot_m);
   void setWorld(FootMeta& foot_m);
 

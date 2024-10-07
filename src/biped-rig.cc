@@ -9,9 +9,6 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
   shin_l_ = sizes.shin;
   bicep_l_ = sizes.bicep;
   forearm_l_ = sizes.forearm;
-  toe_pos_ = sizes.toe;
-  ball_pos_ = sizes.ball;
-  heel_pos_ = sizes.heel;
 
   cog_ = root_->addChild(Object(ModelId::None, glm::scale(vec3(5))));
   cog_->setPos(vec3(0, sizes.pelvis_y, 0));
@@ -179,22 +176,18 @@ void BipedRig::updateSkeleton(BipedSkeleton& skl) {
   skl.torso_->setTransform(neck_->getTransform());
   skl.head_->setTransform(head_->getTransform());
   skl.pelvis_->setTransform(pelvis_->getTransform());
+  skl.ltoes_->setTransform(lball_->getTransform());
+  skl.rtoes_->setTransform(rball_->getTransform());
 
   solveIk();
 
   skl.lfoot_->setRot(glm::identity<glm::quat>());
   auto l_flat = glm::quat_cast(skl.lfoot_->toLocal(root_));
-  skl.lfoot_->setRot(
-      ltoe_->getRot() * lheel_->getRot() * lball_->getRot() * l_flat);
-
-  skl.ltoes_->setRot(glm::inverse(lball_->getRot()));
+  skl.lfoot_->setRot(l_flat * lankle_->getRot());
 
   skl.rfoot_->setRot(glm::identity<glm::quat>());
   auto r_flat = glm::quat_cast(skl.rfoot_->toLocal(root_));
-  skl.rfoot_->setRot(
-      rtoe_->getRot() * rheel_->getRot() * rball_->getRot() * r_flat);
-
-  skl.rtoes_->setRot(glm::inverse(rball_->getRot()));
+  skl.rfoot_->setRot(r_flat * rankle_->getRot());
 }
 
 void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
@@ -229,25 +222,15 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rhip_->setPos(skeleton.rfemur_->getPos());
 
   mat4 ball_t = glm::scale(vec3(3));
-  ltoe_ = root_->addChild(Object(ModelId::BallControl, ball_t));
-  ltoe_->setPos(skeleton.lfoot_->posToAncestor(root_, skeleton.toe_pos_));
-  rtoe_ = root_->addChild(Object(ModelId::BallControl, ball_t));
-  rtoe_->setPos(skeleton.rfoot_->posToAncestor(root_, skeleton.toe_pos_));
+  lankle_ = root_->addChild(Object(ModelId::BallControl, control_t));
+  lankle_->setPos(skeleton.lfoot_->posToAncestor(root_));
+  rankle_ = root_->addChild(Object(ModelId::BallControl, control_t));
+  rankle_->setPos(skeleton.rfoot_->posToAncestor(root_));
 
-  lheel_ = ltoe_->addChild(Object(ModelId::BallControl, ball_t));
-  lheel_->setPos(skeleton.heel_pos_ - skeleton.toe_pos_);
-  rheel_ = rtoe_->addChild(Object(ModelId::BallControl, ball_t));
-  rheel_->setPos(skeleton.heel_pos_ - skeleton.toe_pos_);
-
-  lball_ = lheel_->addChild(Object(ModelId::BallControl, ball_t));
-  lball_->setPos(skeleton.ball_pos_ - skeleton.heel_pos_);
-  rball_ = rheel_->addChild(Object(ModelId::BallControl, ball_t));
-  rball_->setPos(skeleton.ball_pos_ - skeleton.heel_pos_);
-
-  lankle_ = lball_->addChild(Object(ModelId::BallControl, control_t));
-  lankle_->setPos(-skeleton.ball_pos_);
-  rankle_ = rball_->addChild(Object(ModelId::BallControl, control_t));
-  rankle_->setPos(-skeleton.ball_pos_);
+  lball_ = lankle_->addChild(Object(ModelId::BallControl, ball_t));
+  lball_->setPos(skeleton.ltoes_->getPos());
+  rball_ = rankle_->addChild(Object(ModelId::BallControl, ball_t));
+  rball_->setPos(skeleton.rtoes_->getPos());
 
   zero_p_ = Pose::freeze(*this);
 
@@ -282,12 +265,8 @@ void BipedRig::setMaterial(MaterialId material) {
   pelvis_->setMaterial(material);
   lhip_->setMaterial(material);
   rhip_->setMaterial(material);
-  ltoe_->setMaterial(material);
-  lheel_->setMaterial(material);
   lball_->setMaterial(material);
   lankle_->setMaterial(material);
-  rtoe_->setMaterial(material);
-  rheel_->setMaterial(material);
   rball_->setMaterial(material);
   rankle_->setMaterial(material);
 }
@@ -331,18 +310,14 @@ Object* BipedRig::getBone(BoneId bone) const {
       return rhand_;
     case BoneId::Pelvis:
       return pelvis_;
-    case BoneId::Ltoe:
-      return ltoe_;
-    case BoneId::Rtoe:
-      return rtoe_;
+    case BoneId::Lankle:
+      return lankle_;
+    case BoneId::Rankle:
+      return rankle_;
     case BoneId::Lball:
       return lball_;
     case BoneId::Rball:
       return rball_;
-    case BoneId::Lheel:
-      return lheel_;
-    case BoneId::Rheel:
-      return rheel_;
     default:
       ASSERT(false);
       return nullptr;
