@@ -86,6 +86,8 @@ void Skelly::makeBones() {
   sizes_.ankle_d = sizes_.leg - sizes_.ankle.y;
   sizes_.femur = sizes_.femur_pct * sizes_.ankle_d;
   sizes_.shin = sizes_.ankle_d - sizes_.femur;
+  sizes_.max_leg = sizes_.femur + cos(sizes_.min_knee_angle) * sizes_.shin;
+  sizes_.normal_pelvis_y = sizes_.max_leg + sizes_.pelvis_h;
   sizes_.wrist_d = sizes_.arm - sizes_.hand_l;
   sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
   sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
@@ -207,36 +209,39 @@ void Skelly::updateCycle(float delta_s) {
   prev_cycle_t_ = cycle_t_;
   cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
 
-  if (target_speed_changed_) {
-    if (move_transition_) {
-      DASSERT(move_cycles_.size() == 2);
-      // Delete the least relevant pose in the current transition.
-      if (move_transition_->t() > 0.5) {
-        move_cycles_.erase(move_cycles_.begin());
-      } else {
-        move_cycles_.pop_back();
-      }
-    }
-
-    if (target_speed_ != 0) {
-      float step_l = sizes_.leg * 0.76f;
-      float step_dur = (step_l / target_speed_) * 1000.f;
-      float cycle_dur = std::clamp(2 * step_dur, 500.f, 1200.f);
-
-      if (target_speed_ > 350) {
-        move_cycles_.push_back(WalkPoser(
-            WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), mods_,
-            &root_));
-      } else {
-        move_cycles_.push_back(WalkPoser(
-            WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
-            &root_));
-      }
-    } else {
-      move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
-    }
-    move_transition_ = Duration(move_.blend_time);
+  if (target_speed_changed_ || move_cycle_changed_) {
+    updateMoveCycle();
   }
+}
+
+void Skelly::updateMoveCycle() {
+  if (move_transition_) {
+    DASSERT(move_cycles_.size() == 2);
+    // Delete the least relevant pose in the current transition.
+    if (move_transition_->t() > 0.5) {
+      move_cycles_.erase(move_cycles_.begin());
+    } else {
+      move_cycles_.pop_back();
+    }
+  }
+
+  if (target_speed_ != 0) {
+    float step_l = sizes_.leg * 0.76f;
+    float step_dur = (step_l / target_speed_) * 1000.f;
+    float cycle_dur = std::clamp(2 * step_dur, 500.f, 1200.f);
+
+    if (target_speed_ > 350) {
+      move_cycles_.push_back(WalkPoser(
+          WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), mods_, &root_));
+    } else {
+      move_cycles_.push_back(WalkPoser(
+          WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
+          &root_));
+    }
+  } else {
+    move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
+  }
+  move_transition_ = Duration(move_.blend_time);
 }
 
 void Skelly::updateSpeed(float delta_s) {
@@ -389,7 +394,6 @@ void WalkCycle::updateCycle(const WalkOptions& walk, const Cycle& cycle) {
   walk_ = walk;
   cycle_ = cycle;
 
-  base_pelvis_y_ = walk_.max_leg_pct * sizes_->pelvis_y;
   float bounce = std::pow(cycle_dur_ / 1000, 2) * walk_.bounce;
   cycle_.bounce.spline =
       Spline<float>(SplineType::Hermite, {-bounce, 0, bounce, 0, -bounce, 0});
@@ -452,7 +456,7 @@ const Pose& WalkCycle::getPose(float cycle_t) {
 }
 
 void WalkCycle::updateCog() {
-  vec3 pos = vec3(0, base_pelvis_y_, 0);
+  vec3 pos = vec3(0, sizes_->normal_pelvis_y, 0);
   pos.y += sampleMovement(cycle_.bounce, cycle_t_);
 
   pose_.setPos(BoneId::Cog, pos);
@@ -538,10 +542,9 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   foot_m.step_dur = step.dur;
 
   float min_knee_angle = glm::radians(5.f);
-  float max_leg = sizes_->femur + cos(min_knee_angle) * sizes_->shin;
-  vec2 hip_pos = vec2(0, base_pelvis_y_ + sizes_->hip_pos.y);
+  vec2 hip_pos = vec2(0, sizes_->normal_pelvis_y + sizes_->hip_pos.y);
   float leg_vertical = hip_pos.y - sizes_->ankle.y;
-  float flat_ankle_z = -sqrt(max_leg * max_leg - leg_vertical * leg_vertical);
+  float flat_ankle_z = -sqrt(pow(sizes_->max_leg, 2) - pow(leg_vertical, 2));
   float flat_toe_z = flat_ankle_z + sizes_->toe.z + walk_.step_offset;
 
   float slide_end = slide.offset + slide.dur;
@@ -556,14 +559,14 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   float hip_to_ankle = glm::length(hip_pos - end_ankle);
 
   float lift_angle = 0;
-  if (hip_to_ankle > max_leg + toe_to_ankle) {
+  if (hip_to_ankle > sizes_->max_leg + toe_to_ankle) {
     // Target for toe is too far away. Error.
     std::println("Steps are too long!");
     ASSERT(false);
   } else {
     float hip_to_toe = glm::length(end_toe - hip_pos);
     float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
-    float max_leg_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
+    float max_leg_angle = cosineLaw(toe_to_ankle, hip_to_toe, sizes_->max_leg);
     // Adding 10 degrees looks good, and hopefully prevents some knee locking.
     lift_angle = flat_angle - max_leg_angle + glm::radians(10.f);
     lift_angle = std::clamp(lift_angle, 0.f, glm::radians(80.f));
@@ -726,8 +729,8 @@ void Skelly::UpdateImgui() {
     ImGui::EndTabItem();
   }
 
+  move_cycle_changed_ = false;
   if (ImGui::BeginTabItem("WalkOpt")) {
-    bool changed = false;
     if (ImGui::Combo(
             "Movement Presets", &ui_.move_preset,
             "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders\0")) {
@@ -747,32 +750,26 @@ void Skelly::UpdateImgui() {
         moveFlanders(walk_);
       }
       move_.max_speed = walk_.speed;
-      changed = true;
+      move_cycle_changed_ = true;
     }
 
-    changed |= WalkUi(walk_);
-
-    if (changed) {
-      move_cycles_.back().updateCycle(walk_, walk_cycle_);
-    }
+    move_cycle_changed_ |= WalkUi(walk_);
 
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("WalkCyc")) {
-    if (cycleUi(walk_cycle_)) {
-      move_cycles_.back().updateCycle(walk_, walk_cycle_);
-    }
+    move_cycle_changed_ |= cycleUi(walk_cycle_);
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("Run")) {
-    WalkUi(run_);
+    move_cycle_changed_ |= WalkUi(run_);
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("RunCyc")) {
-    cycleUi(run_cycle_);
+    move_cycle_changed_ |= cycleUi(run_cycle_);
     ImGui::EndTabItem();
   }
 

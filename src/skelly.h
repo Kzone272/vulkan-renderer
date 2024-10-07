@@ -50,13 +50,16 @@ struct SkellySizes {
   float head_h = 25;                      // length between shoulders and head
   float neck = 10;                        // length between shoulders and head
   float hand_l = 10;
+  float min_knee_angle = glm::radians(5.f);
   // Driven by params above.
-  float pelvis_y;
+  float pelvis_y;  // Pelvis height in zero-position
   float shoulders_y;
   float ankle_d;  // Distance from hip to ankle
   float femur;
   float shin;
-  float wrist_d;  // Distance from shoulder to wrist
+  float max_leg;
+  float normal_pelvis_y;  // Pelvis height when standing normally
+  float wrist_d;          // Distance from shoulder to wrist
   float bicep;
   float forearm;
   vec3 sho_pos;  // left shoulder
@@ -165,7 +168,6 @@ class WalkCycle {
   Object* root_ = nullptr;
   WalkOptions walk_ = {};
   const SkellySizes* sizes_ = nullptr;
-  float base_pelvis_y_ = 0;
 
   FootMeta lfoot_m_ = {.is_left = true};
   FootMeta rfoot_m_ = {};
@@ -236,6 +238,7 @@ class Skelly {
   void updateSpeed(float delta_s);
 
   void updateCycle(float delta_s);
+  void updateMoveCycle();
   void updateLean(float delta_s);
   void updateHandPose(Pose& pose);
 
@@ -310,6 +313,7 @@ class Skelly {
   vec3 vel_{0};
   float target_speed_ = 0;
   bool target_speed_changed_ = false;
+  bool move_cycle_changed_ = false;
 
   std::unique_ptr<SecondOrder<vec3>> lean_so_;
 };
