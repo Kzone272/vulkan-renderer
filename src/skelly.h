@@ -16,9 +16,8 @@ struct MoveOptions {
 
 struct WalkOptions {
   float speed = 200;
-  float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
-  float step_height = 5;
+  float step_height = 10;
   float step_offset = 0;
   float bounce = 2;
   float hip_sway = 6;
@@ -40,20 +39,26 @@ struct SkellySizes {
   float arm = 70;
   float bicep_pct = 0.5;
   // Constants
-  vec3 ankle = vec3(0, 10, -18);  // from toe to ankle
-  vec3 toe = -ankle;              // from ankle to toe
-  float pelvis_h = 15;            // height above hip
-  float head_h = 25;              // length between shoulders and head
-  float neck = 10;                // length between shoulders and head
-  float foot_l = 25;              // Toe to heel
+  float foot_l = 25;                      // Toe to heel
+  float toes_l = 8;                       // Toe to ball
+  vec3 ankle = vec3(0, 5, -18);           // from toe to ankle
+  vec3 toe = -ankle;                      // from ankle to toe
+  vec3 ball = toe + vec3(0, 0, -toes_l);  // from ankle to ball of foot
+  vec3 heel = toe + vec3(0, 0, -foot_l);  // from ankle to heel
+  float pelvis_h = 15;                    // height above hip
+  float head_h = 25;                      // length between shoulders and head
+  float neck = 10;                        // length between shoulders and head
   float hand_l = 10;
+  float min_knee_angle = glm::radians(5.f);
   // Driven by params above.
-  float pelvis_y;
+  float pelvis_y;  // Pelvis height in zero-position
   float shoulders_y;
   float ankle_d;  // Distance from hip to ankle
   float femur;
   float shin;
-  float wrist_d;  // Distance from shoulder to wrist
+  float max_leg;
+  float normal_pelvis_y;  // Pelvis height when standing normally
+  float wrist_d;          // Distance from shoulder to wrist
   float bicep;
   float forearm;
   vec3 sho_pos;  // left shoulder
@@ -81,7 +86,6 @@ struct FootMeta {
   vec3 liftoff;
   float step_offset = 0;
   float step_dur = 1;
-  float toe_angle = 0;  // Angle relative to floor
   vec3 toe_pos;
   vec3 toe_dir = {0, 0, 1};
   vec3 toe_dir_start = {0, 0, 1};
@@ -107,6 +111,12 @@ struct Cycle {
   Movement<vec3> rslide;
   Movement<float> lheel;
   Movement<float> rheel;
+  Movement<float> ltoe;
+  Movement<float> rtoe;
+  Movement<float> lball;
+  Movement<float> rball;
+  Movement<float> ldrop;
+  Movement<float> rdrop;
   Movement<float> bounce;
   Movement<float> sway;
   Movement<float> spin;
@@ -142,9 +152,8 @@ class WalkCycle {
   void updateCog();
   void updatePelvis();
   void updateFeet();
-  void updateToeAngle(FootMeta& foot);
   void updateToe(FootMeta& foot_m);
-  void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
+  void updateAnkle(FootMeta& foot_m);
   void updateShoulders();
   void updateHands();
 
@@ -228,6 +237,7 @@ class Skelly {
   void updateSpeed(float delta_s);
 
   void updateCycle(float delta_s);
+  void updateMoveCycle();
   void updateLean(float delta_s);
   void updateHandPose(Pose& pose);
 
@@ -239,7 +249,7 @@ class Skelly {
   WalkOptions run_ = {
       .speed = 600,
       .step_height = 20,
-      .bounce = 7,
+      .bounce = 10,
       .hip_spin = 20,
       .shoulder_spin = 10,
       .hand_height_pct = 0.4,
@@ -302,6 +312,7 @@ class Skelly {
   vec3 vel_{0};
   float target_speed_ = 0;
   bool target_speed_changed_ = false;
+  bool move_cycle_changed_ = false;
 
   std::unique_ptr<SecondOrder<vec3>> lean_so_;
 };

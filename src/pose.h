@@ -25,6 +25,10 @@ enum class BoneId : uint32_t {
   Pelvis,
   Ltoe,
   Rtoe,
+  Lheel,
+  Rheel,
+  Lball,
+  Rball,
   COUNT,
 };
 

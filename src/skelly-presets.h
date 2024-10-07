@@ -3,36 +3,37 @@
 #include "skelly.h"
 
 // Some presets for different walk cycles
-inline void moveDefault(WalkOptions& walk) {
+inline void moveDefault(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
+  mods = MoveMods{};
 }
-inline void moveTightrope(WalkOptions& walk) {
+inline void moveTightrope(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
   walk.speed = 120;
-  walk.max_leg_pct = 0.9;
   walk.stance_w_pct = 0;
   walk.hand_height_pct = 0.25;
   walk.arm_span_pct = 0.9;
+  mods.crouch_pct = 0.95;
 }
-inline void movePreppy(WalkOptions& walk) {
+inline void movePreppy(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
   walk.speed = 240;
-  walk.max_leg_pct = 0.9;
   walk.step_height = 15;
   walk.bounce = 5;
   walk.arm_span_pct = 0;
   walk.hand_height_pct = 0.5;
+  mods.crouch_pct = 0.95;
 }
-inline void moveSnow(WalkOptions& walk) {
+inline void moveSnow(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
   walk.speed = 100;
-  walk.max_leg_pct = 0.9;
   walk.step_height = 50;
   walk.arm_span_pct = 0.25;
   walk.hand_height_pct = 0.65;
   walk.hands_forward = 15;
+  mods.crouch_pct = 0.95;
 }
-inline void moveRunway(WalkOptions& walk) {
+inline void moveRunway(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
   walk.stance_w_pct = 0.2;
   walk.hip_sway = 12;
@@ -42,25 +43,25 @@ inline void moveRunway(WalkOptions& walk) {
   walk.hand_height_pct = 0.9;
   walk.hands_forward = -15;
 }
-inline void moveCrouch(WalkOptions& walk) {
+inline void moveCrouch(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
   walk.speed = 120;
-  walk.max_leg_pct = 0.65;
   walk.stance_w_pct = 1.2;
   walk.step_height = 15;
   walk.arm_span_pct = 0.2;
   walk.hand_height_pct = 0.5;
   walk.hands_forward = 15;
+  mods.crouch_pct = 0.7;
 }
-inline void moveFlanders(WalkOptions& walk) {
+inline void moveFlanders(WalkOptions& walk, MoveMods& mods) {
   walk = WalkOptions{};
   walk.speed = 165;
-  walk.max_leg_pct = 0.90;
   walk.bounce = 4;
   walk.hip_sway = 23;
   walk.hip_spin = 4.5;
   walk.hand_height_pct = 0.53;
   walk.hands_forward = 0;
+  mods.crouch_pct = 0.95;
 }
 
 // Some presets for different skeleton sizes

@@ -86,6 +86,8 @@ void Skelly::makeBones() {
   sizes_.ankle_d = sizes_.leg - sizes_.ankle.y;
   sizes_.femur = sizes_.femur_pct * sizes_.ankle_d;
   sizes_.shin = sizes_.ankle_d - sizes_.femur;
+  sizes_.max_leg = sizes_.femur + cos(sizes_.min_knee_angle) * sizes_.shin;
+  sizes_.normal_pelvis_y = sizes_.max_leg + sizes_.pelvis_h;
   sizes_.wrist_d = sizes_.arm - sizes_.hand_l;
   sizes_.bicep = sizes_.bicep_pct * sizes_.wrist_d;
   sizes_.forearm = sizes_.wrist_d - sizes_.bicep;
@@ -130,8 +132,9 @@ void Skelly::handleInput(const InputState& input) {
       vel_ = target_vel;
     } else {
       float acc_force = move_.max_speed / move_.adjust_time;
-      float adjust_time = std::clamp(
-          glm::length(target_vel - vel_) / acc_force, 200.f, move_.adjust_time);
+      float adjust_time =
+          move_.max_speed == 0 ? 0 : glm::length(target_vel - vel_) / acc_force;
+      adjust_time = std::clamp(adjust_time, 200.f, move_.adjust_time);
 
       vec3 acc(0);
       vec3 curr_vel = vel_;
@@ -206,36 +209,39 @@ void Skelly::updateCycle(float delta_s) {
   prev_cycle_t_ = cycle_t_;
   cycle_t_ = fmod(cycle_t_ + delta_s / (cycle_dur_ / 1000.f), 1.f);
 
-  if (target_speed_changed_) {
-    if (move_transition_) {
-      DASSERT(move_cycles_.size() == 2);
-      // Delete the least relevant pose in the current transition.
-      if (move_transition_->t() > 0.5) {
-        move_cycles_.erase(move_cycles_.begin());
-      } else {
-        move_cycles_.pop_back();
-      }
-    }
-
-    if (target_speed_ != 0) {
-      float step_l = sizes_.leg * 0.76f;
-      float step_dur = (step_l / target_speed_) * 1000.f;
-      float cycle_dur = std::clamp(2 * step_dur, 500.f, 1200.f);
-
-      if (target_speed_ > 350) {
-        move_cycles_.push_back(WalkPoser(
-            WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), mods_,
-            &root_));
-      } else {
-        move_cycles_.push_back(WalkPoser(
-            WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
-            &root_));
-      }
-    } else {
-      move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
-    }
-    move_transition_ = Duration(move_.blend_time);
+  if (target_speed_changed_ || move_cycle_changed_) {
+    updateMoveCycle();
   }
+}
+
+void Skelly::updateMoveCycle() {
+  if (move_transition_) {
+    DASSERT(move_cycles_.size() == 2);
+    // Delete the least relevant pose in the current transition.
+    if (move_transition_->t() > 0.5) {
+      move_cycles_.erase(move_cycles_.begin());
+    } else {
+      move_cycles_.pop_back();
+    }
+  }
+
+  if (target_speed_ != 0) {
+    float step_l = sizes_.leg * 0.76f;
+    float step_dur = (step_l / target_speed_) * 1000.f;
+    float cycle_dur = std::clamp(2 * step_dur, 500.f, 1200.f);
+
+    if (target_speed_ > 350) {
+      move_cycles_.push_back(WalkPoser(
+          WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), mods_, &root_));
+    } else {
+      move_cycles_.push_back(WalkPoser(
+          WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
+          &root_));
+    }
+  } else {
+    move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
+  }
+  move_transition_ = Duration(move_.blend_time);
 }
 
 void Skelly::updateSpeed(float delta_s) {
@@ -450,7 +456,7 @@ const Pose& WalkCycle::getPose(float cycle_t) {
 }
 
 void WalkCycle::updateCog() {
-  vec3 pos = vec3(0, walk_.max_leg_pct * sizes_->pelvis_y, 0);
+  vec3 pos = vec3(0, sizes_->normal_pelvis_y, 0);
   pos.y += sampleMovement(cycle_.bounce, cycle_t_);
 
   pose_.setPos(BoneId::Cog, pos);
@@ -467,32 +473,10 @@ void WalkCycle::updatePelvis() {
 }
 
 void WalkCycle::updateFeet() {
-  updateToeAngle(lfoot_m_);
-  updateToeAngle(rfoot_m_);
   updateToe(rfoot_m_);
   updateToe(lfoot_m_);
-
-  mat4 to_root = pose_.getMatrix(BoneId::Cog) * pose_.getMatrix(BoneId::Pelvis);
-  vec3 lhip_pos = to_root * vec4(sizes_->hip_pos, 1);
-  vec3 rhip_pos = to_root * vec4(sizes_->hip_pos * vec3(-1, 1, 1), 1);
-
-  updateAnkle(lhip_pos, lfoot_m_);
-  updateAnkle(rhip_pos, rfoot_m_);
-}
-
-void WalkCycle::updateToeAngle(FootMeta& foot_m) {
-  auto& move = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
-  if (moveStarted(move, cycle_t_, prev_cycle_t_)) {
-    move.spline = Spline<float>(
-        SplineType::Hermite, {foot_m.toe_angle, foot_m.toe_angle * 3, 0, 0});
-    move.start(cycle_dur_);
-  }
-
-  if (move.anim && inCycle(move, cycle_t_)) {
-    foot_m.toe_angle = sampleMovement(move, cycle_t_);
-  } else {
-    foot_m.toe_angle = 0;
-  }
+  updateAnkle(lfoot_m_);
+  updateAnkle(rfoot_m_);
 }
 
 void WalkCycle::updateToe(FootMeta& foot_m) {
@@ -518,6 +502,10 @@ void WalkCycle::updateToe(FootMeta& foot_m) {
 void WalkCycle::updateStep(FootMeta& foot_m) {
   auto& step = foot_m.is_left ? cycle_.lstep : cycle_.rstep;
   auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
+  auto& ball = foot_m.is_left ? cycle_.lball : cycle_.rball;
+  auto& toe = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
+  auto& heel = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
+  auto& drop = foot_m.is_left ? cycle_.ldrop : cycle_.rdrop;
 
   slide.offset = std::fmod(step.offset + step.dur, 1);
   slide.dur = 1 - step.dur;
@@ -538,7 +526,7 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   float step_dur_s = cycle_dur_ / 1000 * step.dur;
   vec3 swing_vel = 1.25f * path / step_dur_s;
   vec3 no_vel = vec3(0, 0, -walk_.speed);
-  vec3 toe_drop = no_vel + vec3(0, -walk_.step_height / 2, 0);
+  vec3 toe_drop = no_vel + vec3(0, -1.5 * walk_.step_height, 0);
 
   step.spline = Spline<vec3>(
       SplineType::Hermite,
@@ -552,51 +540,97 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   foot_m.liftoff = liftoff;
   foot_m.step_offset = step.offset;
   foot_m.step_dur = step.dur;
-}
 
-void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
-  // If hip is too far from ankle, compute the angle to lift the ankle just
-  // enough to compensate.
-  auto point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
-  vec3 flat_ankle_pos = foot_m.toe_pos + point_foot * sizes_->ankle;
-  float hip_to_ankle = glm::length(hip_pos - flat_ankle_pos);
-  float max_leg = 0.98 * (sizes_->ankle_d);
-  // Only start lifting the heel when close to taking a step.
-  const auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
-  float slide_t = getMoveT(slide, cycle_t_);
-  if (slide_t > 0.5 && slide_t < 1 && hip_to_ankle > max_leg) {
-    float hip_to_toe = glm::length(foot_m.toe_pos - hip_pos);
-    float toe_to_ankle = glm::length(sizes_->ankle);
+  float min_knee_angle = glm::radians(5.f);
+  vec2 hip_pos = vec2(0, sizes_->normal_pelvis_y + sizes_->hip_pos.y);
+  float leg_vertical = hip_pos.y - sizes_->ankle.y;
+  float flat_ankle_z = -sqrt(pow(sizes_->max_leg, 2) - pow(leg_vertical, 2));
+  float flat_toe_z = flat_ankle_z + sizes_->toe.z + walk_.step_offset;
+
+  float slide_end = slide.offset + slide.dur;
+  float flat_t =
+      remapRange(flat_toe_z, liftoff.z, contact.z, slide.offset, slide_end);
+  float heel_lift_dur = slide_end - flat_t;
+  flat_t = fmodClamp(flat_t, 1);
+
+  vec2 end_toe = vec2(liftoff.z, 0);
+  vec2 end_ankle = end_toe + sizes_->ankle.zy;
+  float toe_to_ankle = glm::length(sizes_->ankle);
+  float hip_to_ankle = glm::length(hip_pos - end_ankle);
+
+  float lift_angle = 0;
+  if (hip_to_ankle > sizes_->max_leg + toe_to_ankle) {
+    // Target for toe is too far away. Use some max value.
+    std::println("Steps are too long!");
+    lift_angle = glm::radians(80.f);
+  } else {
+    float hip_to_toe = glm::length(end_toe - hip_pos);
     float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
-    if (hip_to_toe > max_leg + toe_to_ankle) {
-      // Target for toe is too far away. Point toes at target.
-      foot_m.toe_angle = flat_angle;
-    } else {
-      float lift_angle = cosineLaw(toe_to_ankle, hip_to_toe, max_leg);
-      foot_m.toe_angle = flat_angle - lift_angle;
-    }
+    float max_leg_angle = cosineLaw(toe_to_ankle, hip_to_toe, sizes_->max_leg);
+    // Adding 10 degrees looks good, and hopefully prevents some knee locking.
+    lift_angle = flat_angle - max_leg_angle + glm::radians(10.f);
+    lift_angle = std::clamp(lift_angle, 0.f, glm::radians(80.f));
   }
 
-  glm::quat ankle_rot =
-      point_foot * glm::angleAxis(foot_m.toe_angle, vec3(1, 0, 0));
+  ball.spline = Spline<float>(SplineType::Linear, {0, 0.66f * lift_angle, 0});
+  ball.offset = flat_t;
+  ball.dur = heel_lift_dur;
+  ball.start(cycle_dur_);
 
-  BoneId bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
-  pose_.setPos(bone, foot_m.toe_pos);
-  pose_.setRot(bone, ankle_rot);
+  toe.spline = Spline<float>(SplineType::Linear, {0, lift_angle});
+  float toe_dur = 0.5 * heel_lift_dur;
+  toe.offset = fmodClamp(flat_t + toe_dur, 1);
+  toe.dur = toe_dur;
+  toe.start(cycle_dur_);
 
-  // TODO: this currently isn't possible with heel angle determined by IK. But
-  // this will become relevant again if I add an animation to land on the
-  // heel.
-  // if (foot_m.toe_angle < 0) {
-  //   // Lift up foot if it would go through the ground.
-  //   float above = foot_m.toe_pos.y;
-  //   float heel_y =
-  //       glm::rotate(vec2(-sizes_.foot_l, 0),
-  //       glm::radians(foot_m.toe_angle)).y;
-  //   float lift = std::max(heel_y - above, 0.f);
-  //   foot_m.foot->setPos(foot_m.foot->getPos() + vec3(0, lift, 0));
-  //   // TODO: Move foot back so heel doesn't slide forward
-  // }
+  float contact_angle = -std::min(glm::radians(30.f), 0.5f * lift_angle);
+  heel.spline = Spline<float>(
+      SplineType::Hermite, {lift_angle, lift_angle / 2, contact_angle, 0});
+  heel.offset = step.offset;
+  heel.dur = step.dur;
+  heel.start(cycle_dur_);
+
+  drop.spline = Spline<float>(SplineType::Linear, {contact_angle, 0});
+  drop.offset = slide.offset;
+  drop.dur = 0.1;
+  drop.start(cycle_dur_);
+}
+
+void WalkCycle::updateAnkle(FootMeta& foot_m) {
+  auto& ball_anim = foot_m.is_left ? cycle_.lball : cycle_.rball;
+  auto& toe_anim = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
+  auto& heel_anim = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
+  auto& drop_anim = foot_m.is_left ? cycle_.ldrop : cycle_.rdrop;
+
+  float ball_angle = 0;
+  if (inCycle(ball_anim, cycle_t_)) {
+    ball_angle = sampleMovement(ball_anim, cycle_t_);
+  }
+
+  float foot_angle = 0;
+  if (inCycle(toe_anim, cycle_t_)) {
+    foot_angle = sampleMovement(toe_anim, cycle_t_);
+  }
+  if (inCycle(heel_anim, cycle_t_)) {
+    foot_angle = sampleMovement(heel_anim, cycle_t_);
+  }
+  if (inCycle(drop_anim, cycle_t_)) {
+    foot_angle = sampleMovement(drop_anim, cycle_t_);
+  }
+
+  glm::quat point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
+  glm::quat ball_rot = glm::angleAxis(ball_angle, vec3(1, 0, 0));
+  // Negative angles rotate from the heel, postive angles from the toe.
+  glm::quat toe_rot = glm::angleAxis(std::max(0.f, foot_angle), vec3(1, 0, 0));
+  glm::quat heel_rot = glm::angleAxis(std::min(0.f, foot_angle), vec3(1, 0, 0));
+
+  BoneId toe_bone = foot_m.is_left ? BoneId::Ltoe : BoneId::Rtoe;
+  BoneId heel_bone = foot_m.is_left ? BoneId::Lheel : BoneId::Rheel;
+  BoneId ball_bone = foot_m.is_left ? BoneId::Lball : BoneId::Rball;
+  pose_.setPos(toe_bone, foot_m.toe_pos);
+  pose_.setRot(toe_bone, point_foot * toe_rot);
+  pose_.setRot(heel_bone, heel_rot);
+  pose_.setRot(ball_bone, ball_rot);
 }
 
 void WalkCycle::updateShoulders() {
@@ -615,7 +649,6 @@ void WalkCycle::updateHands() {
 
 bool WalkUi(WalkOptions& walk) {
   bool changed = false;
-  changed |= ImGui::SliderFloat("Max Leg %", &walk.max_leg_pct, 0.01, 1.2);
   changed |= ImGui::SliderFloat("Stance W %", &walk.stance_w_pct, 0, 2);
   changed |= ImGui::SliderFloat("Step Height", &walk.step_height, 0, 50);
   changed |= ImGui::SliderFloat("Step Offset", &walk.step_offset, -50, 50);
@@ -695,53 +728,47 @@ void Skelly::UpdateImgui() {
     ImGui::EndTabItem();
   }
 
+  move_cycle_changed_ = false;
   if (ImGui::BeginTabItem("WalkOpt")) {
-    bool changed = false;
     if (ImGui::Combo(
             "Movement Presets", &ui_.move_preset,
             "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders\0")) {
       if (ui_.move_preset == 0) {
-        moveDefault(walk_);
+        moveDefault(walk_, mods_);
       } else if (ui_.move_preset == 1) {
-        moveTightrope(walk_);
+        moveTightrope(walk_, mods_);
       } else if (ui_.move_preset == 2) {
-        movePreppy(walk_);
+        movePreppy(walk_, mods_), mods_;
       } else if (ui_.move_preset == 3) {
-        moveSnow(walk_);
+        moveSnow(walk_, mods_);
       } else if (ui_.move_preset == 4) {
-        moveRunway(walk_);
+        moveRunway(walk_, mods_);
       } else if (ui_.move_preset == 5) {
-        moveCrouch(walk_);
+        moveCrouch(walk_, mods_);
       } else if (ui_.move_preset == 6) {
-        moveFlanders(walk_);
+        moveFlanders(walk_, mods_);
       }
       move_.max_speed = walk_.speed;
-      changed = true;
+      move_cycle_changed_ = true;
     }
 
-    changed |= WalkUi(walk_);
-
-    if (changed) {
-      move_cycles_.back().updateCycle(walk_, walk_cycle_);
-    }
+    move_cycle_changed_ |= WalkUi(walk_);
 
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("WalkCyc")) {
-    if (cycleUi(walk_cycle_)) {
-      move_cycles_.back().updateCycle(walk_, walk_cycle_);
-    }
+    move_cycle_changed_ |= cycleUi(walk_cycle_);
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("Run")) {
-    WalkUi(run_);
+    move_cycle_changed_ |= WalkUi(run_);
     ImGui::EndTabItem();
   }
 
   if (ImGui::BeginTabItem("RunCyc")) {
-    cycleUi(run_cycle_);
+    move_cycle_changed_ |= cycleUi(run_cycle_);
     ImGui::EndTabItem();
   }
 

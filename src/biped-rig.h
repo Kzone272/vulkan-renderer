@@ -31,16 +31,20 @@ struct BipedSkeleton {
   Object* lfemur_;
   Object* lshin_;
   Object* lfoot_;
+  Object* ltoes_;
   Object* rfemur_;
   Object* rshin_;
   Object* rfoot_;
+  Object* rtoes_;
 
   float femur_l_;
   float shin_l_;
   float bicep_l_;
   float forearm_l_;
+  // Positions relative to the ankle:
   vec3 toe_pos_;
-  vec3 ankle_pos_;
+  vec3 ball_pos_;
+  vec3 heel_pos_;
 };
 
 struct IkChain {
@@ -92,8 +96,12 @@ struct BipedRig {
   Object* lhip_;
   Object* rhip_;
   Object* ltoe_;
+  Object* lheel_;
+  Object* lball_;
   Object* lankle_;
   Object* rtoe_;
+  Object* rheel_;
+  Object* rball_;
   Object* rankle_;
 
   IkChain larm_;

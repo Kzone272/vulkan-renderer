@@ -565,9 +565,17 @@ void App::updateProjectionMatrix() {
 }
 
 void App::flattenObjectTree() {
+  static const std::set<ModelId> empty_set = {};
+  static const std::set<ModelId> control_models = {
+      ModelId::BoxControl,
+      ModelId::BallControl,
+  };
+
+  static const mat4 identity(1);
   frame_state_.objects.clear();
-  mat4 identity(1);
-  world_.getSceneObjects(identity, frame_state_.objects);
+  world_.getSceneObjects(
+      identity, frame_state_.objects,
+      options_.show_controls ? empty_set : control_models);
 
   static const std::set<ModelId> gooch_models = {
       ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
@@ -649,6 +657,7 @@ void App::updateImgui() {
   }
   if (ImGui::BeginTabItem("Objects")) {
     ImGui::Checkbox("Animate", &options_.animate);
+    ImGui::Checkbox("Show Controls", &options_.show_controls);
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
       remakeGrid(options_.grid_size);

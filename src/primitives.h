@@ -4,7 +4,7 @@
 
 #include "render-objects.h"
 
-// Make a cube with origin at bottom middle.
+// Make a 1x1x1 cube with origin at bottom middle.
 constexpr Mesh makeCube() {
   Mesh m;
 
