@@ -204,9 +204,10 @@ void Object::clearChildren() {
 }
 
 void Object::getSceneObjects(
-    const mat4& parent, std::vector<SceneObject>& objs) {
+    const mat4& parent, std::vector<SceneObject>& objs,
+    const std::set<ModelId>& hidden) {
   mat4 transform = parent * matrix();
-  if (model_ != ModelId::None) {
+  if (model_ != ModelId::None && !hidden.contains(model_)) {
     objs.push_back({
         model_,
         material_,
@@ -214,7 +215,7 @@ void Object::getSceneObjects(
     });
   }
   for (auto& child : children_) {
-    child->getSceneObjects(transform, objs);
+    child->getSceneObjects(transform, objs, hidden);
   }
 }
 

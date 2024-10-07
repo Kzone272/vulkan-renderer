@@ -4,6 +4,7 @@
 // None of this code is used yet.
 
 #include <map>
+#include <set>
 #include <string>
 
 #include "animation.h"
@@ -72,7 +73,9 @@ class Object {
   void clearChildren();
 
   std::vector<std::pair<Object*, ModelId>> getModels();
-  void getSceneObjects(const mat4& parent, std::vector<SceneObject>& objs);
+  void getSceneObjects(
+      const mat4& parent, std::vector<SceneObject>& objs,
+      const std::set<ModelId>& hidden);
 
  private:
   ModelId model_;
