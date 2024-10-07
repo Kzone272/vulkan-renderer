@@ -649,7 +649,6 @@ void WalkCycle::updateHands() {
 
 bool WalkUi(WalkOptions& walk) {
   bool changed = false;
-  changed |= ImGui::SliderFloat("Max Leg %", &walk.max_leg_pct, 0.01, 1.2);
   changed |= ImGui::SliderFloat("Stance W %", &walk.stance_w_pct, 0, 2);
   changed |= ImGui::SliderFloat("Step Height", &walk.step_height, 0, 50);
   changed |= ImGui::SliderFloat("Step Offset", &walk.step_offset, -50, 50);
@@ -735,19 +734,19 @@ void Skelly::UpdateImgui() {
             "Movement Presets", &ui_.move_preset,
             "Normal\0Tightrope\0Preppy\0Snow\0Runway\0Crouch\0Flanders\0")) {
       if (ui_.move_preset == 0) {
-        moveDefault(walk_);
+        moveDefault(walk_, mods_);
       } else if (ui_.move_preset == 1) {
-        moveTightrope(walk_);
+        moveTightrope(walk_, mods_);
       } else if (ui_.move_preset == 2) {
-        movePreppy(walk_);
+        movePreppy(walk_, mods_), mods_;
       } else if (ui_.move_preset == 3) {
-        moveSnow(walk_);
+        moveSnow(walk_, mods_);
       } else if (ui_.move_preset == 4) {
-        moveRunway(walk_);
+        moveRunway(walk_, mods_);
       } else if (ui_.move_preset == 5) {
-        moveCrouch(walk_);
+        moveCrouch(walk_, mods_);
       } else if (ui_.move_preset == 6) {
-        moveFlanders(walk_);
+        moveFlanders(walk_, mods_);
       }
       move_.max_speed = walk_.speed;
       move_cycle_changed_ = true;

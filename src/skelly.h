@@ -16,7 +16,6 @@ struct MoveOptions {
 
 struct WalkOptions {
   float speed = 200;
-  float max_leg_pct = 0.95;
   float stance_w_pct = 0.5;
   float step_height = 10;
   float step_offset = 0;
