@@ -84,7 +84,6 @@ struct FootMeta {
   vec3 liftoff;
   float step_offset = 0;
   float step_dur = 1;
-  float toe_angle = 0;  // Angle relative to floor
   vec3 toe_pos;
   vec3 toe_dir = {0, 0, 1};
   vec3 toe_dir_start = {0, 0, 1};
@@ -151,9 +150,8 @@ class WalkCycle {
   void updateCog();
   void updatePelvis();
   void updateFeet();
-  void updateToeAngle(FootMeta& foot);
   void updateToe(FootMeta& foot_m);
-  void updateAnkle(const vec3& hip_pos, FootMeta& foot_m);
+  void updateAnkle(FootMeta& foot_m);
   void updateShoulders();
   void updateHands();
 

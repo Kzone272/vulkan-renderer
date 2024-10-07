@@ -469,32 +469,10 @@ void WalkCycle::updatePelvis() {
 }
 
 void WalkCycle::updateFeet() {
-  // updateToeAngle(lfoot_m_);
-  // updateToeAngle(rfoot_m_);
   updateToe(rfoot_m_);
   updateToe(lfoot_m_);
-
-  mat4 to_root = pose_.getMatrix(BoneId::Cog) * pose_.getMatrix(BoneId::Pelvis);
-  vec3 lhip_pos = to_root * vec4(sizes_->hip_pos, 1);
-  vec3 rhip_pos = to_root * vec4(sizes_->hip_pos * vec3(-1, 1, 1), 1);
-
-  updateAnkle(lhip_pos, lfoot_m_);
-  updateAnkle(rhip_pos, rfoot_m_);
-}
-
-void WalkCycle::updateToeAngle(FootMeta& foot_m) {
-  auto& move = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
-  if (moveStarted(move, cycle_t_, prev_cycle_t_)) {
-    move.spline = Spline<float>(
-        SplineType::Hermite, {foot_m.toe_angle, foot_m.toe_angle * 3, 0, 0});
-    move.start(cycle_dur_);
-  }
-
-  if (move.anim && inCycle(move, cycle_t_)) {
-    foot_m.toe_angle = sampleMovement(move, cycle_t_);
-  } else {
-    foot_m.toe_angle = 0;
-  }
+  updateAnkle(lfoot_m_);
+  updateAnkle(rfoot_m_);
 }
 
 void WalkCycle::updateToe(FootMeta& foot_m) {
@@ -615,50 +593,31 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   drop.start(cycle_dur_);
 }
 
-void WalkCycle::updateAnkle(const vec3& hip_pos, FootMeta& foot_m) {
-  // If hip is too far from ankle, compute the angle to lift the ankle just
-  // enough to compensate.
-  auto point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
-  vec3 flat_ankle_pos = foot_m.toe_pos + point_foot * sizes_->ankle;
-  float hip_to_ankle = glm::length(hip_pos - flat_ankle_pos);
-  float max_leg = 0.97 * (sizes_->ankle_d);
-  // Only start lifting the heel when close to taking a step.
-  const auto& slide = foot_m.is_left ? cycle_.lslide : cycle_.rslide;
-  float slide_t = getMoveT(slide, cycle_t_);
-  if (slide_t > 0.5 && slide_t < 1 && hip_to_ankle > max_leg) {
-    vec3 ball_pos = foot_m.toe_pos + point_foot * (sizes_->ball - sizes_->toe);
-    float hip_to_ball = glm::length(ball_pos - hip_pos);
-    float ball_to_ankle = glm::length(sizes_->ball);
-    float flat_angle = cosineLaw(ball_to_ankle, hip_to_ball, hip_to_ankle);
-    if (hip_to_ball > max_leg + ball_to_ankle) {
-      // Target for toe is too far away. Point toes at target.
-      // foot_m.toe_angle = flat_angle;
-    } else {
-      float lift_angle = cosineLaw(ball_to_ankle, hip_to_ball, max_leg);
-      // foot_m.toe_angle = flat_angle - lift_angle;
-    }
-  }
+void WalkCycle::updateAnkle(FootMeta& foot_m) {
+  auto& ball_anim = foot_m.is_left ? cycle_.lball : cycle_.rball;
+  auto& toe_anim = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
+  auto& heel_anim = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
+  auto& drop_anim = foot_m.is_left ? cycle_.ldrop : cycle_.rdrop;
 
   float ball_angle = 0;
-  auto& ball = foot_m.is_left ? cycle_.lball : cycle_.rball;
-  if (inCycle(ball, cycle_t_)) {
-    ball_angle = sampleMovement(ball, cycle_t_);
+  if (inCycle(ball_anim, cycle_t_)) {
+    ball_angle = sampleMovement(ball_anim, cycle_t_);
   }
+
   float foot_angle = 0;
-  auto& toe_anim = foot_m.is_left ? cycle_.ltoe : cycle_.rtoe;
   if (inCycle(toe_anim, cycle_t_)) {
     foot_angle = sampleMovement(toe_anim, cycle_t_);
   }
-  auto& heel_anim = foot_m.is_left ? cycle_.lheel : cycle_.rheel;
   if (inCycle(heel_anim, cycle_t_)) {
     foot_angle = sampleMovement(heel_anim, cycle_t_);
   }
-  auto& drop_anim = foot_m.is_left ? cycle_.ldrop : cycle_.rdrop;
   if (inCycle(drop_anim, cycle_t_)) {
     foot_angle = sampleMovement(drop_anim, cycle_t_);
   }
 
+  glm::quat point_foot = glm::rotation(foot_m.toe_dir_start, foot_m.toe_dir);
   glm::quat ball_rot = glm::angleAxis(ball_angle, vec3(1, 0, 0));
+  // Negative angles rotate from the heel, postive angles from the toe.
   glm::quat toe_rot = glm::angleAxis(std::max(0.f, foot_angle), vec3(1, 0, 0));
   glm::quat heel_rot = glm::angleAxis(std::min(0.f, foot_angle), vec3(1, 0, 0));
 
