@@ -560,9 +560,9 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
 
   float lift_angle = 0;
   if (hip_to_ankle > sizes_->max_leg + toe_to_ankle) {
-    // Target for toe is too far away. Error.
+    // Target for toe is too far away. Use some max value.
     std::println("Steps are too long!");
-    ASSERT(false);
+    lift_angle = glm::radians(80.f);
   } else {
     float hip_to_toe = glm::length(end_toe - hip_pos);
     float flat_angle = cosineLaw(toe_to_ankle, hip_to_toe, hip_to_ankle);
