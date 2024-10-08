@@ -102,7 +102,8 @@ void Skelly::makeBones() {
   move_transition_.reset();
 
   hand_pose_.type = PoseType::Override;
-  hand_pose_.bone_mask = std::set<BoneId>{BoneId::Lhand, BoneId::Rhand};
+  hand_pose_.bone_mask = std::set<BoneId>{
+      BoneId::Lhand, BoneId::Rhand, BoneId::Lelbow, BoneId::Relbow};
   lean_pose_.bone_mask = {BoneId::Cog};
 }
 
@@ -320,6 +321,8 @@ void Skelly::updateHandPose(Pose& pose) {
   vec3 rhip = hip_to_hand * vec4(vec3(-1, 1, 1) * akimbo, 1);
   hand_pose_.setPos(BoneId::Lhand, lhip);
   hand_pose_.setPos(BoneId::Rhand, rhip);
+  hand_pose_.setDir(BoneId::Lelbow, glm::normalize(vec3(-1, 0, -1)));
+  hand_pose_.setDir(BoneId::Relbow, glm::normalize(vec3(1, 0, -1)));
 }
 
 WalkPoser::WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root)

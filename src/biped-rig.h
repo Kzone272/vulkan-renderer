@@ -47,7 +47,7 @@ struct IkChain {
   IkChain() = default;
   IkChain(
       Object* start, Object* target, Object* b1, Object* b2, float b1_l,
-      float b2_l, vec3 rot_axis);
+      float b2_l, vec3 dir_zero);
   void solve();
   // Positions in start's parent's space
   vec3 startPos();
@@ -61,11 +61,13 @@ struct IkChain {
   Object* b2;
   float b1_l;
   float b2_l;
-  vec3 rot_axis;
+  vec3 dir;
+  vec3 dir_zero;
   // Computed:
   // The normalized vector pointing from the root to the target in the root's
   // parent's space, when bones are in zero-state.
   vec3 point_zero;
+  vec3 rot_axis;
 };
 
 struct BipedRig {
@@ -79,6 +81,8 @@ struct BipedRig {
   void solveIk();
   void applyPose(const Pose& pose);
   Object* getBone(BoneId bone) const;
+  IkChain* getIk(BoneId id);
+  const vec3& getIkDir(BoneId id) const;
 
   Object* root_;
   Object* cog_;
