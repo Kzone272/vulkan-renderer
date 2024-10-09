@@ -1,6 +1,6 @@
 Planned changes to Pose/Rig/Skeleton
 
-cosntexpr uint32_t noParent = -1;
+cosntexpr uint32_t kNoParent = -1;
 Skeleton() {
   addBone(uint32_t b, vec3 pos, uint32_t p) {
     ASSERT(b == parents.size() -1);
@@ -36,13 +36,20 @@ Pose() {
     }
   }
 
+  getRootMatrix(uint32_t i) {
+    return root_ms_[i];
+  }
+  vec3 getRootPos(uint32_t i) {
+    return vec3(getRootMatrix(i) * vec3(0,0,0,1));
+  }
+
   std::vector<Transform> ts_;
   std::vector<mat4> root_ms_;
   Skeleton skl_;
 }
 
-BipedBones() {
-  enum class B {
+BipedAnim() {
+  enum class Id {
     cog,
     pelvis,
     torso,
@@ -64,23 +71,29 @@ BipedBones() {
     COUNT,
   };
 
-  addBone(B p, B b, vec3 pos) {
-    skl_.add(static_cast<uint32_t>(b), pos, static_cast<uint32_t>(p));
+  addBone(Id p, Id b, vec3 pos) {
+    bi = static_cast<uint32_t>(b);
+    skl_.add(bi, pos, static_cast<uint32_t>(p));
+    zero_pose_.setPos(bi, pos);
   }
 
   BipedBones() {
-    addBone(-1, B::cog, cog_pos)
-    addBone(B::cog, B::pelvis, pelvis_pos);
-    addBone(B::pelvis, B::torso, torso_pos);
-    addBone(B::torso, B::lbicep, lbicep_pos);
+    pose_ = {skl_, Id::COUNT};
+
+    addBone(-1, Id::cog, cog_pos)
+    addBone(Id::cog, Id::pelvis, pelvis_pos);
+    addBone(Id::pelvis, Id::torso, torso_pos);
+    addBone(Id::torso, Id::lbicep, lbicep_pos);
     ...
   }
 
   Skeleton skl_;
+  Pose zero_pose_;
+  std::vector<mat4> ts_;
 }
 
 BipedRig() {
-  enum class B {
+  enum class Id uint32_t {
     cog,
     neck,
     head,
@@ -95,47 +108,85 @@ BipedRig() {
     lball,  // ball of foot
     rankle,
     rball,
+    lelbow,
+    relbow,
+    lknee,
+    rknee,
     COUNT,
   };
+  static const uint32_t kBoneCount = static_cast<uint32_t>(Id::COUNT);
 
-  addBone(B p, B b, vec3 pos) {
+  addBone(Id p, Id b, vec3 pos) {
     skl_.add(static_cast<uint32_t>(b), pos, static_cast<uint32_t>(p));
   }
 
-  BipedRip() {
-    addBone(-1, B::cog, cog_pos)
-    addBone(B::cog, B::neck, neck_pos);
-    addBone(B::neck, B::head, head_pos);
-    addBone(B::neck, B::lsho, lsho_pos);
+  uint32_t map(BipedRig::Id id) {
+    static std::map<Id, BipedAnim::Id> map = {
+      {Id::cog, BipedAnim::Id::cog},
+      {Id::neck, BipedAnim::Id::torso},
+      ...
+    };
+
+    i = -1;
+    auto it = map.find(id);
+    if (it != end) {
+      i = static_cast<uint32_t>(it->second);
+    }
+    return i;
+  }
+
+  BipedRig(Pose anim_pose) {
+    anim_pose.computeRootMatrices()
+
+    addBone(kNoParent, Id::cog, anim_pose.getPos(map(Id::cog)));
+    addBone(Id::cog, Id::neck, anim_pose.getPos(map(Id::neck)));
+    addBone(Id::neck, Id::head, anim_pose.getPos(map(Id::head)));
+    addBone(Id::neck, Id::lsho, anim_pose.getPos(map(Id::lsho)));
+    ...
+    addBone(kNoParent, Id::lankle, anim_pose.getRootPos(BipedAnim::Id::lfoot));
+    addBone(Id::lankle, Id::lball, anim_pose.getPos(map(Id::lball)));
     ...
   }
 
-  applyToSkeleton() {
-    
+  applyPose(Pose rig_pose) {
+    rig_pose.computeRootMatrices();
+    for (size_t i = 0; i < Id::COUNT; i++) {
+      auto rig_id = static_cast<Id>(i);
+      anim_i = map();
+      if (anim_i != -1) {
+        anim_pose_[anim_i] = rig_pose.getRootMatrix(rig_id);
+      }
+    }
+    solveIk();
   }
 
+  solveIk() {
+    larm_.solve(&anim_pose_);
+  }
+
+  std::vector<mat4> anim_pose_;
   Skeleton skl_;
 }
 
 
 SkeletonObject() {
-  setPose(Pose pose) {
-    pose_ = pose;
+  setTransforms(std::vector<mat4> mats) {
+    bone_ts_ = mats;
   }
 
   getSceneObjects(
       const mat4& parent, std::vector<SceneObject>& objs,
       const std::set<ModelId>& hidden) {
     for (const bone : bones_) {
-      objs.push_back({
-        models_[bone],
-        material_,
-        parent * transform * model_ts_[bone],
-    });
+        objs.push_back({
+          models_[bone],
+          material_,
+          parent * bone_ts[bone] * model_ts_[bone],
+        });
     }
   }
 
-  Pose pose_;
   std::vector<ModelId> models_;
-  std::vector<Transform> model_ts_;
+  std::vector<mat4> bone_ts_;
+  std::vector<mat4> model_ts_;
 }
