@@ -162,11 +162,14 @@ IkChain::IkChain(
       b1(b1),
       b2(b2),
       b1_l(b1_l),
-      b2_l(b2_l),
-      dir_zero(dir_zero),
-      dir(dir_zero) {
+      b2_l(b2_l) {
   DASSERT(lca != nullptr);
   point_zero = glm::normalize(targetPos() - startPos());
+
+  vec3 dir_zero_p = glm::proj(dir_zero, point_zero);
+  this->dir_zero = glm::normalize(dir_zero - dir_zero_p);
+  dir = dir_zero;
+
   rot_axis = glm::cross(dir_zero, point_zero);
 }
 
@@ -178,10 +181,10 @@ vec3 IkChain::targetPos() {
 }
 
 void IkChain::solve() {
-  vec3 dir_in_start = start->toLocal(lca) * vec4(dir, 0);
+  vec3 dir_local = start->toLocal(lca) * vec4(dir, 0);
   solveTwoBoneIk(
       *b1, b1_l, *b2, b2_l, startPos(), targetPos(), point_zero, rot_axis,
-      dir_in_start, dir_zero);
+      dir_local, dir_zero);
 }
 
 void BipedRig::updateSkeleton(BipedSkeleton& skl) {
