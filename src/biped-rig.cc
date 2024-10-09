@@ -154,10 +154,11 @@ void solveTwoBoneIk(
 }  // namespace
 
 IkChain::IkChain(
-    Object* start, Object* target, Object* b1, Object* b2, float b1_l,
-    float b2_l, vec3 dir_zero)
+    Object* start, Object* target, Object* pole, Object* b1, Object* b2,
+    float b1_l, float b2_l)
     : start(start),
       target(target),
+      pole(pole),
       lca(Object::lca(start, target)),
       b1(b1),
       b2(b2),
@@ -166,9 +167,9 @@ IkChain::IkChain(
   DASSERT(lca != nullptr);
   point_zero = glm::normalize(targetPos() - startPos());
 
-  vec3 dir_zero_p = glm::proj(dir_zero, point_zero);
-  this->dir_zero = glm::normalize(dir_zero - dir_zero_p);
-  dir = dir_zero;
+  vec3 pole_dir = pole->getPos();
+  vec3 pole_dir_p = glm::proj(pole_dir, point_zero);
+  this->dir_zero = glm::normalize(pole_dir - pole_dir_p);
 
   rot_axis = glm::cross(dir_zero, point_zero);
 }
@@ -181,7 +182,7 @@ vec3 IkChain::targetPos() {
 }
 
 void IkChain::solve() {
-  vec3 dir_local = start->toLocal(lca) * vec4(dir, 0);
+  vec3 dir_local = start->toLocal(lca) * vec4(pole->getPos(), 0);
   solveTwoBoneIk(
       *b1, b1_l, *b2, b2_l, startPos(), targetPos(), point_zero, rot_axis,
       dir_local, dir_zero);
@@ -248,19 +249,29 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   rball_ = rankle_->addChild(Object(ModelId::BallControl, ball_t));
   rball_->setPos(skeleton.rtoes_->getPos());
 
+  lelbow_ = neck_->addChild(Object(ModelId::BallControl, control_t));
+  lelbow_->setPos(vec3(0, 0, -1));
+  relbow_ = neck_->addChild(Object(ModelId::BallControl, control_t));
+  relbow_->setPos(vec3(0, 0, -1));
+
+  lknee_ = root_->addChild(Object(ModelId::BallControl, control_t));
+  lknee_->setPos(vec3(0, 0, 1));
+  rknee_ = root_->addChild(Object(ModelId::BallControl, control_t));
+  rknee_->setPos(vec3(0, 0, 1));
+
   larm_ = IkChain(
-      lsho_, lhand_, skeleton.lbicep_, skeleton.lforearm_, skeleton.bicep_l_,
-      skeleton.forearm_l_, vec3(0, 0, -1));
+      lsho_, lhand_, lelbow_, skeleton.lbicep_, skeleton.lforearm_,
+      skeleton.bicep_l_, skeleton.forearm_l_);
   rarm_ = IkChain(
-      rsho_, rhand_, skeleton.rbicep_, skeleton.rforearm_, skeleton.bicep_l_,
-      skeleton.forearm_l_, vec3(0, 0, -1));
+      rsho_, rhand_, relbow_, skeleton.rbicep_, skeleton.rforearm_,
+      skeleton.bicep_l_, skeleton.forearm_l_);
 
   lleg_ = IkChain(
-      lhip_, lankle_, skeleton.lfemur_, skeleton.lshin_, skeleton.femur_l_,
-      skeleton.shin_l_, vec3(0, 0, 1));
+      lhip_, lankle_, lknee_, skeleton.lfemur_, skeleton.lshin_,
+      skeleton.femur_l_, skeleton.shin_l_);
   rleg_ = IkChain(
-      rhip_, rankle_, skeleton.rfemur_, skeleton.rshin_, skeleton.femur_l_,
-      skeleton.shin_l_, vec3(0, 0, 1));
+      rhip_, rankle_, rknee_, skeleton.rfemur_, skeleton.rshin_,
+      skeleton.femur_l_, skeleton.shin_l_);
 
   zero_p_ = Pose::freeze(*this);
 
@@ -295,17 +306,13 @@ void BipedRig::solveIk() {
 }
 
 void BipedRig::applyPose(const Pose& pose) {
-  for (uint32_t i = 0; i < static_cast<uint32_t>(kBoneCount + kDirCount); i++) {
+  for (size_t i = 0; i < kBoneCount; i++) {
     BoneId bone_id = static_cast<BoneId>(i);
     if (pose.bone_mask && !pose.bone_mask->contains(bone_id)) {
       continue;
     }
 
-    if (i < kBoneCount) {
-      getBone(bone_id)->setTransform(pose.getTransform(bone_id));
-    } else {
-      getIk(bone_id)->dir = pose.getDir(bone_id);
-    }
+    getBone(bone_id)->setTransform(pose.getTransform(bone_id));
   }
 }
 
@@ -331,40 +338,16 @@ Object* BipedRig::getBone(BoneId bone) const {
       return lball_;
     case BoneId::Rball:
       return rball_;
+    case BoneId::Lelbow:
+      return lelbow_;
+    case BoneId::Relbow:
+      return relbow_;
+    case BoneId::Lknee:
+      return lknee_;
+    case BoneId::Rknee:
+      return rknee_;
     default:
       ASSERT(false);
       return nullptr;
-  }
-}
-
-IkChain* BipedRig::getIk(BoneId id) {
-  switch (id) {
-    case BoneId::Lelbow:
-      return &larm_;
-    case BoneId::Relbow:
-      return &rarm_;
-    case BoneId::Lknee:
-      return &lleg_;
-    case BoneId::Rknee:
-      return &rleg_;
-    default:
-      ASSERT(false);
-      return nullptr;
-  }
-}
-
-const vec3& BipedRig::getIkDir(BoneId id) const {
-  switch (id) {
-    case BoneId::Lelbow:
-      return larm_.dir;
-    case BoneId::Relbow:
-      return rarm_.dir;
-    case BoneId::Lknee:
-      return lleg_.dir;
-    case BoneId::Rknee:
-      return rleg_.dir;
-    default:
-      ASSERT(false);
-      return vec3(0);
   }
 }

@@ -321,8 +321,8 @@ void Skelly::updateHandPose(Pose& pose) {
   vec3 rhip = hip_to_hand * vec4(vec3(-1, 1, 1) * akimbo, 1);
   hand_pose_.setPos(BoneId::Lhand, lhip);
   hand_pose_.setPos(BoneId::Rhand, rhip);
-  hand_pose_.setDir(BoneId::Lelbow, glm::normalize(vec3(-1, 0, -1)));
-  hand_pose_.setDir(BoneId::Relbow, glm::normalize(vec3(1, 0, -1)));
+  hand_pose_.setPos(BoneId::Lelbow, vec3(-1, 0, -1));
+  hand_pose_.setPos(BoneId::Relbow, vec3(1, 0, -1));
 }
 
 WalkPoser::WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root)

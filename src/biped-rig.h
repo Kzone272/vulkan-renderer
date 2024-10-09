@@ -46,8 +46,8 @@ struct BipedSkeleton {
 struct IkChain {
   IkChain() = default;
   IkChain(
-      Object* start, Object* target, Object* b1, Object* b2, float b1_l,
-      float b2_l, vec3 dir_zero);
+      Object* start, Object* target, Object* pole, Object* b1, Object* b2,
+      float b1_l, float b2_l);
   void solve();
   // Positions in start's parent's space
   vec3 startPos();
@@ -55,13 +55,13 @@ struct IkChain {
 
   Object* start;
   Object* target;
-  Object* lca;  // LCA of start and target
+  Object* pole;  // TODO: Currently treated as vector, not a position.
+  Object* lca;   // LCA of start and target
   // TODO: Support chain of bones.
   Object* b1;
   Object* b2;
   float b1_l;
   float b2_l;
-  vec3 dir;
   vec3 dir_zero;
   // Computed:
   // The normalized vector pointing from the root to the target in the root's
@@ -81,8 +81,6 @@ struct BipedRig {
   void solveIk();
   void applyPose(const Pose& pose);
   Object* getBone(BoneId bone) const;
-  IkChain* getIk(BoneId id);
-  const vec3& getIkDir(BoneId id) const;
 
   Object* root_;
   Object* cog_;
@@ -99,6 +97,10 @@ struct BipedRig {
   Object* lball_;  // ball of foot
   Object* rankle_;
   Object* rball_;
+  Object* lelbow_;
+  Object* relbow_;
+  Object* lknee_;
+  Object* rknee_;
 
   IkChain larm_;
   IkChain rarm_;
