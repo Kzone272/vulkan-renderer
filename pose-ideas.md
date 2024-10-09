@@ -3,7 +3,7 @@ Planned changes to Pose/Rig/Skeleton
 cosntexpr size_t kNoParent = -1;
 Skeleton() {
   addBone(size_t b, size_t p) {
-    DASSERT(b == parents.size() -1);
+    DASSERT(b == parents.size());
     parents.push(b);
   }
 
