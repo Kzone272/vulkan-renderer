@@ -175,7 +175,7 @@ class WalkCycle {
 class WalkPoser {
  public:
   WalkPoser() = default;
-  WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root);
+  WalkPoser(WalkCycle walk, Skeleton* skl, const MoveMods& mods, Object* root);
   Pose getPose(float cycle_t, float delta_s);
   float getCycleDur() {
     return walk_.getCycleDur();
@@ -192,7 +192,7 @@ class WalkPoser {
   WalkCycle walk_ = {};
   Movement<vec3> lstep_offset_;
   Movement<vec3> rstep_offset_;
-  Pose add_pose_ = {PoseType::Additive};
+  Pose add_pose_ = {};
 
   const MoveMods* mods_ = nullptr;
   Object* root_ = nullptr;
@@ -260,9 +260,10 @@ class Skelly {
   Object root_ = {};
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
-  Pose lean_pose_ = {PoseType::Additive};
+  Pose lean_pose_ = {};
   Pose hand_pose_ = {};
   BipedRig rig_ = {};
+  Skeleton* rig_skl_ = nullptr;
 
   float cycle_t_ = 0;
   float prev_cycle_t_ = 0;

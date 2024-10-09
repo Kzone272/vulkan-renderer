@@ -97,14 +97,17 @@ void Skelly::makeBones() {
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
   rig_.makeRig(skeleton_, &root_);
+  rig_skl_ = rig_.skeleton();
   idle_ = {rig_, idle_walk_, sizes_, walk_cycle_, 1000};
-  move_cycles_ = {WalkPoser(idle_, mods_, &root_)};
+  move_cycles_ = {WalkPoser(idle_, rig_skl_, mods_, &root_)};
   move_transition_.reset();
 
-  hand_pose_.type = PoseType::Override;
-  hand_pose_.bone_mask = std::set<BoneId>{
-      BoneId::Lhand, BoneId::Rhand, BoneId::Lelbow, BoneId::Relbow};
-  lean_pose_.bone_mask = {BoneId::Cog};
+  hand_pose_ = {rig_skl_};
+  hand_pose_.bone_mask = {
+      BipedRig::Id::Lhand, BipedRig::Id::Rhand, BipedRig::Id::Lelbow,
+      BipedRig::Id::Relbow};
+  lean_pose_ = {rig_skl_, PoseType::Additive};
+  lean_pose_.bone_mask = {BipedRig::Id::Cog};
 }
 
 void Skelly::setMaterials(MaterialId bone_mat, MaterialId control_mat) {
@@ -233,14 +236,15 @@ void Skelly::updateMoveCycle() {
 
     if (target_speed_ > 350) {
       move_cycles_.push_back(WalkPoser(
-          WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), mods_, &root_));
+          WalkCycle(rig_, run_, sizes_, run_cycle_, cycle_dur), rig_skl_, mods_,
+          &root_));
     } else {
       move_cycles_.push_back(WalkPoser(
-          WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), mods_,
-          &root_));
+          WalkCycle(rig_, walk_, sizes_, walk_cycle_, cycle_dur), rig_skl_,
+          mods_, &root_));
     }
   } else {
-    move_cycles_.push_back(WalkPoser(idle_, mods_, &root_));
+    move_cycles_.push_back(WalkPoser(idle_, rig_skl_, mods_, &root_));
   }
   move_transition_ = Duration(move_.blend_time);
 }
@@ -305,8 +309,8 @@ void Skelly::updateLean(float delta_s) {
       glm::normalize(vec3(0, 1, 0)),
       glm::normalize(vec3(offset.x, sizes_.pelvis_y, offset.z)));
 
-  lean_pose_.setPos(BoneId::Cog, offset);
-  lean_pose_.setRot(BoneId::Cog, rot);
+  lean_pose_.setPos(BipedRig::Id::Cog, offset);
+  lean_pose_.setRot(BipedRig::Id::Cog, rot);
 }
 
 void Skelly::updateHandPose(Pose& pose) {
@@ -314,20 +318,22 @@ void Skelly::updateHandPose(Pose& pose) {
     return;
   }
 
-  mat4 hip_to_hand = glm::inverse(pose.getMatrix(BoneId::Neck)) *
-                     pose.getMatrix(BoneId::Pelvis);
+  mat4 hip_to_hand = glm::inverse(pose.getMatrix(BipedRig::Id::Neck)) *
+                     pose.getMatrix(BipedRig::Id::Pelvis);
   vec3 akimbo = sizes_.hip_pos + vec3(-5, 5, 0);
   vec3 lhip = hip_to_hand * vec4(akimbo, 1);
   vec3 rhip = hip_to_hand * vec4(vec3(-1, 1, 1) * akimbo, 1);
-  hand_pose_.setPos(BoneId::Lhand, lhip);
-  hand_pose_.setPos(BoneId::Rhand, rhip);
-  hand_pose_.setPos(BoneId::Lelbow, vec3(-1, 0, -1));
-  hand_pose_.setPos(BoneId::Relbow, vec3(1, 0, -1));
+  hand_pose_.setPos(BipedRig::Id::Lhand, lhip);
+  hand_pose_.setPos(BipedRig::Id::Rhand, rhip);
+  hand_pose_.setPos(BipedRig::Id::Lelbow, vec3(-1, 0, -1));
+  hand_pose_.setPos(BipedRig::Id::Relbow, vec3(1, 0, -1));
 }
 
-WalkPoser::WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root)
+WalkPoser::WalkPoser(
+    WalkCycle walk, Skeleton* skl, const MoveMods& mods, Object* root)
     : walk_(walk), mods_(&mods), root_(root) {
-  add_pose_.bone_mask = {BoneId::Lankle, BoneId::Rankle};
+  add_pose_ = {skl, PoseType::Additive};
+  add_pose_.bone_mask = {BipedRig::Id::Lankle, BipedRig::Id::Rankle};
 }
 
 Pose WalkPoser::getPose(float cycle_t, float delta_s) {
@@ -360,7 +366,8 @@ void WalkPoser::plantFoot(FootMeta& foot_m) {
   }
   if (foot_m.planted) {
     vec3 root_pos = root_->posToLocal(foot_m.world_target);
-    auto ankle_bone = foot_m.is_left ? BoneId::Lankle : BoneId::Rankle;
+    auto ankle_bone =
+        foot_m.is_left ? BipedRig::Id::Lankle : BipedRig::Id::Rankle;
     add_pose_.setPos(ankle_bone, root_pos - foot_m.toe_pos);
   }
 }
@@ -377,7 +384,7 @@ void WalkPoser::offsetFoot(float cycle_t, FootMeta& foot_m) {
   }
 
   if (!foot_m.planted) {
-    auto bone = foot_m.is_left ? BoneId::Lankle : BoneId::Rankle;
+    auto bone = foot_m.is_left ? BipedRig::Id::Lankle : BipedRig::Id::Rankle;
     add_pose_.setPos(bone, sampleMovement(move, cycle_t));
   }
 }
@@ -463,7 +470,7 @@ void WalkCycle::updateCog() {
   vec3 pos = vec3(0, sizes_->normal_pelvis_y, 0);
   pos.y += sampleMovement(cycle_.bounce, cycle_t_);
 
-  pose_.setPos(BoneId::Cog, pos);
+  pose_.setPos(BipedRig::Id::Cog, pos);
 }
 
 void WalkCycle::updatePelvis() {
@@ -473,7 +480,7 @@ void WalkCycle::updatePelvis() {
   glm::quat rot = glm::angleAxis(spin, vec3(0, 1, 0)) *
                   glm::angleAxis(sway, vec3(0, 0, -1));
 
-  pose_.setRot(BoneId::Pelvis, rot);
+  pose_.setRot(BipedRig::Id::Pelvis, rot);
 }
 
 void WalkCycle::updateFeet() {
@@ -645,8 +652,10 @@ void WalkCycle::updateAnkle(FootMeta& foot_m) {
 
   vec3 ankle = point_foot * vec3(0, ankle_2d.yx) + foot_m.toe_pos;
 
-  BoneId ankle_bone = foot_m.is_left ? BoneId::Lankle : BoneId::Rankle;
-  BoneId ball_bone = foot_m.is_left ? BoneId::Lball : BoneId::Rball;
+  BipedRig::Id ankle_bone =
+      foot_m.is_left ? BipedRig::Id::Lankle : BipedRig::Id::Rankle;
+  BipedRig::Id ball_bone =
+      foot_m.is_left ? BipedRig::Id::Lball : BipedRig::Id::Rball;
   pose_.setPos(ankle_bone, ankle);
   pose_.setRot(ankle_bone, ankle_rot);
   pose_.setRot(ball_bone, ball_rot);
@@ -654,15 +663,15 @@ void WalkCycle::updateAnkle(FootMeta& foot_m) {
 
 void WalkCycle::updateShoulders() {
   float angle = sampleMovement(cycle_.shoulders, cycle_t_);
-  pose_.setRot(BoneId::Neck, glm::angleAxis(angle, vec3(0, 1, 0)));
+  pose_.setRot(BipedRig::Id::Neck, glm::angleAxis(angle, vec3(0, 1, 0)));
 }
 
 void WalkCycle::updateHands() {
   if (cycle_.larm.anim) {
-    pose_.setPos(BoneId::Lhand, sampleMovement(cycle_.larm, cycle_t_));
+    pose_.setPos(BipedRig::Id::Lhand, sampleMovement(cycle_.larm, cycle_t_));
   }
   if (cycle_.rarm.anim) {
-    pose_.setPos(BoneId::Rhand, sampleMovement(cycle_.rarm, cycle_t_));
+    pose_.setPos(BipedRig::Id::Rhand, sampleMovement(cycle_.rarm, cycle_t_));
   }
 }
 
