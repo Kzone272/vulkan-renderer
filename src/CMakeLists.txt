@@ -45,6 +45,7 @@ add_executable(main
   shaders.cc
   scene-data.h
   second-order.h
+  skeleton.h
   biped-rig.h
   biped-rig.cc
   transform.h

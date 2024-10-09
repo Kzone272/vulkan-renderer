@@ -189,6 +189,8 @@ void IkChain::solve() {
 }
 
 void BipedRig::updateSkeleton(BipedSkeleton& skl) {
+  curr_pose_.computeRootMatrices();
+
   skl.cog_->setTransform(cog_->getTransform());
   skl.torso_->setTransform(neck_->getTransform());
   skl.head_->setTransform(head_->getTransform());
@@ -207,57 +209,36 @@ void BipedRig::updateSkeleton(BipedSkeleton& skl) {
   skl.rfoot_->setRot(r_flat * rankle_->getRot());
 }
 
+void BipedRig::addBone(Id bone, Id parent, vec3 pos) {
+  skl_.addBone(bone, parent);
+  zero_pose_.setPos(bone, pos);
+}
+
 void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
   root_ = root;
 
-  mat4 control_t = glm::scale(vec3(5));
-  cog_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  cog_->setPos(skeleton.cog_->getPos());
+  zero_pose_ = {&skl_};
 
-  neck_ = cog_->addChild(Object(ModelId::BallControl, control_t));
-  neck_->setPos(skeleton.torso_->getPos());
-  head_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  head_->setPos(skeleton.head_->getPos());
+  addBone(Id::Cog, Id::NoParent, skeleton.cog_->getPos());
+  addBone(Id::Neck, Id::Cog, skeleton.torso_->getPos());
+  addBone(Id::Head, Id::Neck, skeleton.head_->getPos());
+  addBone(Id::Lsho, Id::Neck, skeleton.lbicep_->getPos());
+  addBone(Id::Rsho, Id::Neck, skeleton.rbicep_->getPos());
+  addBone(Id::Lhand, Id::Neck, skeleton.lhand_->posToAncestor(skeleton.torso_));
+  addBone(Id::Rhand, Id::Neck, skeleton.rhand_->posToAncestor(skeleton.torso_));
+  addBone(Id::Pelvis, Id::Cog, skeleton.cog_->getPos());
+  addBone(Id::Lhip, Id::Pelvis, skeleton.lfemur_->getPos());
+  addBone(Id::Rhip, Id::Pelvis, skeleton.rfemur_->getPos());
+  addBone(Id::Lankle, Id::NoParent, skeleton.lfoot_->posToAncestor(root_));
+  addBone(Id::Rankle, Id::NoParent, skeleton.rfoot_->posToAncestor(root_));
+  addBone(Id::Lball, Id::Lankle, skeleton.ltoes_->getPos());
+  addBone(Id::Rball, Id::Rankle, skeleton.rtoes_->getPos());
+  addBone(Id::Lelbow, Id::Neck, vec3(0, 0, -1));
+  addBone(Id::Relbow, Id::Neck, vec3(0, 0, -1));
+  addBone(Id::Lknee, Id::NoParent, vec3(0, 0, 1));
+  addBone(Id::Rknee, Id::NoParent, vec3(0, 0, 1));
 
-  lsho_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  lsho_->setPos(skeleton.lbicep_->getPos());
-  rsho_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  rsho_->setPos(skeleton.rbicep_->getPos());
-
-  lhand_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  lhand_->setPos(skeleton.lhand_->posToAncestor(skeleton.torso_));
-  rhand_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  rhand_->setPos(skeleton.rhand_->posToAncestor(skeleton.torso_));
-
-  mat4 pelvis_t = glm::scale(vec3(15, 1, 15));
-  pelvis_ = cog_->addChild(Object(ModelId::BoxControl, pelvis_t));
-  cog_->setPos(skeleton.cog_->getPos());
-
-  lhip_ = pelvis_->addChild(Object(ModelId::BallControl, control_t));
-  lhip_->setPos(skeleton.lfemur_->getPos());
-  rhip_ = pelvis_->addChild(Object(ModelId::BallControl, control_t));
-  rhip_->setPos(skeleton.rfemur_->getPos());
-
-  mat4 ball_t = glm::scale(vec3(3));
-  lankle_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  lankle_->setPos(skeleton.lfoot_->posToAncestor(root_));
-  rankle_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  rankle_->setPos(skeleton.rfoot_->posToAncestor(root_));
-
-  lball_ = lankle_->addChild(Object(ModelId::BallControl, ball_t));
-  lball_->setPos(skeleton.ltoes_->getPos());
-  rball_ = rankle_->addChild(Object(ModelId::BallControl, ball_t));
-  rball_->setPos(skeleton.rtoes_->getPos());
-
-  lelbow_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  lelbow_->setPos(vec3(0, 0, -1));
-  relbow_ = neck_->addChild(Object(ModelId::BallControl, control_t));
-  relbow_->setPos(vec3(0, 0, -1));
-
-  lknee_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  lknee_->setPos(vec3(0, 0, 1));
-  rknee_ = root_->addChild(Object(ModelId::BallControl, control_t));
-  rknee_->setPos(vec3(0, 0, 1));
+  zero_pose_.computeRootMatrices();
 
   larm_ = IkChain(
       lsho_, lhand_, lelbow_, skeleton.lbicep_, skeleton.lforearm_,
@@ -273,29 +254,42 @@ void BipedRig::makeRig(const BipedSkeleton& skeleton, Object* root) {
       rhip_, rankle_, rknee_, skeleton.rfemur_, skeleton.rshin_,
       skeleton.femur_l_, skeleton.shin_l_);
 
-  zero_p_ = Pose::freeze(*this);
-
   // Marks the root position/direction.
-  mat4 root_control_t = glm::scale(vec3(10, 1, 30));
-  root_->addChild(Object(ModelId::BoxControl, root_control_t));
+  // mat4 root_control_t = glm::scale(vec3(10, 1, 30));
+  // root_->addChild(Object(ModelId::BoxControl, root_control_t));
+}
+
+void BipedRig::getSceneObjects(
+    const mat4& parent, std::vector<SceneObject>& objs,
+    const std::set<ModelId>& hidden) {
+  static mat4 control_t = glm::scale(vec3(5));
+  static mat4 pelvis_t = glm::scale(vec3(15, 1, 15));
+  static mat4 small_t = glm::scale(vec3(3));
+
+  for (size_t i = 0; i < Id::COUNT; i++) {
+    ModelId model =
+        i == Id::Pelvis ? ModelId::BoxControl : ModelId::BallControl;
+    mat4& model_t = control_t;
+    if (i == Id::Pelvis) {
+      model_t = pelvis_t;
+    } else if (i == Id::Lankle || i == Id::Rankle) {
+      model_t = small_t;
+    }
+
+    if (model == ModelId::None || hidden.contains(model)) {
+      continue;
+    }
+
+    objs.push_back({
+        model,
+        mat_,
+        parent * curr_pose_.getRootMatrix(i) * model_t,
+    });
+  }
 }
 
 void BipedRig::setMaterial(MaterialId material) {
-  root_->setMaterial(material);
-  cog_->setMaterial(material);
-  neck_->setMaterial(material);
-  head_->setMaterial(material);
-  lsho_->setMaterial(material);
-  rsho_->setMaterial(material);
-  lhand_->setMaterial(material);
-  rhand_->setMaterial(material);
-  pelvis_->setMaterial(material);
-  lhip_->setMaterial(material);
-  rhip_->setMaterial(material);
-  lball_->setMaterial(material);
-  lankle_->setMaterial(material);
-  rball_->setMaterial(material);
-  rankle_->setMaterial(material);
+  mat_ = material;
 }
 
 void BipedRig::solveIk() {
@@ -306,48 +300,5 @@ void BipedRig::solveIk() {
 }
 
 void BipedRig::applyPose(const Pose& pose) {
-  for (size_t i = 0; i < kBoneCount; i++) {
-    BoneId bone_id = static_cast<BoneId>(i);
-    if (pose.bone_mask && !pose.bone_mask->contains(bone_id)) {
-      continue;
-    }
-
-    getBone(bone_id)->setTransform(pose.getTransform(bone_id));
-  }
-}
-
-Object* BipedRig::getBone(BoneId bone) const {
-  switch (bone) {
-    case BoneId::Cog:
-      return cog_;
-    case BoneId::Neck:
-      return neck_;
-    case BoneId::Head:
-      return head_;
-    case BoneId::Lhand:
-      return lhand_;
-    case BoneId::Rhand:
-      return rhand_;
-    case BoneId::Pelvis:
-      return pelvis_;
-    case BoneId::Lankle:
-      return lankle_;
-    case BoneId::Rankle:
-      return rankle_;
-    case BoneId::Lball:
-      return lball_;
-    case BoneId::Rball:
-      return rball_;
-    case BoneId::Lelbow:
-      return lelbow_;
-    case BoneId::Relbow:
-      return relbow_;
-    case BoneId::Lknee:
-      return lknee_;
-    case BoneId::Rknee:
-      return rknee_;
-    default:
-      ASSERT(false);
-      return nullptr;
-  }
+  curr_pose_ = pose;
 }

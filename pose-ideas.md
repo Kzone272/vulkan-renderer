@@ -1,14 +1,13 @@
 Planned changes to Pose/Rig/Skeleton
 
-cosntexpr uint32_t kNoParent = -1;
+cosntexpr size_t kNoParent = -1;
 Skeleton() {
-  addBone(uint32_t b, vec3 pos, uint32_t p) {
-    ASSERT(b == parents.size() -1);
-    pos.push(b);
+  addBone(size_t b, size_t p) {
+    DASSERT(b == parents.size() -1);
     parents.push(b);
   }
 
-  parent(uint32_t i) {
+  parent(size_t i) {
     return parents[i];
   }
   size_t count() {
@@ -16,11 +15,11 @@ Skeleton() {
   }
 
   std::vector<vec3> pos;
-  std::vector<uint32_t> parents;
+  std::vector<size_t> parents;
 }
 
 Pose() {
-  const mat4& getMatrix(uint32_t i) {
+  const mat4& getMatrix(size_t i) {
     return ts_[i].matrix();
   }
 
@@ -29,17 +28,17 @@ Pose() {
       computeRootMatrix(i);
       mat4& m = root_ms_[i];
       m = getMatrix(i);
-      uint32_t p = skl_.parent(i);
+      size_t p = skl_.parent(i);
       if (p != kNoParent) {
         m = root_ms_[p] * m;
       }
     }
   }
 
-  getRootMatrix(uint32_t i) {
+  getRootMatrix(size_t i) {
     return root_ms_[i];
   }
-  vec3 getRootPos(uint32_t i) {
+  vec3 getRootPos(size_t i) {
     return vec3(getRootMatrix(i) * vec3(0,0,0,1));
   }
 
@@ -71,9 +70,9 @@ BipedAnim() {
     COUNT,
   };
 
-  addBone(Id p, Id b, vec3 pos) {
-    bi = static_cast<uint32_t>(b);
-    skl_.add(bi, pos, static_cast<uint32_t>(p));
+  addBone(Id b, Id p, vec3 pos) {
+    bi = static_cast<size_t>(b);
+    skl_.add(bi, static_cast<size_t>(p));
     zero_pose_.setPos(bi, pos);
   }
 
@@ -93,7 +92,7 @@ BipedAnim() {
 }
 
 BipedRig() {
-  enum class Id uint32_t {
+  enum class Id size_t {
     cog,
     neck,
     head,
@@ -114,13 +113,15 @@ BipedRig() {
     rknee,
     COUNT,
   };
-  static const uint32_t kBoneCount = static_cast<uint32_t>(Id::COUNT);
+  static const size_t kBoneCount = static_cast<size_t>(Id::COUNT);
 
-  addBone(Id p, Id b, vec3 pos) {
-    skl_.add(static_cast<uint32_t>(b), pos, static_cast<uint32_t>(p));
+  addBone(Id b, Id p, vec3 pos) {
+    bi = static_cast<size_t>(b);
+    skl_.add(bi, static_cast<size_t>(p));
+    zero_pose_.setPos(bi, pos);
   }
 
-  uint32_t map(BipedRig::Id id) {
+  size_t map(BipedRig::Id id) {
     static std::map<Id, BipedAnim::Id> map = {
       {Id::cog, BipedAnim::Id::cog},
       {Id::neck, BipedAnim::Id::torso},
@@ -130,7 +131,7 @@ BipedRig() {
     i = -1;
     auto it = map.find(id);
     if (it != end) {
-      i = static_cast<uint32_t>(it->second);
+      i = static_cast<size_t>(it->second);
     }
     return i;
   }
@@ -152,7 +153,7 @@ BipedRig() {
     rig_pose.computeRootMatrices();
     for (size_t i = 0; i < Id::COUNT; i++) {
       auto rig_id = static_cast<Id>(i);
-      anim_i = map();
+      anim_i = map(rig_id);
       if (anim_i != -1) {
         anim_pose_[anim_i] = rig_pose.getRootMatrix(rig_id);
       }
@@ -164,10 +165,10 @@ BipedRig() {
     larm_.solve(&anim_pose_);
   }
 
+  Pose zero_pose_;
   std::vector<mat4> anim_pose_;
   Skeleton skl_;
 }
-
 
 SkeletonObject() {
   setTransforms(std::vector<mat4> mats) {

@@ -71,16 +71,50 @@ struct IkChain {
 };
 
 struct BipedRig {
+  enum Id : size_t {
+    Cog,
+    Neck,
+    Head,
+    Lsho,
+    Rsho,
+    Lhand,
+    Rhand,
+    Pelvis,
+    Lhip,
+    Rhip,
+    Lankle,
+    Rankle,
+    Lball,
+    Rball,
+    Lelbow,
+    Relbow,
+    Lknee,
+    Rknee,
+    COUNT,
+    NoParent = kNoParent,
+  };
+
   BipedRig() = default;
   void makeRig(const BipedSkeleton& skeleton, Object* root);
   void setMaterial(MaterialId material);
   Pose getZeroPose() {
-    return zero_p_;
+    return zero_pose_;
   }
   void updateSkeleton(BipedSkeleton& skeleton);
   void solveIk();
   void applyPose(const Pose& pose);
-  Object* getBone(BoneId bone) const;
+  Skeleton* skeleton() {
+    return &skl_;
+  };
+
+  void addBone(Id bone, Id parent, vec3 pos);
+
+  void getSceneObjects(
+      const mat4& parent, std::vector<SceneObject>& objs,
+      const std::set<ModelId>& hidden);
+
+  Skeleton skl_ = {Id::COUNT};
+  MaterialId mat_ = kMaterialIdNone;
 
   Object* root_;
   Object* cog_;
@@ -109,5 +143,6 @@ struct BipedRig {
   IkChain spine_;
   IkChain cerv_;  // Cervical spine (neck to head)
 
-  Pose zero_p_;
+  Pose zero_pose_;
+  Pose curr_pose_;
 };
