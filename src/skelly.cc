@@ -96,7 +96,7 @@ void Skelly::makeBones() {
 
   root_.clearChildren();
   skeleton_.makeBones(sizes_, &root_);
-  rig_.makeRig(skeleton_, &root_);
+  rig_.makeRig(skeleton_.getZeroPose(), &root_);
   rig_skl_ = rig_.skeleton();
   idle_ = {rig_, idle_walk_, sizes_, walk_cycle_, 1000};
   move_cycles_ = {WalkPoser(idle_, rig_skl_, mods_, &root_)};
@@ -113,6 +113,14 @@ void Skelly::makeBones() {
 void Skelly::setMaterials(MaterialId bone_mat, MaterialId control_mat) {
   skeleton_.setMaterial(bone_mat);
   rig_.setMaterial(control_mat);
+}
+
+void Skelly::getSceneObjects(
+    const mat4& parent, std::vector<SceneObject>& objs,
+    const std::set<ModelId>& hidden) {
+  mat4 root = root_.matrix();
+  rig_.getSceneObjects(root, objs, hidden);
+  skeleton_.getSceneObjects(root, objs, hidden);
 }
 
 void Skelly::handleInput(const InputState& input) {
@@ -325,8 +333,8 @@ void Skelly::updateHandPose(Pose& pose) {
   vec3 rhip = hip_to_hand * vec4(vec3(-1, 1, 1) * akimbo, 1);
   hand_pose_.setPos(BipedRig::Id::Lhand, lhip);
   hand_pose_.setPos(BipedRig::Id::Rhand, rhip);
-  hand_pose_.setPos(BipedRig::Id::Lelbow, vec3(-1, 0, -1));
-  hand_pose_.setPos(BipedRig::Id::Relbow, vec3(1, 0, -1));
+  hand_pose_.setPos(BipedRig::Id::Lelbow, lhip + vec3(-100, 0, -100));
+  hand_pose_.setPos(BipedRig::Id::Relbow, rhip + vec3(100, 0, -100));
 }
 
 WalkPoser::WalkPoser(
@@ -656,9 +664,12 @@ void WalkCycle::updateAnkle(FootMeta& foot_m) {
       foot_m.is_left ? BipedRig::Id::Lankle : BipedRig::Id::Rankle;
   BipedRig::Id ball_bone =
       foot_m.is_left ? BipedRig::Id::Lball : BipedRig::Id::Rball;
+  BipedRig::Id knee_bone =
+      foot_m.is_left ? BipedRig::Id::Lknee : BipedRig::Id::Rknee;
   pose_.setPos(ankle_bone, ankle);
   pose_.setRot(ankle_bone, ankle_rot);
   pose_.setRot(ball_bone, ball_rot);
+  pose_.setPos(knee_bone, ankle + vec3(0, 0, 200));
 }
 
 void WalkCycle::updateShoulders() {
@@ -668,10 +679,14 @@ void WalkCycle::updateShoulders() {
 
 void WalkCycle::updateHands() {
   if (cycle_.larm.anim) {
-    pose_.setPos(BipedRig::Id::Lhand, sampleMovement(cycle_.larm, cycle_t_));
+    vec3 pos = sampleMovement(cycle_.larm, cycle_t_);
+    pose_.setPos(BipedRig::Id::Lhand, pos);
+    pose_.setPos(BipedRig::Id::Lelbow, pos + vec3(0, 0, -100));
   }
   if (cycle_.rarm.anim) {
-    pose_.setPos(BipedRig::Id::Rhand, sampleMovement(cycle_.rarm, cycle_t_));
+    vec3 pos = sampleMovement(cycle_.rarm, cycle_t_);
+    pose_.setPos(BipedRig::Id::Rhand, pos);
+    pose_.setPos(BipedRig::Id::Relbow, pos + vec3(0, 0, -100));
   }
 }
 

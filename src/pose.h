@@ -40,10 +40,13 @@ struct Pose {
   const mat4& getMatrix(size_t i);
 
   void computeRootMatrices();
-  const mat4& getRootMatrix(size_t i);
-  vec3 getRootPos(size_t i);
+  const mat4& getRootMatrix(size_t i) const;
+  vec3 getRootPos(size_t i) const;
+  const std::vector<mat4>& getRootMatrices() const {
+    return root_ms_;
+  }
 
-  size_t bone_count;
+  size_t bone_count = 0;
   Skeleton* skl = nullptr;
   PoseType type = PoseType::Override;
   std::vector<Transform> bone_ts = std::vector<Transform>(bone_count);

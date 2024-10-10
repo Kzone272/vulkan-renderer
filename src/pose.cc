@@ -68,10 +68,10 @@ void Pose::computeRootMatrices() {
   }
 }
 
-const mat4& Pose::getRootMatrix(size_t i) {
+const mat4& Pose::getRootMatrix(size_t i) const {
   return root_ms_[i];
 }
 
-vec3 Pose::getRootPos(size_t i) {
+vec3 Pose::getRootPos(size_t i) const {
   return vec3(getRootMatrix(i) * vec4(0, 0, 0, 1));
 }

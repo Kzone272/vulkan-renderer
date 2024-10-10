@@ -579,10 +579,10 @@ void App::flattenObjectTree() {
   };
 
   static const mat4 identity(1);
+  auto& hidden = options_.show_controls ? empty_set : control_models;
   frame_state_.objects.clear();
-  world_.getSceneObjects(
-      identity, frame_state_.objects,
-      options_.show_controls ? empty_set : control_models);
+  world_.getSceneObjects(identity, frame_state_.objects, hidden);
+  skelly_.getSceneObjects(identity, frame_state_.objects, hidden);
 
   static const std::set<ModelId> gooch_models = {
       ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
