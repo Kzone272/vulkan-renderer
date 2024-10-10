@@ -9,132 +9,140 @@ struct SkellySizes;
 struct BipedRig;
 
 struct BipedSkeleton {
-  BipedSkeleton() = default;
+  enum Id : size_t {
+    cog,
+    pelvis,
+    torso,
+    lbicep,
+    lforearm,
+    lhand,
+    rbicep,
+    rforearm,
+    rhand,
+    head,
+    lfemur,
+    lshin,
+    lfoot,
+    ltoes,
+    rfemur,
+    rshin,
+    rfoot,
+    rtoes,
+    COUNT,
+    NoParent = kNoParent,
+  };
+
+  BipedSkeleton();
   // Not copyable
   BipedSkeleton(const BipedSkeleton& other) = delete;
   BipedSkeleton& operator=(const BipedSkeleton& other) = delete;
 
   void makeBones(const SkellySizes& sizes, Object* root);
   void setMaterial(MaterialId material);
+  void getSceneObjects(
+      const mat4& parent, std::vector<SceneObject>& objs,
+      const std::set<ModelId>& hidden);
+
+  void setBone(Id bone, const vec3& pos, const mat4& model_t);
+  void setPose(const std::vector<mat4>& pose) {
+    curr_pose_ = pose;
+  }
+  const Pose& getZeroPose() {
+    return zero_pose_;
+  }
 
   Object* root_;
-  Object* cog_;
-  Object* pelvis_;
-  Object* torso_;
-  Object* lbicep_;
-  Object* lforearm_;
-  Object* lhand_;
-  Object* rbicep_;
-  Object* rforearm_;
-  Object* rhand_;
-  Object* head_;
-  Object* lfemur_;
-  Object* lshin_;
-  Object* lfoot_;
-  Object* ltoes_;
-  Object* rfemur_;
-  Object* rshin_;
-  Object* rfoot_;
-  Object* rtoes_;
 
-  float femur_l_;
-  float shin_l_;
-  float bicep_l_;
-  float forearm_l_;
+  Skeleton skl_ = {Id::COUNT};
+  Pose zero_pose_ = {&skl_};
+
+  MaterialId mat_ = kMaterialIdNone;
+  std::vector<ModelId> models_ = {Id::COUNT, ModelId::Bone};
+  std::vector<mat4> model_ts_ = {Id::COUNT, mat4(1)};
+
+  std::vector<mat4> curr_pose_;
 };
+
+enum BipedRigId : size_t;
 
 struct IkChain {
   IkChain() = default;
   IkChain(
-      Object* start, Object* target, Object* pole, Object* b1, Object* b2,
+      BipedRigId start, BipedRigId target, BipedRigId pole,
+      const Pose& rig_zero_pose, BipedSkeleton::Id b1, BipedSkeleton::Id b2,
       float b1_l, float b2_l);
-  void solve();
-  // Positions in start's parent's space
-  vec3 startPos();
-  vec3 targetPos();
+  void solve(const Pose& rig_pose, std::vector<mat4>& anim_pose);
 
-  Object* start;
-  Object* target;
-  Object* pole;  // TODO: Currently treated as vector, not a position.
-  Object* lca;   // LCA of start and target
+  BipedRigId start;
+  BipedRigId target;
+  BipedRigId pole;
   // TODO: Support chain of bones.
-  Object* b1;
-  Object* b2;
+  BipedSkeleton::Id b1;
+  BipedSkeleton::Id b2;
   float b1_l;
   float b2_l;
-  vec3 dir_zero;
   // Computed:
-  // The normalized vector pointing from the root to the target in the root's
-  // parent's space, when bones are in zero-state.
+  // The normalized vector pointing from the start to the target when bones are
+  // in zero-pose.
   vec3 point_zero;
   vec3 rot_axis;
 };
 
-struct BipedRig {
-  enum Id : size_t {
-    Cog,
-    Neck,
-    Head,
-    Lsho,
-    Rsho,
-    Lhand,
-    Rhand,
-    Pelvis,
-    Lhip,
-    Rhip,
-    Lankle,
-    Rankle,
-    Lball,
-    Rball,
-    Lelbow,
-    Relbow,
-    Lknee,
-    Rknee,
-    COUNT,
-    NoParent = kNoParent,
-  };
+enum BipedRigId : size_t {
+  Cog,
+  Neck,
+  Head,
+  Lsho,
+  Rsho,
+  Lhand,
+  Rhand,
+  Pelvis,
+  Lhip,
+  Rhip,
+  Lankle,
+  Rankle,
+  Lball,
+  Rball,
+  Lelbow,
+  Relbow,
+  Lknee,
+  Rknee,
+  COUNT,
+  NoParent = kNoParent,
+};
 
-  BipedRig() = default;
-  void makeRig(const BipedSkeleton& skeleton, Object* root);
+struct BipedRig {
+  using Id = BipedRigId;
+
+  BipedRig();
+  void makeRig(const Pose& anim_pose, Object* root);
   void setMaterial(MaterialId material);
   Pose getZeroPose() {
     return zero_pose_;
   }
   void updateSkeleton(BipedSkeleton& skeleton);
-  void solveIk();
+  void solveIk(std::vector<mat4>& anim_pose);
   void applyPose(const Pose& pose);
   Skeleton* skeleton() {
     return &skl_;
   };
 
-  void addBone(Id bone, Id parent, vec3 pos);
+  void setBone(Id bone, vec3 pos);
+  BipedSkeleton::Id map(Id rig_id);
 
   void getSceneObjects(
       const mat4& parent, std::vector<SceneObject>& objs,
       const std::set<ModelId>& hidden);
 
   Skeleton skl_ = {Id::COUNT};
+  Pose zero_pose_ = {&skl_};
+  Pose curr_pose_;
+
   MaterialId mat_ = kMaterialIdNone;
+  std::vector<ModelId> models_ = {Id::COUNT, ModelId::BallControl};
+  std::vector<mat4> model_ts_ = {Id::COUNT, mat4(1)};
 
   Object* root_;
-  Object* cog_;
-  Object* neck_;
-  Object* head_;
-  Object* lsho_;  // (sho)ulder
-  Object* rsho_;
-  Object* lhand_;
-  Object* rhand_;
-  Object* pelvis_;
-  Object* lhip_;
-  Object* rhip_;
-  Object* lankle_;
-  Object* lball_;  // ball of foot
-  Object* rankle_;
-  Object* rball_;
-  Object* lelbow_;
-  Object* relbow_;
-  Object* lknee_;
-  Object* rknee_;
 
   IkChain larm_;
   IkChain rarm_;
@@ -142,7 +150,4 @@ struct BipedRig {
   IkChain rleg_;
   IkChain spine_;
   IkChain cerv_;  // Cervical spine (neck to head)
-
-  Pose zero_pose_;
-  Pose curr_pose_;
 };
