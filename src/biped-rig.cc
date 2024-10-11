@@ -28,9 +28,7 @@ void BipedSkeleton::setBone(Id bone, const vec3& pos, const mat4& model_t) {
   model_ts_[bone] = model_t;
 }
 
-void BipedSkeleton::makeBones(const SkellySizes& sizes, Object* root) {
-  root_ = root;
-
+void BipedSkeleton::makeBones(const SkellySizes& sizes) {
   setBone(Id::cog, vec3(0, sizes.pelvis_y, 0), mat4(1));
   models_[Id::cog] = ModelId::None;
 
@@ -293,9 +291,7 @@ void BipedRig::setBone(Id bone, vec3 pos) {
   zero_pose_.setPos(bone, pos);
 }
 
-void BipedRig::makeRig(const Pose& anim_pose, Object* root) {
-  root_ = root;
-
+void BipedRig::makeRig(const Pose& anim_pose) {
   for (size_t i = 0; i < Id::COUNT; i++) {
     Id rig_id = (Id)i;
     auto anim_id = map(rig_id);
@@ -353,10 +349,6 @@ void BipedRig::makeRig(const Pose& anim_pose, Object* root) {
   rleg_ = IkChain(
       Id::Rhip, Id::Rankle, Id::Rknee, zero_pose_, BipedSkeleton::Id::rfemur,
       BipedSkeleton::Id::rshin, rfemur_l, rshin_l);
-
-  // Marks the root position/direction.
-  // mat4 root_control_t = glm::scale(vec3(10, 1, 30));
-  // root_->addChild(Object(ModelId::BoxControl, root_control_t));
 }
 
 void BipedRig::getSceneObjects(

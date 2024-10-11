@@ -164,7 +164,6 @@ class WalkCycle {
   float prev_cycle_t_ = 0;
 
   // TODO: Delete these maybe
-  Object* root_ = nullptr;
   WalkOptions walk_ = {};
   const SkellySizes* sizes_ = nullptr;
 

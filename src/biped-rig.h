@@ -37,7 +37,7 @@ struct BipedSkeleton {
   BipedSkeleton(const BipedSkeleton& other) = delete;
   BipedSkeleton& operator=(const BipedSkeleton& other) = delete;
 
-  void makeBones(const SkellySizes& sizes, Object* root);
+  void makeBones(const SkellySizes& sizes);
   void setMaterial(MaterialId material);
   void getSceneObjects(
       const mat4& parent, std::vector<SceneObject>& objs,
@@ -50,8 +50,6 @@ struct BipedSkeleton {
   const Pose& getZeroPose() {
     return zero_pose_;
   }
-
-  Object* root_;
 
   Skeleton skl_ = {Id::COUNT};
   Pose zero_pose_ = {&skl_};
@@ -115,7 +113,7 @@ struct BipedRig {
   using Id = BipedRigId;
 
   BipedRig();
-  void makeRig(const Pose& anim_pose, Object* root);
+  void makeRig(const Pose& anim_pose);
   void setMaterial(MaterialId material);
   Pose getZeroPose() {
     return zero_pose_;
@@ -141,8 +139,6 @@ struct BipedRig {
   MaterialId mat_ = kMaterialIdNone;
   std::vector<ModelId> models_ = {Id::COUNT, ModelId::BallControl};
   std::vector<mat4> model_ts_ = {Id::COUNT, mat4(1)};
-
-  Object* root_;
 
   IkChain larm_;
   IkChain rarm_;

@@ -95,8 +95,8 @@ void Skelly::makeBones() {
   sizes_.hip_pos = vec3(-(sizes_.pelvis_w / 2 + 3), -sizes_.pelvis_h, 0);
 
   root_.clearChildren();
-  skeleton_.makeBones(sizes_, &root_);
-  rig_.makeRig(skeleton_.getZeroPose(), &root_);
+  skeleton_.makeBones(sizes_);
+  rig_.makeRig(skeleton_.getZeroPose());
   rig_skl_ = rig_.skeleton();
   idle_ = {rig_, idle_walk_, sizes_, walk_cycle_, 1000};
   move_cycles_ = {WalkPoser(idle_, rig_skl_, mods_, &root_)};
@@ -400,7 +400,6 @@ void WalkPoser::offsetFoot(float cycle_t, FootMeta& foot_m) {
 WalkCycle::WalkCycle(
     BipedRig& rig, const WalkOptions& walk, const SkellySizes& sizes,
     const Cycle& cycle, float cycle_dur) {
-  root_ = rig.root_;
   sizes_ = &sizes;
   lfoot_m_.planted = true;
   rfoot_m_.planted = true;
