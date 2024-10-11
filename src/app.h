@@ -122,12 +122,15 @@ class App {
   struct UiState {
     std::string fps;
     std::string skelly;
+    std::string flatten;
     bool gooch = false;
     int floor = (int)Floor::Viking;
   } ui_;
   struct Stats {
     float skelly_total = 0;
     int skelly_num = 0;
+    float flatten_total = 0;
+    int flatten_num = 0;
   } stats_;
 
   struct AnimationState {

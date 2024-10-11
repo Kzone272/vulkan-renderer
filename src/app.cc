@@ -374,6 +374,11 @@ void App::checkFps(Time now) {
     stats_.skelly_num = 0;
     ui_.skelly = std::format("Skeleton avg time: {:.3f}ms", skelly_avg);
 
+    float flatten_avg = stats_.flatten_total / stats_.flatten_num;
+    stats_.flatten_total = 0;
+    stats_.flatten_num = 0;
+    ui_.flatten = std::format("Flatten tree avg time: {:.3f}ms", flatten_avg);
+
     next_fps_time_ = now + 1s;
     last_fps_frame_ = frame_state_.frame_num;
   }
@@ -416,10 +421,10 @@ void App::updateObjects() {
   }
 
   {
-    Time start = Clock::now();
+    Time sk_start = Clock::now();
     skelly_.update(time_delta_s_);
-    Time end = Clock::now();
-    stats_.skelly_total += FloatMs(end - start).count();
+    Time sk_end = Clock::now();
+    stats_.skelly_total += FloatMs(sk_end - sk_start).count();
     stats_.skelly_num++;
   }
 
@@ -565,6 +570,8 @@ void App::updateProjectionMatrix() {
 }
 
 void App::flattenObjectTree() {
+  Time start = Clock::now();
+
   static const std::set<ModelId> empty_set = {};
   static const std::set<ModelId> control_models = {
       ModelId::BoxControl,
@@ -588,6 +595,10 @@ void App::flattenObjectTree() {
       }
     }
   }
+
+  Time end = Clock::now();
+  stats_.flatten_total += FloatMs(end - start).count();
+  stats_.flatten_num++;
 }
 
 void App::updateImgui() {
@@ -597,9 +608,13 @@ void App::updateImgui() {
 
   ImGui::Begin("Stats");
   ImGui::Text("%s", ui_.fps.c_str());
-  std::string pos_str = std::format("Pos: {}", toStr(skelly_.getPos()));
   ImGui::Text("%s", ui_.skelly.c_str());
-  ImGui::Text(pos_str.c_str());
+  ImGui::Text("%s", ui_.flatten.c_str());
+  bool show_pos = false;
+  if (show_pos) {
+    std::string pos_str = std::format("Pos: {}", toStr(skelly_.getPos()));
+    ImGui::Text(pos_str.c_str());
+  }
   ImGui::End();
 
   ImGui::Begin("Misc Controls");
