@@ -40,21 +40,29 @@ const mat4& Pose::getMatrix(size_t i) {
 
 void Pose::setTransform(size_t i, const Transform& t) {
   bone_ts[i] = t;
+  roots_dirty_ = true;
 }
 
 void Pose::setPos(size_t i, const vec3& pos) {
   bone_ts[i].setPos(pos);
+  roots_dirty_ = true;
 }
 
 void Pose::setScale(size_t i, const vec3& scale) {
   bone_ts[i].setScale(scale);
+  roots_dirty_ = true;
 }
 
 void Pose::setRot(size_t i, const quat& rot) {
   bone_ts[i].setRot(rot);
+  roots_dirty_ = true;
 }
 
 void Pose::computeRootMatrices() {
+  if (!roots_dirty_) {
+    return;
+  }
+
   if (root_ms_.empty()) {
     root_ms_.resize(bone_count);
   }
@@ -66,9 +74,11 @@ void Pose::computeRootMatrices() {
       m = root_ms_[parent] * m;
     }
   }
+  roots_dirty_ = false;
 }
 
 const mat4& Pose::getRootMatrix(size_t i) const {
+  DASSERT(!roots_dirty_);
   return root_ms_[i];
 }
 

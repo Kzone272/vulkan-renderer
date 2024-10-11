@@ -51,5 +51,6 @@ struct Pose {
   PoseType type = PoseType::Override;
   std::vector<Transform> bone_ts = std::vector<Transform>(bone_count);
   std::vector<mat4> root_ms_;
+  bool roots_dirty_ = true;
   std::optional<std::set<size_t>> bone_mask;
 };
