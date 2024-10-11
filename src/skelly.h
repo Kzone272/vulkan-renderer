@@ -164,7 +164,6 @@ class WalkCycle {
   float prev_cycle_t_ = 0;
 
   // TODO: Delete these maybe
-  Object* root_ = nullptr;
   WalkOptions walk_ = {};
   const SkellySizes* sizes_ = nullptr;
 
@@ -175,7 +174,7 @@ class WalkCycle {
 class WalkPoser {
  public:
   WalkPoser() = default;
-  WalkPoser(WalkCycle walk, const MoveMods& mods, Object* root);
+  WalkPoser(WalkCycle walk, Skeleton* skl, const MoveMods& mods, Object* root);
   Pose getPose(float cycle_t, float delta_s);
   float getCycleDur() {
     return walk_.getCycleDur();
@@ -192,7 +191,7 @@ class WalkPoser {
   WalkCycle walk_ = {};
   Movement<vec3> lstep_offset_;
   Movement<vec3> rstep_offset_;
-  Pose add_pose_ = {PoseType::Additive};
+  Pose add_pose_ = {};
 
   const MoveMods* mods_ = nullptr;
   Object* root_ = nullptr;
@@ -220,6 +219,9 @@ class Skelly {
 
   void makeBones();
   void setMaterials(MaterialId bone_mat, MaterialId control_mat);
+  void getSceneObjects(
+      const mat4& parent, std::vector<SceneObject>& objs,
+      const std::set<ModelId>& hidden);
   void handleInput(const InputState& input);
   void update(float delta_s);
 
@@ -260,9 +262,10 @@ class Skelly {
   Object root_ = {};
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
-  Pose lean_pose_ = {PoseType::Additive};
+  Pose lean_pose_ = {};
   Pose hand_pose_ = {};
   BipedRig rig_ = {};
+  Skeleton* rig_skl_ = nullptr;
 
   float cycle_t_ = 0;
   float prev_cycle_t_ = 0;

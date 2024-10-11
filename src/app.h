@@ -104,7 +104,7 @@ class App {
   struct Options {
     CameraType cam_type = CameraType::Follow;
     bool animate = true;
-    bool show_controls = true;
+    bool show_controls = false;
     bool bounce_objects = false;
     int grid_size = 2;
     bool tetra_in = true;

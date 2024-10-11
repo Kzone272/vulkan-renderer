@@ -5,6 +5,7 @@
 #include <set>
 
 #include "glm-include.h"
+#include "skeleton.h"
 #include "transform.h"
 
 enum class PoseType {
@@ -16,50 +17,40 @@ class Object;
 struct IkChain;
 struct BipedRig;
 
-enum class BoneId : uint32_t {
-  Cog,
-  Neck,
-  Head,
-  Lhand,
-  Rhand,
-  Pelvis,
-  Lankle,
-  Rankle,
-  Lball,
-  Rball,
-  // Dirs
-  Lelbow,
-  Relbow,
-  Lknee,
-  Rknee,
-  COUNT,
-};
-constexpr size_t kBoneCount = static_cast<size_t>(BoneId::COUNT);
-
 struct Pose {
   Pose() = default;
-  Pose(PoseType type)
-      : type(type),
+  Pose(Skeleton* skl, PoseType type = PoseType::Override)
+      : skl(skl),
+        bone_count(skl->count()),
+        type(type),
         bone_ts(
-            kBoneCount, type == PoseType::Additive ? Transform::makeAdditive()
+            bone_count, type == PoseType::Additive ? Transform::makeAdditive()
                                                    : Transform()) {
   }
 
-  static Pose freeze(const BipedRig& rig);
   static Pose blend(const Pose& p1, const Pose& p2, float a);
 
-  size_t getBoneIndex(BoneId id) const;
+  void setPos(size_t i, const vec3& pos);
+  void setScale(size_t i, const vec3& scale);
+  void setRot(size_t i, const quat& rot);
+  void setTransform(size_t i, const Transform& t);
 
-  void setPos(BoneId bone, const vec3& pos);
-  void setScale(BoneId bone, const vec3& scale);
-  void setRot(BoneId bone, const quat& rot);
-  void setTransform(BoneId bone, const Transform& t);
+  const vec3& getPos(size_t i) const;
+  const Transform& getTransform(size_t i) const;
+  const mat4& getMatrix(size_t i);
 
-  const vec3& getPos(BoneId bone) const;
-  const Transform& getTransform(BoneId bone) const;
-  const mat4& getMatrix(BoneId bone);
+  void computeRootMatrices();
+  const mat4& getRootMatrix(size_t i) const;
+  vec3 getRootPos(size_t i) const;
+  const std::vector<mat4>& getRootMatrices() const {
+    return root_ms_;
+  }
 
+  size_t bone_count = 0;
+  Skeleton* skl = nullptr;
   PoseType type = PoseType::Override;
-  std::vector<Transform> bone_ts = std::vector<Transform>(kBoneCount);
-  std::optional<std::set<BoneId>> bone_mask;
+  std::vector<Transform> bone_ts = std::vector<Transform>(bone_count);
+  std::vector<mat4> root_ms_;
+  bool roots_dirty_ = true;
+  std::optional<std::set<size_t>> bone_mask;
 };
