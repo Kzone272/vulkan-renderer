@@ -78,7 +78,7 @@ void initPipeline(vk::Device device, const Fbo& fbo, Pipeline& pl) {
   vk::PipelineDepthStencilStateCreateInfo depth_ci{
       .depthTestEnable = VK_TRUE,
       .depthWriteEnable = VK_TRUE,
-      .depthCompareOp = vk::CompareOp::eLess,
+      .depthCompareOp = vk::CompareOp::eGreater,
       .stencilTestEnable = VK_FALSE,
   };
 

@@ -224,7 +224,7 @@ void Fbo::initRp(const VulkanState& vs) {
         .initialLayout = vk::ImageLayout::eUndefined,
         .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
     });
-    clears.push_back({{1.f, 0}});
+    clears.push_back({{0.f, 0}});
   }
 
   vk::SubpassDescription subpass{

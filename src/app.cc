@@ -563,10 +563,8 @@ void App::handleInput() {
 }
 
 void App::updateProjectionMatrix() {
-  frame_state_.proj = glm::perspective(
-      glm::radians(45.0f), (float)width_ / (float)height_, 20.f, 10000.0f);
-  // Invert y-axis because Vulkan is opposite GL.
-  frame_state_.proj[1][1] *= -1;
+  frame_state_.proj = perspectiveInfRevZ(
+      glm::radians(45.0f), (float)width_ / (float)height_, 20.f);
 }
 
 void App::flattenObjectTree() {

@@ -8,7 +8,7 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
   float dist = length(cellPos - cellCentroid);
-  gl_FragDepth = dist;
+  gl_FragDepth = 1.0 - dist;
 
   // vec3 col = vec3(gl_FragDepth);
   vec3 col = vec3(cellColor);

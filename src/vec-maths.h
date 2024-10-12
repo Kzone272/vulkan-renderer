@@ -20,3 +20,20 @@ vec3 fromHex(uint32_t hex) {
   uint8_t b = hex & 0xFF;
   return vec3(fromSrgb(r / 255.f), fromSrgb(g / 255.f), fromSrgb(b / 255.f));
 }
+
+// Perspective projection matrix using reverse-z and an infinite far plane.
+// Details: https://iolite-engine.com/blog_posts/reverse_z_cheatsheet
+// Why: https://developer.nvidia.com/content/depth-precision-visualized
+mat4 perspectiveInfRevZ(float fovy, float aspect, float z_near) {
+  // based on glm::perspective() impl.
+  DASSERT(abs(aspect - std::numeric_limits<float>::epsilon()) > 0.f);
+
+  float tan_half_fovy = tan(fovy / 2.f);
+
+  mat4 proj(0);
+  proj[0][0] = 1.f / (aspect * tan_half_fovy);
+  proj[1][1] = -1.f / (tan_half_fovy);  // Negative because y is down in Vulkan
+  proj[2][3] = 1.f;
+  proj[3][2] = z_near;
+  return proj;
+}
