@@ -5,7 +5,6 @@ Short-term ideas:
   - Add shadow mapping for directional lights
   - Add cascaded shadow mapping
   - Add screen-space gradient material
-  - Use reverse-z depth buffer for better accuracy
   - Setup cube map for background and indirect lighting
   - Normal maps
   - Ambient occlusion shader?
