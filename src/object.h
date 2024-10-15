@@ -103,7 +103,7 @@ class Object {
   MaterialId material_ = kMaterialIdNone;
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
-  mat4 local_m_;
+  mat4 local_m_{1};
 
   Object* parent_ = nullptr;
   WorldTree* world_ = nullptr;

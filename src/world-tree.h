@@ -81,6 +81,7 @@ struct WorldTree {
   void order() {
     objects_.clear();
     parents_.clear();
+    model_ms_.clear();
     traverse(&root_);
 
     std::vector<TData> new_ts;
@@ -97,6 +98,8 @@ struct WorldTree {
       obj->setObjectIndex(index);
       auto* parent = obj->getParent();
       parents_.push_back(parent ? parent->getObjectIndex() : -1);
+      model_ms_.push_back(obj->getModelMatrix());
+
       index++;
     }
 
@@ -115,24 +118,30 @@ struct WorldTree {
       const mat4& parent, std::vector<SceneObject>& objs,
       const std::set<ModelId>& hidden) {
     // Set locals
+    std::vector<mat4> temp_ms(objects_.size(), mat4(1));
+
     for (size_t i = 1; i < objects_.size(); i++) {
-      // auto& m = local_ms_[i];
       auto& t = ts_[i];
-      root_ms_[i] = glm::toMat4(t.rot);
-      root_ms_[i][0] *= t.scale[0];
-      root_ms_[i][1] *= t.scale[1];
-      root_ms_[i][2] *= t.scale[2];
-      root_ms_[i][3][0] = t.pos[0];
-      root_ms_[i][3][1] = t.pos[1];
-      root_ms_[i][3][2] = t.pos[2];
+      temp_ms[i] = glm::toMat4(t.rot);
+      temp_ms[i][0] *= t.scale[0];
+      temp_ms[i][1] *= t.scale[1];
+      temp_ms[i][2] *= t.scale[2];
+      temp_ms[i][3][0] = t.pos[0];
+      temp_ms[i][3][1] = t.pos[1];
+      temp_ms[i][3][2] = t.pos[2];
     }
 
     for (size_t i = 1; i < objects_.size(); i++) {
-      root_ms_[i] = root_ms_[parents_[i]] * root_ms_[i];
+      glm_mat4_mul(
+          (glm_vec4*)&temp_ms[parents_[i]], (glm_vec4*)&temp_ms[i],
+          (glm_vec4*)&root_ms_[i]);
+      // root_ms_[i] = root_ms_[parents_[i]] * root_ms_[i];
     }
     for (size_t i = 1; i < objects_.size(); i++) {
-      auto* obj = objects_[i];
-      root_ms_[i] = root_ms_[i] * obj->getModelMatrix();
+      // root_ms_[i] = root_ms_[i] * model_ms_[i];
+      glm_mat4_mul(
+          (glm_vec4*)&root_ms_[i], (glm_vec4*)&model_ms_[i],
+          (glm_vec4*)&temp_ms[i]);
     }
 
     for (size_t i = 1; i < objects_.size(); i++) {
@@ -145,7 +154,7 @@ struct WorldTree {
       objs.push_back({
           model,
           obj->getMaterial(),
-          root_ms_[i],
+          temp_ms[i],
       });
     }
   }
@@ -161,4 +170,5 @@ struct WorldTree {
   std::vector<size_t> parents_;
   std::vector<TData> ts_;
   std::vector<mat4> root_ms_;
+  std::vector<mat4> model_ms_;
 };
