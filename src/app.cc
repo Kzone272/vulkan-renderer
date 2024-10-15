@@ -101,6 +101,7 @@ void App::setupWorld() {
   loadMaterials();
 
   world_.addChild(skelly_.getObj());
+  skelly_.getObj()->setPos(vec3(200, 0, 0));
   skelly_.setMaterials(mats_.bone, mats_.control);
   world_.addChild(&grid_);
   remakeGrid(options_.grid_size);
@@ -134,6 +135,8 @@ void App::setupWorld() {
   frame_state_.voronoi_cells.push_back({.color{1, 0, 1}});
   frame_state_.voronoi_cells.push_back({.color{0.2, 0.8, 0.6}});
 
+  world_.order();
+
   setupLights();
 }
 
@@ -162,7 +165,7 @@ void App::loadMaterials() {
 }
 
 void App::loadModels() {
-  auto models = world_.getModels();
+  auto models = world_.root()->getModels();
   for (auto& [object, id] : models) {
     if (id == ModelId::None) {
       continue;
@@ -202,11 +205,13 @@ void App::remakeGrid(int grid) {
     for (int j = 0; j < grid; j++) {
       ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       mat4 model_t = glm::scale(vec3(100));
-      auto* obj = grid_.addChild(Object(id, model_t));
+      auto* obj = world_.addChild(Object(id, model_t), &grid_);
       obj->setMaterial(mats_.cube);
       obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
     }
   }
+
+  world_.order();
 }
 
 void App::setupLights() {

@@ -12,6 +12,8 @@
 #include "render-objects.h"
 #include "transform.h"
 
+struct WorldTree;
+
 extern const std::map<ModelId, ModelInfo> kModelRegistry;
 
 class Object {
@@ -67,10 +69,29 @@ class Object {
   void clearRotAnims();
   void animate(Time now);
 
+  void setWorld(WorldTree* world) {
+    world_ = world;
+  }
+  void setObjectIndex(size_t ind) {
+    obj_ind_ = ind;
+  }
+  size_t getObjectIndex() {
+    return obj_ind_;
+  }
   Object* addChild(Object&& child);
   void addChild(Object* child);
   const std::vector<Object*>& children();
   void clearChildren();
+
+  ModelId getModel() {
+    return model_;
+  }
+  MaterialId getMaterial() {
+    return material_;
+  }
+  const mat4& getModelMatrix() {
+    return model_transform_;
+  }
 
   std::vector<std::pair<Object*, ModelId>> getModels();
   void getSceneObjects(
@@ -82,9 +103,12 @@ class Object {
   MaterialId material_ = kMaterialIdNone;
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
+  mat4 local_m_;
 
   Object* parent_ = nullptr;
-  Transform transform_;
+  WorldTree* world_ = nullptr;
+  size_t obj_ind_ = -1;
+  // Transform transform_;
   Transform anim_transform_;
 
   // Offset from the current position.

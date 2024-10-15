@@ -15,6 +15,7 @@
 #include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
+#include "world-tree.h"
 
 namespace {
 
@@ -147,7 +148,8 @@ class App {
   InputState input_;
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
-  Object world_;
+
+  WorldTree world_;
   Object grid_;
   Object* floor_ = nullptr;
   Skelly skelly_;

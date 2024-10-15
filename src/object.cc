@@ -7,6 +7,7 @@
 #include "glm-include.h"
 #include "render-objects.h"
 #include "vec-maths.h"
+#include "world-tree.h"
 
 const std::map<ModelId, ModelInfo> kModelRegistry = {
     {ModelId::Viking,
@@ -41,49 +42,50 @@ void Object::setParent(Object* parent) {
 }
 
 void Object::setScale(const vec3& scale) {
-  transform_.setScale(scale);
+  world_->setScale(obj_ind_, scale);
 }
 vec3 Object::getScale() const {
-  return transform_.getScale();
+  return world_->getScale(obj_ind_);
 }
 
 void Object::setRot(glm::quat rot) {
-  transform_.setRot(rot);
+  world_->setRot(obj_ind_, rot);
 }
 glm::quat Object::getRot() const {
   if (rot_anims_.size()) {
-    return anim_transform_.getRot() * transform_.getRot();
+    return anim_transform_.getRot() * world_->getRot(obj_ind_);
   } else {
-    return transform_.getRot();
+    return world_->getRot(obj_ind_);
   }
 }
 
 void Object::setPos(const vec3& pos) {
-  transform_.setPos(pos);
+  world_->setPos(obj_ind_, pos);
 }
 
 vec3 Object::getPos() const {
   if (pos_anims_.size()) {
-    return transform_.getPos() + anim_transform_.getPos();
+    return world_->getPos(obj_ind_) + anim_transform_.getPos();
   } else {
-    return transform_.getPos();
+    return world_->getPos(obj_ind_);
   }
 }
 
-void Object::setTransform(const Transform& t) {
-  transform_ = t;
-}
+// void Object::setTransform(const Transform& t) {
+//   world_->= obj_ind_, t;
+// }
 
-const Transform& Object::getTransform() const {
-  return transform_;
-};
+// const Transform& Object::getTransform() const {
+//   return world_->
+// obj_ind_, };
 
 const mat4& Object::matrix() {
-  if (pos_anims_.size() || rot_anims_.size()) {
-    return Transform::addBlend(transform_, anim_transform_, 1).matrix();
-  } else {
-    return transform_.matrix();
-  }
+  // if (pos_anims_.size() || rot_anims_.size()) {
+  //   return Transform::addBlend(transform_, anim_transform_, 1).matrix();
+  // } else {
+  local_m_ = world_->matrix(obj_ind_);
+  return local_m_;
+  // }
 }
 
 // Transform from this object's space to an ancestor.
