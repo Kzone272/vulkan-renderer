@@ -5,7 +5,7 @@
 #include "render-objects.h"
 
 // Make a 1x1x1 cube with origin at bottom middle.
-constexpr Mesh makeCube() {
+Mesh makeCube() {
   Mesh m;
 
   // Vertices:
