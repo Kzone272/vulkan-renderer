@@ -2,23 +2,33 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "default",
-      "binaryDir": "${sourceDir}/build",
+      "name": "Debug",
+      "binaryDir": "${sourceDir}/build/Debug",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH":"${sourceDir}/install",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+        "CMAKE_PREFIX_PATH":"${sourceDir}/install/Debug",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/Debug",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "Release",
+      "binaryDir": "${sourceDir}/build/Release",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH":"${sourceDir}/install/Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/Release",
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "debug",
-      "configurePreset": "default",
+      "name": "Debug",
+      "configurePreset": "Debug",
       "configuration": "Debug"
     },
     {
-      "name": "release",
-      "configurePreset": "default",
+      "name": "Release",
+      "configurePreset": "Release",
       "configuration": "Release"
     }
   ]

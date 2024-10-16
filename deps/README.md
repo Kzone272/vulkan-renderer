@@ -9,10 +9,11 @@ git submodule update --init
 
 - Run from this dir:
 ```
-cmake --preset default
-cmake --build --preset debug
-cmake --install build --config Debug
+cmake --preset Debug
+cmake --build --preset Debug
+cmake --install build/Debug --config Debug
 ```
+Repeat the above replacing "Debug" with "Release" for release builds.
 
-This will build all deps into deps/build dir and install them locally in the
-deps/install dir.
+This will build all deps into deps/build/(Debug|Release) dir and install them
+locally in the deps/install/(Debug|Release) dir.

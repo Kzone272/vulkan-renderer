@@ -2,12 +2,23 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "common",
-      "binaryDir": "${sourceDir}/build",
+      "name": "Debug",
       "hidden": true,
+      "binaryDir": "${sourceDir}/build/Debug",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH":"${sourceDir}/deps/install",
-        "DEPS_INCLUDE_DIR": "${sourceDir}/deps/install/include"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/deps/install/Debug",
+        "DEPS_INCLUDE_DIR": "${sourceDir}/deps/install/Debug/include"
+      }
+    },
+    {
+      "name": "Release",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/Release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/deps/install/Release",
+        "DEPS_INCLUDE_DIR": "${sourceDir}/deps/install/Release/include"
       }
     },
     {
@@ -19,43 +30,65 @@
     },
     {
       "name": "Ninja",
-      "hidden": true, 
+      "hidden": true,
       "generator": "Ninja"
     },
     {
       "name": "MSVC",
-      "hidden": true, 
+      "hidden": true,
       "generator": "Visual Studio 17 2022"
     },
     {
-      "name": "Debug",
-      "hidden": true,
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE":"Debug"
-      }
-    },
-    {
-      "name": "Release",
-      "hidden": true,
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE":"Release"
-      }
-    },
-    {
       "name": "Mac-Debug",
-      "inherits": ["common", "Ninja", "Clang", "Debug"]
+      "inherits": [
+        "Ninja",
+        "Clang",
+        "Debug"
+      ]
     },
     {
       "name": "Mac-Release",
-      "inherits": ["common", "Ninja", "Clang", "Release"]
+      "inherits": [
+        "Ninja",
+        "Clang",
+        "Release"
+      ]
     },
     {
       "name": "Windows-Debug",
-      "inherits": ["common", "MSVC", "Debug"]
+      "inherits": [
+        "MSVC",
+        "Debug"
+      ]
     },
     {
       "name": "Windows-Release",
-      "inherits": ["common", "MSVC", "Release"]
+      "inherits": [
+        "MSVC",
+        "Release"
+      ]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Windows-Debug",
+      "configurePreset": "Windows-Debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "Windows-Release",
+      "configurePreset": "Windows-Release",
+      "configuration": "Release"
+    },
+    {
+      "name": "Mac-Debug",
+      "configurePreset": "Mac-Debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "Mac-Release",
+      "configurePreset": "Mac-Release",
+      "configuration": "Release"
     }
   ]
 }
