@@ -78,9 +78,12 @@ const std::map<SplineType, mat4> kBensteinSplines{
 };
 
 template <class T>
-T weight(vec4 weights, const T& a, const T& b, const T& c, const T& d) {
-  glm::mat<4, T::length(), float, glm::qualifier::defaultp> points = {
-      a, b, c, d};
+T weight(vec4 weights, const T& a, const T& b, const T& c, const T& d);
+
+template <>
+vec3 weight(
+    vec4 weights, const vec3& a, const vec3& b, const vec3& c, const vec3& d) {
+  glm::mat4x3 points = {a, b, c, d};
   return weights * glm::transpose(points);
 }
 

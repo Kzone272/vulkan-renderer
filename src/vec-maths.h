@@ -2,7 +2,7 @@
 
 #include "glm-include.h"
 
-float fromSrgb(float component) {
+inline float fromSrgb(float component) {
   if (component <= 0.04045) {
     return component / 12.92;
   } else {
@@ -10,11 +10,11 @@ float fromSrgb(float component) {
   }
 }
 
-vec3 fromSrgb(vec3 srgb) {
+inline vec3 fromSrgb(vec3 srgb) {
   return vec3(fromSrgb(srgb.r), fromSrgb(srgb.g), fromSrgb(srgb.b));
 }
 
-vec3 fromHex(uint32_t hex) {
+inline vec3 fromHex(uint32_t hex) {
   uint8_t r = (hex >> 16) & 0xFF;
   uint8_t g = (hex >> 8) & 0xFF;
   uint8_t b = hex & 0xFF;
@@ -24,7 +24,7 @@ vec3 fromHex(uint32_t hex) {
 // Perspective projection matrix using reverse-z and an infinite far plane.
 // Details: https://iolite-engine.com/blog_posts/reverse_z_cheatsheet
 // Why: https://developer.nvidia.com/content/depth-precision-visualized
-mat4 perspectiveInfRevZ(float fovy, float aspect, float z_near) {
+inline mat4 perspectiveInfRevZ(float fovy, float aspect, float z_near) {
   // based on glm::perspective() impl.
   DASSERT(abs(aspect - std::numeric_limits<float>::epsilon()) > 0.f);
 
@@ -36,4 +36,9 @@ mat4 perspectiveInfRevZ(float fovy, float aspect, float z_near) {
   proj[2][3] = 1.f;
   proj[3][2] = z_near;
   return proj;
+}
+
+// Uses GLM SIMD matrix multiplication to boost performance.
+inline void fastMult(const mat4& left, const mat4& right, mat4& out) {
+  glm_mat4_mul((glm_vec4*)&left, (glm_vec4*)&right, (glm_vec4*)&out);
 }

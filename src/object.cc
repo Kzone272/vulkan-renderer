@@ -6,6 +6,7 @@
 #include "animation.h"
 #include "glm-include.h"
 #include "render-objects.h"
+#include "vec-maths.h"
 
 const std::map<ModelId, ModelInfo> kModelRegistry = {
     {ModelId::Viking,
@@ -206,16 +207,20 @@ void Object::clearChildren() {
 void Object::getSceneObjects(
     const mat4& parent, std::vector<SceneObject>& objs,
     const std::set<ModelId>& hidden) {
-  mat4 transform = parent * matrix();
+  mat4 local = matrix();
+  mat4 root;
+  fastMult(parent, local, root);
   if (model_ != ModelId::None && !hidden.contains(model_)) {
+    mat4 final;
+    fastMult(root, model_transform_, final);
     objs.push_back({
         model_,
         material_,
-        transform * model_transform_,
+        final,
     });
   }
   for (auto& child : children_) {
-    child->getSceneObjects(transform, objs, hidden);
+    child->getSceneObjects(root, objs, hidden);
   }
 }
 
