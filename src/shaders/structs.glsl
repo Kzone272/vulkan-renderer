@@ -1,10 +1,12 @@
 // Common structs used across shaders.
 
 struct Light {
+  vec4 vec;
+  vec4 color;
   uint type;
-  vec3 vec;
-  vec3 color;
-  float falloff;
+  float pad1;
+  float pad2;
+  float pad3;
 };
 const uint kDirectionalLightType = 1;
 const uint kPointLightType = 2;

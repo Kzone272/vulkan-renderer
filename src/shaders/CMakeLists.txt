@@ -19,6 +19,7 @@ file(GLOB shader_files
   jf-sdf.frag
   voronoi-seed.frag
   uv-sample.frag
+  # TODO: Detect changes in .glsl files to rebuild shaders.
 )
 
 set(shader_binary_dir "${PROJECT_BINARY_DIR}/shaders")

@@ -6,15 +6,19 @@
 #include "glm-include.h"
 
 struct Light {
-  enum class Type {
+  enum class Type : uint32_t {
     None,
     Directional,
     Point,
   };
+  vec4 vec = vec4(0);    // Direction, or position.
+  vec4 color = vec4(1);  // Falloff in the w component.
   Type type = Type::None;
-  alignas(16) vec3 vec{0, 0, 0};  // Direction, or position.
-  alignas(16) vec3 color{1, 1, 1};
-  float falloff = 0;
+  // Pad size to nearest 16 bytes, because the next light's vec4 will need
+  // 16-byte alignment anyway.
+  float pad1 = 0;
+  float pad2 = 0;
+  float pad3 = 0;
 };
 
 struct GlobalData {

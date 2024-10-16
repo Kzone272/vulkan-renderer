@@ -50,12 +50,12 @@ void main() {
 
       float intensity = 0;
       if (light.type == kDirectionalLightType) {
-        intensity = dirLight(light.vec, vnorm);
+        intensity = dirLight(light.vec.xyz, vnorm);
       } else if (light.type == kPointLightType) {
-        intensity = pointLight(light.vec, light.falloff, vnorm);
+        intensity = pointLight(light.vec.xyz, light.color.w, vnorm);
       }
 
-      lambert += intensity * light.color * diffuse;
+      lambert += intensity * light.color.rgb * diffuse;
     }
 
     // Global illumination

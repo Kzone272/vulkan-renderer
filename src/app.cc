@@ -213,44 +213,39 @@ void App::setupLights() {
   frame_state_.lights.clear();
   // Mostly downward sun
   frame_state_.lights.push_back({
+      .vec = vec4(0.3, -1, 0, 0),
+      .color = vec4(1),
       .type = Light::Type::Directional,
-      .vec = vec3(0.3, -1, 0),
-      .color = vec3(1),
   });
   // Corner torch
   frame_state_.lights.push_back({
+      .vec = vec4(385, 200, 475, 1),
+      .color = vec4(1, 1, 0, 400),
       .type = Light::Type::Point,
-      .vec = vec3(385, 200, 475),
-      .color = vec3(1, 1, 0),
-      .falloff = 400,
   });
   // Front torch
   frame_state_.lights.push_back({
+      .vec = vec4(385, 200, 110, 1),
+      .color = vec4(1, 1, 0, 400),
       .type = Light::Type::Point,
-      .vec = vec3(385, 200, 110),
-      .color = vec3(1, 1, 0),
-      .falloff = 400,
   });
   // Cauldron
   frame_state_.lights.push_back({
+      .vec = vec4(270, 20, 300, 1),
+      .color = vec4(2, 1.2, 0, 500),
       .type = Light::Type::Point,
-      .vec = vec3(270, 20, 300),
-      .color = vec3(2, 1.2, 0),
-      .falloff = 500,
   });
   // Right tail light
   frame_state_.lights.push_back({
+      .vec = vec4(-225, 40, -180, 1),
+      .color = vec4(4, 0, 0, 500),
       .type = Light::Type::Point,
-      .vec = vec3(-225, 40, -180),
-      .color = vec3(4, 0, 0),
-      .falloff = 500,
   });
   // Left tail light
   frame_state_.lights.push_back({
+      .vec = vec4(-370, 40, -180, 1),
+      .color = vec4(4, 0, 0, 500),
       .type = Light::Type::Point,
-      .vec = vec3(-370, 40, -180),
-      .color = vec3(4, 0, 0),
-      .falloff = 500,
   });
 }
 
