@@ -91,4 +91,13 @@ add_custom_command(TARGET main POST_BUILD
 )
 add_dependencies(main assets)
 
+# Copy dlls to build directory.
+add_custom_target(dlls)
+add_custom_command(TARGET main POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${PROJECT_SOURCE_DIR}/deps/install/${CMAKE_BUILD_TYPE}/bin"
+    "$<TARGET_FILE_DIR:main>"
+)
+add_dependencies(main dlls)
+
 add_subdirectory(shaders)

@@ -36,59 +36,103 @@
     {
       "name": "MSVC",
       "hidden": true,
-      "generator": "Visual Studio 17 2022"
+      "generator": "Visual Studio 17 2022",
+      "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RelWithDebInfo"
+      }
     },
     {
-      "name": "Mac-Debug",
+      "name": "Mac",
+      "hidden": true,
       "inherits": [
         "Ninja",
-        "Clang",
+        "Clang"
+      ],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "DebugMac",
+      "inherits": [
+        "Mac",
         "Debug"
       ]
     },
     {
-      "name": "Mac-Release",
+      "name": "ReleaseMac",
       "inherits": [
-        "Ninja",
-        "Clang",
+        "Mac",
         "Release"
       ]
     },
     {
-      "name": "Windows-Debug",
+      "name": "Windows",
+      "hidden": true,
       "inherits": [
-        "MSVC",
+        "MSVC"
+      ],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "DebugWin",
+      "inherits": [
+        "Windows",
         "Debug"
       ]
     },
     {
-      "name": "Windows-Release",
+      "name": "ReleaseWin",
       "inherits": [
-        "MSVC",
+        "Windows",
         "Release"
       ]
     }
   ],
   "buildPresets": [
     {
-      "name": "Windows-Debug",
-      "configurePreset": "Windows-Debug",
-      "configuration": "Debug"
+      "name": "DebugWin",
+      "configurePreset": "DebugWin",
+      "configuration": "Debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
-      "name": "Windows-Release",
-      "configurePreset": "Windows-Release",
-      "configuration": "Release"
+      "name": "ReleaseWin",
+      "configurePreset": "ReleaseWin",
+      "configuration": "Release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
-      "name": "Mac-Debug",
-      "configurePreset": "Mac-Debug",
-      "configuration": "Debug"
+      "name": "DebugMac",
+      "configurePreset": "DebugMac",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
     },
     {
-      "name": "Mac-Release",
-      "configurePreset": "Mac-Release",
-      "configuration": "Release"
+      "name": "ReleaseMac",
+      "configurePreset": "ReleaseMac",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
     }
   ]
 }
