@@ -7,6 +7,7 @@
 #include "glm-include.h"
 #include "object.h"
 #include "transform.h"
+#include "vec-maths.h"
 
 struct WorldTree {
   WorldTree() {
@@ -82,6 +83,8 @@ struct WorldTree {
     objects_.clear();
     parents_.clear();
     model_ms_.clear();
+    models_.clear();
+    mats_.clear();
     traverse(&root_);
 
     std::vector<TData> new_ts;
@@ -99,6 +102,8 @@ struct WorldTree {
       auto* parent = obj->getParent();
       parents_.push_back(parent ? parent->getObjectIndex() : -1);
       model_ms_.push_back(obj->getModelMatrix());
+      models_.push_back(obj->getModel());
+      mats_.push_back(obj->getMaterial());
 
       index++;
     }
@@ -117,44 +122,28 @@ struct WorldTree {
   void getSceneObjects(
       const mat4& parent, std::vector<SceneObject>& objs,
       const std::set<ModelId>& hidden) {
-    // Set locals
-    std::vector<mat4> temp_ms(objects_.size(), mat4(1));
-
-    for (size_t i = 1; i < objects_.size(); i++) {
+    size_t count = objects_.size();
+    for (size_t i = 1; i < count; i++) {
       auto& t = ts_[i];
-      temp_ms[i] = glm::toMat4(t.rot);
-      temp_ms[i][0] *= t.scale[0];
-      temp_ms[i][1] *= t.scale[1];
-      temp_ms[i][2] *= t.scale[2];
-      temp_ms[i][3][0] = t.pos[0];
-      temp_ms[i][3][1] = t.pos[1];
-      temp_ms[i][3][2] = t.pos[2];
-    }
+      mat4 temp = glm::toMat4(t.rot);
+      temp[0] *= t.scale[0];
+      temp[1] *= t.scale[1];
+      temp[2] *= t.scale[2];
+      temp[3][0] = t.pos[0];
+      temp[3][1] = t.pos[1];
+      temp[3][2] = t.pos[2];
+      fastMult(root_ms_[parents_[i]], temp, root_ms_[i]);
 
-    for (size_t i = 1; i < objects_.size(); i++) {
-      glm_mat4_mul(
-          (glm_vec4*)&temp_ms[parents_[i]], (glm_vec4*)&temp_ms[i],
-          (glm_vec4*)&root_ms_[i]);
-      // root_ms_[i] = root_ms_[parents_[i]] * root_ms_[i];
-    }
-    for (size_t i = 1; i < objects_.size(); i++) {
-      // root_ms_[i] = root_ms_[i] * model_ms_[i];
-      glm_mat4_mul(
-          (glm_vec4*)&root_ms_[i], (glm_vec4*)&model_ms_[i],
-          (glm_vec4*)&temp_ms[i]);
-    }
-
-    for (size_t i = 1; i < objects_.size(); i++) {
-      auto* obj = objects_[i];
-      auto model = obj->getModel();
+      auto model = models_[i];
       if (model == ModelId::None || hidden.contains(model)) {
         continue;
       }
 
+      fastMult(root_ms_[i], model_ms_[i], temp);
       objs.push_back({
           model,
-          obj->getMaterial(),
-          temp_ms[i],
+          mats_[i],
+          temp,
       });
     }
   }
@@ -171,4 +160,6 @@ struct WorldTree {
   std::vector<TData> ts_;
   std::vector<mat4> root_ms_;
   std::vector<mat4> model_ms_;
+  std::vector<ModelId> models_;
+  std::vector<MaterialId> mats_;
 };
