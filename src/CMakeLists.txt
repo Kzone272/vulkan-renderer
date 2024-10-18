@@ -63,8 +63,8 @@ set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 0)
 add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
-  ${DEPS_INCLUDE_DIR}
-  ${DEPS_INCLUDE_DIR}/imgui
+  ${DEPS_DIR}/include
+  ${DEPS_DIR}/include/imgui
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
 )
@@ -95,7 +95,7 @@ add_dependencies(main assets)
 add_custom_target(dlls)
 add_custom_command(TARGET main POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${PROJECT_SOURCE_DIR}/deps/install/${CMAKE_BUILD_TYPE}/bin"
+    "${DEPS_DIR}/bin"
     "$<TARGET_FILE_DIR:main>"
 )
 add_dependencies(main dlls)

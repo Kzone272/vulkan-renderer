@@ -8,7 +8,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PREFIX_PATH": "${sourceDir}/deps/install/Debug",
-        "DEPS_INCLUDE_DIR": "${sourceDir}/deps/install/Debug/include"
+        "DEPS_DIR": "${sourceDir}/deps/install/Debug"
       }
     },
     {
@@ -18,7 +18,17 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_PREFIX_PATH": "${sourceDir}/deps/install/Release",
-        "DEPS_INCLUDE_DIR": "${sourceDir}/deps/install/Release/include"
+        "DEPS_DIR": "${sourceDir}/deps/install/Release"
+      }
+    },
+    {
+      "name": "RelWithDebInfo",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/RelWithDebInfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/deps/install/Debug",
+        "DEPS_DIR": "${sourceDir}/deps/install/Debug"
       }
     },
     {
@@ -93,6 +103,13 @@
         "Windows",
         "Release"
       ]
+    },
+    {
+      "name": "RelWithDebInfoWin",
+      "inherits": [
+        "Windows",
+        "RelWithDebInfo"
+      ]
     }
   ],
   "buildPresets": [
@@ -110,6 +127,16 @@
       "name": "ReleaseWin",
       "configurePreset": "ReleaseWin",
       "configuration": "Release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "RelWithDebInfoWin",
+      "configurePreset": "RelWithDebInfoWin",
+      "configuration": "RelWithDebInfo",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
