@@ -7,6 +7,7 @@
 #include "glm-include.h"
 #include "render-objects.h"
 #include "vec-maths.h"
+#include "world-tree.h"
 
 const std::map<ModelId, ModelInfo> kModelRegistry = {
     {ModelId::Viking,
@@ -24,8 +25,9 @@ const std::map<ModelId, ModelInfo> kModelRegistry = {
      }},
 };
 
-Object::Object(ModelId model, std::optional<mat4> model_transform)
-    : model_(model) {
+Object::Object(
+    WorldTree* world, ModelId model, std::optional<mat4> model_transform)
+    : world_(world), model_(model) {
   if (model_transform) {
     model_transform_ = *model_transform;
   } else {
@@ -34,6 +36,13 @@ Object::Object(ModelId model, std::optional<mat4> model_transform)
       model_transform_ = it->second.model_transform;
     }
   }
+
+  world_->reg(this);
+}
+
+void Object::setMaterial(MaterialId material) {
+  world_->setMaterial(obj_ind_, material);
+  material_ = material;
 }
 
 void Object::setParent(Object* parent) {
@@ -41,49 +50,40 @@ void Object::setParent(Object* parent) {
 }
 
 void Object::setScale(const vec3& scale) {
-  transform_.setScale(scale);
+  world_->setScale(obj_ind_, scale);
 }
 vec3 Object::getScale() const {
-  return transform_.getScale();
+  return world_->getScale(obj_ind_);
 }
 
 void Object::setRot(glm::quat rot) {
-  transform_.setRot(rot);
+  world_->setRot(obj_ind_, rot);
 }
 glm::quat Object::getRot() const {
   if (rot_anims_.size()) {
-    return anim_transform_.getRot() * transform_.getRot();
+    return anim_transform_.getRot() * world_->getRot(obj_ind_);
   } else {
-    return transform_.getRot();
+    return world_->getRot(obj_ind_);
   }
 }
 
 void Object::setPos(const vec3& pos) {
-  transform_.setPos(pos);
+  world_->setPos(obj_ind_, pos);
 }
 
 vec3 Object::getPos() const {
   if (pos_anims_.size()) {
-    return transform_.getPos() + anim_transform_.getPos();
+    return world_->getPos(obj_ind_) + anim_transform_.getPos();
   } else {
-    return transform_.getPos();
+    return world_->getPos(obj_ind_);
   }
 }
 
-void Object::setTransform(const Transform& t) {
-  transform_ = t;
-}
-
-const Transform& Object::getTransform() const {
-  return transform_;
-};
-
-const mat4& Object::matrix() {
-  if (pos_anims_.size() || rot_anims_.size()) {
-    return Transform::addBlend(transform_, anim_transform_, 1).matrix();
-  } else {
-    return transform_.matrix();
-  }
+mat4 Object::matrix() const {
+  return world_->matrix(obj_ind_);
+  // if (pos_anims_.size() || rot_anims_.size()) {
+  //   return Transform::addBlend(transform_, anim_transform_, 1).matrix();
+  // }
 }
 
 // Transform from this object's space to an ancestor.
@@ -128,15 +128,6 @@ mat4 Object::toLocal(Object* ancestor) {
 
 vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
   return toLocal(ancestor) * vec4(pos, 1);
-}
-
-std::vector<std::pair<Object*, ModelId>> Object::getModels() {
-  std::vector<std::pair<Object*, ModelId>> models = {{this, model_}};
-  for (auto* child : children_) {
-    auto child_models = child->getModels();
-    models.insert(models.end(), child_models.begin(), child_models.end());
-  }
-  return models;
 }
 
 void Object::addPosAnim(Animation<vec3>* a) {
@@ -202,26 +193,7 @@ void Object::clearChildren() {
   }
   children_.clear();
   owned_children_.clear();
-}
-
-void Object::getSceneObjects(
-    const mat4& parent, std::vector<SceneObject>& objs,
-    const std::set<ModelId>& hidden) {
-  mat4 local = matrix();
-  mat4 root;
-  fastMult(parent, local, root);
-  if (model_ != ModelId::None && !hidden.contains(model_)) {
-    mat4 final;
-    fastMult(root, model_transform_, final);
-    objs.push_back({
-        model_,
-        material_,
-        final,
-    });
-  }
-  for (auto& child : children_) {
-    child->getSceneObjects(root, objs, hidden);
-  }
+  world_->orderChanged();
 }
 
 Object* Object::lca(Object* o1, Object* o2) {

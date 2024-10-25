@@ -215,7 +215,7 @@ class Duration {
 
 class Skelly {
  public:
-  Skelly();
+  Skelly(WorldTree* world);
 
   void makeBones();
   void setMaterials(MaterialId bone_mat, MaterialId control_mat);
@@ -259,7 +259,8 @@ class Skelly {
   SkellySizes sizes_ = {};
   MoveMods mods_ = {};
 
-  Object root_ = {};
+  WorldTree* world_;
+  Object root_;
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
   Pose lean_pose_ = {};

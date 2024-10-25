@@ -100,20 +100,20 @@ void App::initFrameState() {
 void App::setupWorld() {
   loadMaterials();
 
-  world_.addChild(skelly_.getObj());
+  skelly_.getObj()->setPos(vec3(200, 0, 0));
   skelly_.setMaterials(mats_.bone, mats_.control);
   world_.addChild(&grid_);
   remakeGrid(options_.grid_size);
-  floor_ = world_.addChild(Object(ModelId::Floor));
+  floor_ = world_.makeObject(ModelId::Floor);
   floor_->setMaterial(floor_mats_[ui_.floor]);
 
-  auto* car = world_.addChild(Object(ModelId::Pony));
+  auto* car = world_.makeObject(ModelId::Pony);
   car->setPos(vec3(-300, -1, 0));
 
-  auto* room = world_.addChild(Object(ModelId::Viking));
+  auto* room = world_.makeObject(ModelId::Viking);
   room->setPos(vec3(300, 1, 300));
 
-  auto* ball = world_.addChild(Object(ModelId::Sphere, glm::scale(vec3(100))));
+  auto* ball = world_.makeObject(ModelId::Sphere, glm::scale(vec3(100)));
   ball->setPos(vec3(-300, 100, 600));
   ball->setMaterial(mats_.cube);
 
@@ -162,7 +162,8 @@ void App::loadMaterials() {
 }
 
 void App::loadModels() {
-  auto models = world_.getModels();
+  std::vector<std::pair<Object*, ModelId>> models;
+  world_.getModels(models);
   for (auto& [object, id] : models) {
     if (id == ModelId::None) {
       continue;
@@ -202,7 +203,7 @@ void App::remakeGrid(int grid) {
     for (int j = 0; j < grid; j++) {
       ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       mat4 model_t = glm::scale(vec3(100));
-      auto* obj = grid_.addChild(Object(id, model_t));
+      auto* obj = grid_.addChild(Object(&world_, id, model_t));
       obj->setMaterial(mats_.cube);
       obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
     }
@@ -574,7 +575,8 @@ void App::flattenObjectTree() {
   static const mat4 identity(1);
   auto& hidden = options_.show_controls ? empty_set : control_models;
   frame_state_.objects.clear();
-  world_.getSceneObjects(identity, frame_state_.objects, hidden);
+  world_.updateMats();
+  world_.getSceneObjects(frame_state_.objects, hidden);
   skelly_.getSceneObjects(identity, frame_state_.objects, hidden);
 
   static const std::set<ModelId> gooch_models = {

@@ -12,12 +12,14 @@
 #include "render-objects.h"
 #include "transform.h"
 
+class WorldTree;
+
 extern const std::map<ModelId, ModelInfo> kModelRegistry;
 
 class Object {
  public:
   Object(
-      ModelId model = ModelId::None,
+      WorldTree* world, ModelId model = ModelId::None,
       std::optional<mat4> model_transform = std::nullopt);
 
   // Move only.
@@ -40,13 +42,7 @@ class Object {
   glm::quat getRot() const;
   void setPos(const vec3& pos);
   vec3 getPos() const;
-  void setTransform(const Transform& t);
-  const Transform& getTransform() const;
-  const mat4& matrix();
-
-  void setMaterial(MaterialId material) {
-    material_ = material;
-  }
+  mat4 matrix() const;
 
   // Transform from this object's space to an ancestor.
   mat4 toAncestor(Object* ancestor);
@@ -67,15 +63,28 @@ class Object {
   void clearRotAnims();
   void animate(Time now);
 
+  void setObjectIndex(size_t ind) {
+    obj_ind_ = ind;
+  }
+  size_t getObjectIndex() {
+    return obj_ind_;
+  }
+
   Object* addChild(Object&& child);
   void addChild(Object* child);
   const std::vector<Object*>& children();
   void clearChildren();
 
-  std::vector<std::pair<Object*, ModelId>> getModels();
-  void getSceneObjects(
-      const mat4& parent, std::vector<SceneObject>& objs,
-      const std::set<ModelId>& hidden);
+  ModelId getModel() {
+    return model_;
+  }
+  void setMaterial(MaterialId material);
+  MaterialId getMaterial() {
+    return material_;
+  }
+  const mat4& getModelMatrix() {
+    return model_transform_;
+  }
 
  private:
   ModelId model_;
@@ -83,12 +92,11 @@ class Object {
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
 
+  WorldTree* world_ = nullptr;
   Object* parent_ = nullptr;
-  Transform transform_;
+  size_t obj_ind_ = -1;
   Transform anim_transform_;
 
-  // Offset from the current position.
-  vec3 pos_offset_{0};
   // Animations that add to current position.
   std::vector<Animation<vec3>*> pos_anims_;
   std::vector<Animation<float>*> rot_anims_;

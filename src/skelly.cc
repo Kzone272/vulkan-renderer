@@ -10,6 +10,7 @@
 #include "maths.h"
 #include "skelly-presets.h"
 #include "time-utils.h"
+#include "world-tree.h"
 
 namespace {
 
@@ -73,10 +74,10 @@ void Duration::update(float delta_s) {
   }
 }
 
-Skelly::Skelly() {
-  root_.setPos(vec3(200, 0, 0));
+Skelly::Skelly(WorldTree* world) : world_(world), root_(world_) {
+  world_->addChild(&root_);
   makeBones();
-  lean_so_ = std::make_unique<SecondOrder<vec3>>(mods_.lean_params, vec3{0});
+  lean_so_ = std::make_unique<SecondOrder<vec3>>(mods_.lean_params, vec3(0));
 }
 
 void Skelly::makeBones() {
