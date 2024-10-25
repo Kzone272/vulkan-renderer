@@ -12,14 +12,14 @@
 #include "render-objects.h"
 #include "transform.h"
 
-struct WorldTree;
+class WorldTree;
 
 extern const std::map<ModelId, ModelInfo> kModelRegistry;
 
 class Object {
  public:
   Object(
-      ModelId model = ModelId::None,
+      WorldTree* world, ModelId model = ModelId::None,
       std::optional<mat4> model_transform = std::nullopt);
 
   // Move only.
@@ -69,15 +69,13 @@ class Object {
   void clearRotAnims();
   void animate(Time now);
 
-  void setWorld(WorldTree* world) {
-    world_ = world;
-  }
   void setObjectIndex(size_t ind) {
     obj_ind_ = ind;
   }
   size_t getObjectIndex() {
     return obj_ind_;
   }
+
   Object* addChild(Object&& child);
   void addChild(Object* child);
   const std::vector<Object*>& children();
@@ -93,7 +91,7 @@ class Object {
     return model_transform_;
   }
 
-  std::vector<std::pair<Object*, ModelId>> getModels();
+  void getModels(std::vector<std::pair<Object*, ModelId>>& pairs);
   void getSceneObjects(
       const mat4& parent, std::vector<SceneObject>& objs,
       const std::set<ModelId>& hidden);
@@ -105,14 +103,12 @@ class Object {
   mat4 model_transform_{1};
   mat4 local_m_{1};
 
-  Object* parent_ = nullptr;
   WorldTree* world_ = nullptr;
+  Object* parent_ = nullptr;
   size_t obj_ind_ = -1;
   // Transform transform_;
   Transform anim_transform_;
 
-  // Offset from the current position.
-  vec3 pos_offset_{0};
   // Animations that add to current position.
   std::vector<Animation<vec3>*> pos_anims_;
   std::vector<Animation<float>*> rot_anims_;

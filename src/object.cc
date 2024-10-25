@@ -25,8 +25,11 @@ const std::map<ModelId, ModelInfo> kModelRegistry = {
      }},
 };
 
-Object::Object(ModelId model, std::optional<mat4> model_transform)
-    : model_(model) {
+Object::Object(
+    WorldTree* world, ModelId model, std::optional<mat4> model_transform)
+    : world_(world), model_(model) {
+  world_->reg(this);
+
   if (model_transform) {
     model_transform_ = *model_transform;
   } else {
@@ -70,14 +73,6 @@ vec3 Object::getPos() const {
     return world_->getPos(obj_ind_);
   }
 }
-
-// void Object::setTransform(const Transform& t) {
-//   world_->= obj_ind_, t;
-// }
-
-// const Transform& Object::getTransform() const {
-//   return world_->
-// obj_ind_, };
 
 const mat4& Object::matrix() {
   // if (pos_anims_.size() || rot_anims_.size()) {
@@ -132,13 +127,11 @@ vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
   return toLocal(ancestor) * vec4(pos, 1);
 }
 
-std::vector<std::pair<Object*, ModelId>> Object::getModels() {
-  std::vector<std::pair<Object*, ModelId>> models = {{this, model_}};
+void Object::getModels(std::vector<std::pair<Object*, ModelId>>& pairs) {
+  pairs.emplace_back(this, model_);
   for (auto* child : children_) {
-    auto child_models = child->getModels();
-    models.insert(models.end(), child_models.begin(), child_models.end());
+    child->getModels(pairs);
   }
-  return models;
 }
 
 void Object::addPosAnim(Animation<vec3>* a) {
@@ -204,6 +197,7 @@ void Object::clearChildren() {
   }
   children_.clear();
   owned_children_.clear();
+  world_->orderChanged();
 }
 
 void Object::getSceneObjects(

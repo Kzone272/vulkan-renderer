@@ -150,9 +150,9 @@ class App {
   std::unique_ptr<Renderer> renderer_;
 
   WorldTree world_;
-  Object grid_;
+  Object grid_ = {&world_};
   Object* floor_ = nullptr;
-  Skelly skelly_;
+  Skelly skelly_ = {&world_};
 
   struct Materials {
     MaterialId cube = kMaterialIdNone;
