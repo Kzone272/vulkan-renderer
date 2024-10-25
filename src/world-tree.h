@@ -9,6 +9,7 @@
 #include "transform.h"
 #include "vec-maths.h"
 
+// TODO: Redundant with Transform.h. Delete one of them.
 struct TData {
   TData() = default;
 
@@ -30,6 +31,8 @@ struct TData {
   }
 };
 
+// Stores data for all Objects in a flat structure. This makes iterating through
+// them when flattening the tree much faster due to cache-friendly data access.
 class WorldTree {
  public:
   WorldTree() {
