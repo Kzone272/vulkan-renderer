@@ -182,7 +182,7 @@ class Renderer {
   SampleQuery sample_query_;
 
 #ifdef DEBUG
-  const bool enable_validation_layers_ = false;
+  const bool enable_validation_layers_ = true;
 #else
   const bool enable_validation_layers_ = false;
 #endif  // DEBUG

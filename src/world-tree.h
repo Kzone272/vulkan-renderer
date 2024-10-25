@@ -61,6 +61,9 @@ class WorldTree {
     local_dirty_.emplace_back(true);
     root_ms_.emplace_back(1.f);
     root_dirty_.emplace_back(true);
+    model_ms_.emplace_back(obj->getModelMatrix());
+    models_.emplace_back(obj->getModel());
+    mats_.emplace_back(obj->getMaterial());
   }
 
   void orderChanged() {
@@ -98,9 +101,17 @@ class WorldTree {
     return ts_[i].matrix();
   }
 
+  void setMaterial(size_t i, MaterialId mat) {
+    mats_[i] = mat;
+  }
+
   void getModels(std::vector<std::pair<Object*, ModelId>>& pairs) {
-    for (auto* child : children_) {
-      child->getModels(pairs);
+    if (!in_order_) {
+      order();
+    }
+
+    for (size_t i = 0; i < count_; i++) {
+      pairs.emplace_back(objects_[i], models_[i]);
     }
   }
 

@@ -28,8 +28,6 @@ const std::map<ModelId, ModelInfo> kModelRegistry = {
 Object::Object(
     WorldTree* world, ModelId model, std::optional<mat4> model_transform)
     : world_(world), model_(model) {
-  world_->reg(this);
-
   if (model_transform) {
     model_transform_ = *model_transform;
   } else {
@@ -38,6 +36,13 @@ Object::Object(
       model_transform_ = it->second.model_transform;
     }
   }
+
+  world_->reg(this);
+}
+
+void Object::setMaterial(MaterialId material) {
+  world_->setMaterial(obj_ind_, material);
+  material_ = material;
 }
 
 void Object::setParent(Object* parent) {
@@ -74,12 +79,10 @@ vec3 Object::getPos() const {
   }
 }
 
-const mat4& Object::matrix() {
+mat4 Object::matrix() const {
+  return world_->matrix(obj_ind_);
   // if (pos_anims_.size() || rot_anims_.size()) {
   //   return Transform::addBlend(transform_, anim_transform_, 1).matrix();
-  // } else {
-  local_m_ = world_->matrix(obj_ind_);
-  return local_m_;
   // }
 }
 
@@ -125,13 +128,6 @@ mat4 Object::toLocal(Object* ancestor) {
 
 vec3 Object::posToLocal(Object* ancestor, vec3 pos) {
   return toLocal(ancestor) * vec4(pos, 1);
-}
-
-void Object::getModels(std::vector<std::pair<Object*, ModelId>>& pairs) {
-  pairs.emplace_back(this, model_);
-  for (auto* child : children_) {
-    child->getModels(pairs);
-  }
 }
 
 void Object::addPosAnim(Animation<vec3>* a) {
@@ -198,26 +194,6 @@ void Object::clearChildren() {
   children_.clear();
   owned_children_.clear();
   world_->orderChanged();
-}
-
-void Object::getSceneObjects(
-    const mat4& parent, std::vector<SceneObject>& objs,
-    const std::set<ModelId>& hidden) {
-  mat4 local = matrix();
-  mat4 root;
-  fastMult(parent, local, root);
-  if (model_ != ModelId::None && !hidden.contains(model_)) {
-    mat4 final;
-    fastMult(root, model_transform_, final);
-    objs.push_back({
-        model_,
-        material_,
-        final,
-    });
-  }
-  for (auto& child : children_) {
-    child->getSceneObjects(root, objs, hidden);
-  }
 }
 
 Object* Object::lca(Object* o1, Object* o2) {

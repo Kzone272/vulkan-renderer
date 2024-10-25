@@ -42,13 +42,7 @@ class Object {
   glm::quat getRot() const;
   void setPos(const vec3& pos);
   vec3 getPos() const;
-  void setTransform(const Transform& t);
-  const Transform& getTransform() const;
-  const mat4& matrix();
-
-  void setMaterial(MaterialId material) {
-    material_ = material;
-  }
+  mat4 matrix() const;
 
   // Transform from this object's space to an ancestor.
   mat4 toAncestor(Object* ancestor);
@@ -84,6 +78,7 @@ class Object {
   ModelId getModel() {
     return model_;
   }
+  void setMaterial(MaterialId material);
   MaterialId getMaterial() {
     return material_;
   }
@@ -91,22 +86,15 @@ class Object {
     return model_transform_;
   }
 
-  void getModels(std::vector<std::pair<Object*, ModelId>>& pairs);
-  void getSceneObjects(
-      const mat4& parent, std::vector<SceneObject>& objs,
-      const std::set<ModelId>& hidden);
-
  private:
   ModelId model_;
   MaterialId material_ = kMaterialIdNone;
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
-  mat4 local_m_{1};
 
   WorldTree* world_ = nullptr;
   Object* parent_ = nullptr;
   size_t obj_ind_ = -1;
-  // Transform transform_;
   Transform anim_transform_;
 
   // Animations that add to current position.

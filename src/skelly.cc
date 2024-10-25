@@ -573,7 +573,7 @@ void WalkCycle::updateStep(FootMeta& foot_m) {
   flat_t = fmodClamp(flat_t, 1);
 
   vec2 end_toe = vec2(liftoff.z, 0);
-  vec2 end_ankle = end_toe + vec2(sizes_->ankle.z, sizes_->ankle.y);
+  vec2 end_ankle = end_toe + sizes_->ankle.zy;
   float toe_to_ankle = glm::length(sizes_->ankle);
   float hip_to_ankle = glm::length(hip_pos - end_ankle);
 
@@ -643,12 +643,9 @@ void WalkCycle::updateAnkle(FootMeta& foot_m) {
   glm::quat toe_rot = glm::angleAxis(toe_angle, vec3(1, 0, 0));
   glm::quat heel_rot = glm::angleAxis(heel_angle, vec3(1, 0, 0));
 
-  vec2 ball = vec2(sizes_->ball.z, sizes_->ball.y);
-  vec2 heel = vec2(sizes_->heel.z, sizes_->heel.y);
-  vec2 toe = vec2(sizes_->toe.z, sizes_->toe.y);
-  vec2 ball_to_ankle = -1.f * ball;
-  vec2 heel_to_ball = ball - heel;
-  vec2 toe_to_heel = heel - toe;
+  vec2 ball_to_ankle = -1.f * sizes_->ball.zy;
+  vec2 heel_to_ball = sizes_->ball.zy - sizes_->heel.zy;
+  vec2 toe_to_heel = sizes_->heel.zy - sizes_->toe.zy;
 
   // Calculate the position of the ankle from the toe, given the hierarchy:
   //   ankle -> ball -> heel -> toe
@@ -661,7 +658,7 @@ void WalkCycle::updateAnkle(FootMeta& foot_m) {
   glm::quat ball_rot = glm::angleAxis(-ball_angle, vec3(1, 0, 0));
   glm::quat ankle_rot = glm::angleAxis(ball_angle + foot_angle, vec3(1, 0, 0));
 
-  vec3 ankle = point_foot * vec3(0, ankle_2d.y, ankle_2d.x) + foot_m.toe_pos;
+  vec3 ankle = point_foot * vec3(0, ankle_2d.yx) + foot_m.toe_pos;
 
   BipedRig::Id ankle_bone =
       foot_m.is_left ? BipedRig::Id::Lankle : BipedRig::Id::Rankle;
