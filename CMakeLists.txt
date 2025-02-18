@@ -19,7 +19,7 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 find_package(glm 0.9.9.9 CONFIG REQUIRED)
 find_package(SDL2 2.28.0 CONFIG REQUIRED)
 find_package(SDL2_image 2.6.3 CONFIG REQUIRED)
-find_package(Vulkan REQUIRED)
+find_package(Vulkan 1.4 REQUIRED)
 find_package(tinyobjloader 2.0.0 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 

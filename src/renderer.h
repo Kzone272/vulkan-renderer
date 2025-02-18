@@ -132,9 +132,10 @@ class Renderer {
   uint32_t height_ = 100;
 
   vk::UniqueInstance instance_;
-  vk::DispatchLoaderDynamic dldi_;
+  vk::detail::DispatchLoaderDynamic dldi_;
   vk::UniqueSurfaceKHR surface_;
-  vk::UniqueHandle<vk::DebugUtilsMessengerEXT, vk::DispatchLoaderDynamic>
+  vk::UniqueHandle<
+      vk::DebugUtilsMessengerEXT, vk::detail::DispatchLoaderDynamic>
       dbg_messenger_;
   vk::PhysicalDevice physical_device_;
   // Indices of queue families for the selected |physical_device_|

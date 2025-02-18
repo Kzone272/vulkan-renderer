@@ -41,9 +41,9 @@ const std::vector<const char*> device_extensions = {
 };
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
-    VkDebugUtilsMessageTypeFlagsEXT msg_type,
-    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    vk::DebugUtilsMessageSeverityFlagBitsEXT msg_severity,
+    vk::DebugUtilsMessageTypeFlagsEXT msg_type,
+    const vk::DebugUtilsMessengerCallbackDataEXT* callback_data,
     void* user_data) {
   std::println("dbg_layer: {}", callback_data->pMessage);
   return VK_FALSE;
@@ -1184,7 +1184,7 @@ void Renderer::recordCommandBuffer() {
     swap_.startRender(ds_);
 
     auto scene_output = scene_uses_msaa_ ? resolve_.outputSet()->sets[0]
-                                    : scene_.outputSet()->sets[0];
+                                         : scene_.outputSet()->sets[0];
 
     if (frame_state_->debug_view == DebugView::None) {
       if (frame_state_->stained_glass) {
