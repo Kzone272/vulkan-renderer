@@ -16,3 +16,6 @@
 [submodule "deps/VulkanMemoryAllocator"]
 	path = deps/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "deps/VulkanMemoryAllocator-Hpp"]
+	path = deps/VulkanMemoryAllocator-Hpp
+	url = git@github.com:YaaZ/VulkanMemoryAllocator-Hpp.git
