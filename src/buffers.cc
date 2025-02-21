@@ -19,6 +19,21 @@ void createBuffer(
   };
   buf_mem = vs.device.allocateMemoryUnique(alloc_info).value;
   std::ignore = vs.device.bindBufferMemory(*buf, *buf_mem, 0);
+
+  vma::AllocationCreateInfo alloc_ci = {
+      .usage = vma::MemoryUsage::eAuto,
+  };
+
+  // VkBuffer buffer;
+  // VmaAllocation allocation;
+  // vmaCreateBuffer(
+  //     vs.vma, &static_cast<VkBufferCreateInfo const&>(buffer_ci), &alloc_ci,
+  //     &buffer, &allocation, nullptr);
+
+  auto res = vs.vma.createBufferUnique(buffer_ci, alloc_ci).value;
+  // buf = std::move(res.first);
+
+  // vs.vma->
 }
 
 DynamicBuf createDynamicBuffer(

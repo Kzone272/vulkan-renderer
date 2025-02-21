@@ -54,6 +54,8 @@ add_executable(main
   pose.cc
   imgui-helpers.h
   imgui-helpers.cc
+  vma-usage.h
+  vma-usage.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)
@@ -67,6 +69,7 @@ target_include_directories(main PRIVATE
   ${DEPS_DIR}/include/imgui
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
+  ${COMMON_INCLUDE_DIRS}
 )
 
 target_precompile_headers(main
