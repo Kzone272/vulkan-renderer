@@ -114,6 +114,16 @@ void Renderer::initVulkan() {
   createSurface();
   pickPhysicalDevice();
   createLogicalDevice();
+
+  // Create VmaAllocator
+  vma::AllocatorCreateInfo vma_ci = {
+      .physicalDevice = physical_device_,
+      .device = vs_.device,
+      .instance = *instance_,
+      .vulkanApiVersion = VK_API_VERSION_1_0,
+  };
+  vs_.vma = vma::createAllocator(vma_ci).value;
+
   createCommandPool();
   createCommandBuffers();
   createSwapchain();
