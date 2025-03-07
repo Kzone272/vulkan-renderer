@@ -158,9 +158,10 @@ void Scene::render(
       curr_model = it->second.get();
 
       vk::DeviceSize offsets[] = {0};
-      ds.cmd.bindVertexBuffers(0, *curr_model->vert_buf, offsets);
+      ds.cmd.bindVertexBuffers(0, *curr_model->vert_buf.buf, offsets);
       if (curr_model->index_count) {
-        ds.cmd.bindIndexBuffer(*curr_model->ind_buf, 0, vk::IndexType::eUint32);
+        ds.cmd.bindIndexBuffer(
+            *curr_model->ind_buf.buf, 0, vk::IndexType::eUint32);
       }
     }
 

@@ -68,6 +68,7 @@ class Renderer {
   bool checkDeviceExtensionSupport(vk::PhysicalDevice device);
   SwapchainSupportDetails querySwapchainSupport(vk::PhysicalDevice device);
   void createLogicalDevice();
+  void createVma();
   vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
       const std::vector<vk::SurfaceFormatKHR>& formats);
   vk::PresentModeKHR chooseSwapPresentMode(
@@ -111,7 +112,7 @@ class Renderer {
   // from the staging_buf to dst_buf.
   void stageBuffer(
       vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
-      vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem);
+      Buffer& dst_buf);
 
   vk::CommandBuffer beginSingleTimeCommands();
   void endSingleTimeCommands(vk::CommandBuffer cmd_buf);
@@ -131,6 +132,7 @@ class Renderer {
   uint32_t width_ = 100;
   uint32_t height_ = 100;
 
+  uint32_t vulkan_version_ = VK_API_VERSION_1_0;
   vk::UniqueInstance instance_;
   vk::DispatchLoaderDynamic dldi_;
   vk::UniqueSurfaceKHR surface_;
@@ -140,6 +142,7 @@ class Renderer {
   // Indices of queue families for the selected |physical_device_|
   QueueFamilyIndices q_indices_;
   vk::UniqueDevice device_;
+  vma::UniqueAllocator vma_;
   vk::Queue gfx_q_;
   vk::Queue present_q_;
   SwapchainSupportDetails swapchain_support_;
