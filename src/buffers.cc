@@ -25,9 +25,9 @@ Buffer createStagingBuffer(const VulkanState& vs, vk::DeviceSize size) {
       .usage = vk::BufferUsageFlagBits::eTransferSrc,
   };
   vma::AllocationCreateInfo alloc_ci{
-      .usage = vma::MemoryUsage::eAutoPreferHost,
       .flags = vma::AllocationCreateFlagBits::eMapped |
                vma::AllocationCreateFlagBits::eHostAccessSequentialWrite,
+      .usage = vma::MemoryUsage::eAutoPreferHost,
   };
   return createBuffer(vs, buffer_ci, alloc_ci);
 }
