@@ -32,7 +32,7 @@ Currently builds on MSVC >= 1937 on Windows, and Clang >= 17 on Mac.
 ### Dependencies
 
 These should be installed using instructions in deps/README.md, or globally installed:
-- VulkanSDK @ 1.3.236.0
+- VulkanSDK @ 1.3.290.0
 - sdl2 @ 2.28.0
 - SDL2_image[core,libjpeg-turbo] @ 2.6.3
 - glm @ 0.9.9.9

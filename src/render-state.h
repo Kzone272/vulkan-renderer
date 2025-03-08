@@ -1,12 +1,14 @@
 #pragma once
 
 #include "shaders.h"
+#include "vma-usage.h"
 
 // This will be owned by Renderer, but passed to other classes after all
 // properties are set.
 struct VulkanState {
   const uint32_t kMaxFramesInFlight;
   vk::Device device;
+  vma::Allocator vma = nullptr;
   vk::DescriptorPool desc_pool;
   vk::Sampler linear_sampler;
   vk::Sampler clamp_sampler;

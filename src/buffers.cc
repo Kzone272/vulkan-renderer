@@ -1,47 +1,59 @@
 #include "buffers.h"
 
-void createBuffer(
-    const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage,
-    vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
-    vk::UniqueDeviceMemory& buf_mem) {
+DynamicBuf::~DynamicBuf() {
+  if (staging.alloc) {
+    vma.unmapMemory(*staging.alloc);
+  }
+}
+
+Buffer createBuffer(
+    const VulkanState& vs, const vk::BufferCreateInfo& buffer_ci,
+    const vma::AllocationCreateInfo& alloc_ci) {
+  Buffer buffer;
+  auto result = vs.vma.createBufferUnique(buffer_ci, alloc_ci).value;
+  buffer.buf = std::move(result.first);
+  buffer.alloc = std::move(result.second);
+  buffer.info.range = buffer_ci.size;
+  buffer.info.buffer = *buffer.buf;
+  buffer.props = vs.vma.getAllocationMemoryProperties(*buffer.alloc);
+  return std::move(buffer);
+}
+
+Buffer createStagingBuffer(const VulkanState& vs, vk::DeviceSize size) {
+  vk::BufferCreateInfo buffer_ci{
+      .size = size,
+      .usage = vk::BufferUsageFlagBits::eTransferSrc,
+  };
+  vma::AllocationCreateInfo alloc_ci{
+      .flags = vma::AllocationCreateFlagBits::eMapped |
+               vma::AllocationCreateFlagBits::eHostAccessSequentialWrite,
+      .usage = vma::MemoryUsage::eAutoPreferHost,
+  };
+  return createBuffer(vs, buffer_ci, alloc_ci);
+}
+
+Buffer createDeviceBuffer(
+    const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage) {
   vk::BufferCreateInfo buffer_ci{
       .size = size,
       .usage = usage,
-      .sharingMode = vk::SharingMode::eExclusive,
   };
-  buf = vs.device.createBufferUnique(buffer_ci).value;
-
-  vk::MemoryRequirements mem_reqs = vs.device.getBufferMemoryRequirements(*buf);
-
-  vk::MemoryAllocateInfo alloc_info{
-      .allocationSize = mem_reqs.size,
-      .memoryTypeIndex = findMemoryType(vs, mem_reqs.memoryTypeBits, props),
+  vma::AllocationCreateInfo alloc_ci{
+      .usage = vma::MemoryUsage::eAutoPreferDevice,
   };
-  buf_mem = vs.device.allocateMemoryUnique(alloc_info).value;
-  std::ignore = vs.device.bindBufferMemory(*buf, *buf_mem, 0);
+  return createBuffer(vs, buffer_ci, alloc_ci);
 }
 
 DynamicBuf createDynamicBuffer(
     const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage) {
   DynamicBuf dbuf;
-  createBuffer(
-      vs, size, vk::BufferUsageFlagBits::eTransferSrc,
-      vk::MemoryPropertyFlagBits::eHostVisible |
-          vk::MemoryPropertyFlagBits::eHostCoherent,
-      dbuf.staging.buf, dbuf.staging.mem);
-  dbuf.staging.info.range = size;
-  dbuf.staging.info.buffer = *dbuf.staging.buf;
+  dbuf.vma = vs.vma;
 
-  dbuf.staging.mapped =
-      vs.device.mapMemory(*dbuf.staging.mem, dbuf.staging.info.offset, size)
-          .value;
+  dbuf.staging = createStagingBuffer(vs, size);
+  dbuf.staging.mapped = vs.vma.mapMemory(*dbuf.staging.alloc).value;
 
-  createBuffer(
-      vs, size, usage | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal, dbuf.device.buf,
-      dbuf.device.mem);
-  dbuf.device.info.range = size;
-  dbuf.device.info.buffer = *dbuf.device.buf;
+  dbuf.device = createDeviceBuffer(
+      vs, size, usage | vk::BufferUsageFlagBits::eTransferDst);
 
   return std::move(dbuf);
 }
@@ -51,6 +63,9 @@ void updateDynamicBuf(
     vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access) {
   size_t size = std::min((size_t)dbuf.staging.info.range, data_size);
   memcpy(dbuf.staging.mapped, data, size);
+  if (!(dbuf.staging.props & vk::MemoryPropertyFlagBits::eHostCoherent)) {
+    dbuf.vma.flushAllocation(*dbuf.staging.alloc, 0, size);
+  }
 
   vk::BufferCopy copy{
       .srcOffset = dbuf.staging.info.offset,
@@ -91,4 +106,26 @@ uint32_t findMemoryType(
   }
   ASSERT(false);
   return 0;
+}
+
+// Deprecated: Doesn't use VMA.
+void createBuffer(
+    const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage,
+    vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
+    vk::UniqueDeviceMemory& buf_mem) {
+  vk::BufferCreateInfo buffer_ci{
+      .size = size,
+      .usage = usage,
+      .sharingMode = vk::SharingMode::eExclusive,
+  };
+  buf = vs.device.createBufferUnique(buffer_ci).value;
+
+  vk::MemoryRequirements mem_reqs = vs.device.getBufferMemoryRequirements(*buf);
+
+  vk::MemoryAllocateInfo alloc_info{
+      .allocationSize = mem_reqs.size,
+      .memoryTypeIndex = findMemoryType(vs, mem_reqs.memoryTypeBits, props),
+  };
+  buf_mem = vs.device.allocateMemoryUnique(alloc_info).value;
+  std::ignore = vs.device.bindBufferMemory(*buf, *buf_mem, 0);
 }

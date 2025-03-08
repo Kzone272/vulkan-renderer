@@ -4,22 +4,34 @@
 #include "vulkan-include.h"
 
 struct Buffer {
-  vk::UniqueBuffer buf;
-  vk::UniqueDeviceMemory mem;
+  vma::UniqueBuffer buf = {};
+  vma::UniqueAllocation alloc = {};
+  vk::MemoryPropertyFlags props = {};
   void* mapped = nullptr;
-  vk::DescriptorBufferInfo info;
+  vk::DescriptorBufferInfo info = {};
 };
 
 struct DynamicBuf {
+  DynamicBuf() = default;
+  ~DynamicBuf();
+  // Move only
+  DynamicBuf(DynamicBuf&& other) = default;
+  DynamicBuf& operator=(DynamicBuf&& other) = default;
+  DynamicBuf(const DynamicBuf& other) = delete;
+  DynamicBuf& operator=(const DynamicBuf& other) = delete;
+
   Buffer staging;
   Buffer device;
+  vma::Allocator vma;
 };
 
-// TODO: Take in a Buffer?
-void createBuffer(
-    const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage,
-    vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
-    vk::UniqueDeviceMemory& buf_mem);
+Buffer createBuffer(
+    const VulkanState& vs, const vk::BufferCreateInfo& buffer_ci,
+    const vma::AllocationCreateInfo& alloc_ci);
+Buffer createStagingBuffer(const VulkanState& vs, vk::DeviceSize size);
+Buffer createDeviceBuffer(
+    const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage);
+
 DynamicBuf createDynamicBuffer(
     const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage);
 std::vector<vk::DescriptorBufferInfo*> uboInfos(std::vector<DynamicBuf>& dbufs);
@@ -37,3 +49,9 @@ void updateDynamicBuf(
 
 uint32_t findMemoryType(
     const VulkanState& vs, uint32_t type_filter, vk::MemoryPropertyFlags props);
+
+// Deprecated: Doesn't use VMA.
+void createBuffer(
+    const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage,
+    vk::MemoryPropertyFlags props, vk::UniqueBuffer& buf,
+    vk::UniqueDeviceMemory& buf_mem);

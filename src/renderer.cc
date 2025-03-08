@@ -114,6 +114,7 @@ void Renderer::initVulkan() {
   createSurface();
   pickPhysicalDevice();
   createLogicalDevice();
+  createVma();
   createCommandPool();
   createCommandBuffers();
   createSwapchain();
@@ -237,7 +238,7 @@ void Renderer::createInstance() {
       .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
       .pEngineName = "No Engine",
       .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-      .apiVersion = VK_API_VERSION_1_0,
+      .apiVersion = vulkan_version_,
   };
   vk::InstanceCreateInfo instance_ci{.pApplicationInfo = &app_info};
 
@@ -511,6 +512,17 @@ void Renderer::createLogicalDevice() {
   ASSERT(present_q_);
 }
 
+void Renderer::createVma() {
+  vma::AllocatorCreateInfo vma_ci = {
+      .physicalDevice = physical_device_,
+      .device = vs_.device,
+      .instance = *instance_,
+      .vulkanApiVersion = vulkan_version_,
+  };
+  vma_ = vma::createAllocatorUnique(vma_ci).value;
+  vs_.vma = *vma_;
+}
+
 vk::SurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(
     const std::vector<vk::SurfaceFormatKHR>& formats) {
   DASSERT(formats.size());
@@ -692,18 +704,10 @@ Texture* Renderer::createTexture(
   texture->format = vk::Format::eB8G8R8A8Srgb;
   texture->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
 
-  vk::UniqueBuffer staging_buf;
-  vk::UniqueDeviceMemory staging_buf_mem;
   vk::DeviceSize image_size = width * height * 4;
-  createBuffer(
-      vs_, image_size, vk::BufferUsageFlagBits::eTransferSrc,
-      vk::MemoryPropertyFlagBits::eHostVisible |
-          vk::MemoryPropertyFlagBits::eHostCoherent,
-      staging_buf, staging_buf_mem);
+  auto staging = createStagingBuffer(vs_, image_size);
 
-  void* mapped_data = device_->mapMemory(*staging_buf_mem, 0, image_size).value;
-  memcpy(mapped_data, texture_data, static_cast<size_t>(image_size));
-  device_->unmapMemory(*staging_buf_mem);
+  vs_.vma.copyMemoryToAllocation(texture_data, *staging.alloc, 0, image_size);
 
   createImage(
       vs_, *texture.get(), vk::ImageTiling::eOptimal,
@@ -716,7 +720,7 @@ Texture* Renderer::createTexture(
   transitionImageLayout(
       *texture->image, texture->format, texture->mip_levels,
       vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-  copyBufferToImage(*staging_buf, *texture->image, width, height);
+  copyBufferToImage(*staging.buf, *texture->image, width, height);
   generateMipmaps(
       *texture->image, width, height, texture->format, texture->mip_levels);
   // Transitioned to vk::ImageLayout::eShaderReadOnlyOptimal while generating
@@ -964,8 +968,7 @@ Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
 
   stageBuffer(
       sizeof(MaterialData), (void*)&mat_info.data,
-      vk::BufferUsageFlagBits::eUniformBuffer, material->ubo.buf,
-      material->ubo.mem);
+      vk::BufferUsageFlagBits::eUniformBuffer, material->ubo);
   material->ubo.info = vk::DescriptorBufferInfo{
       .buffer = *material->ubo.buf,
       .offset = 0,
@@ -1024,7 +1027,7 @@ void Renderer::stageVertices(
   vk::DeviceSize size = sizeof(Vertex) * vertices.size();
   stageBuffer(
       size, (void*)vertices.data(), vk::BufferUsageFlagBits::eVertexBuffer,
-      model.vert_buf, model.vert_buf_mem);
+      model.vert_buf);
 }
 
 void Renderer::stageIndices(
@@ -1032,38 +1035,25 @@ void Renderer::stageIndices(
   vk::DeviceSize size = sizeof(uint32_t) * indices.size();
   stageBuffer(
       size, (void*)indices.data(), vk::BufferUsageFlagBits::eIndexBuffer,
-      model.ind_buf, model.ind_buf_mem);
+      model.ind_buf);
 }
 
 // Copy data to a CPU staging buffer, create a GPU buffer, and submit a copy
 // from the staging_buf to dst_buf.
-// TODO: Move to buffers.h
-// TODO: Reuse createDynamicBuffer() for this.
+// TODO: Move to buffers.h?
 void Renderer::stageBuffer(
     vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
-    vk::UniqueBuffer& dst_buf, vk::UniqueDeviceMemory& dst_buf_mem) {
-  vk::UniqueBuffer staging_buf;
-  vk::UniqueDeviceMemory staging_buf_mem;
-  createBuffer(
-      vs_, size, vk::BufferUsageFlagBits::eTransferSrc,
-      vk::MemoryPropertyFlagBits::eHostVisible |
-          vk::MemoryPropertyFlagBits::eHostCoherent,
-      staging_buf, staging_buf_mem);
-
-  void* staging_data = device_->mapMemory(*staging_buf_mem, 0, size).value;
-  memcpy(staging_data, data, (size_t)size);
-  device_->unmapMemory(*staging_buf_mem);
-
-  createBuffer(
-      vs_, size, usage | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal, dst_buf, dst_buf_mem);
+    Buffer& dst_buf) {
+  auto dbuf = createDynamicBuffer(vs_, size, usage);
 
   vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
-  vk::BufferCopy copy_region{
-      .size = size,
-  };
-  cmd_buf.copyBuffer(*staging_buf, *dst_buf, copy_region);
+
+  updateDynamicBuf(
+      cmd_buf, dbuf, data, size, vk::PipelineStageFlagBits::eTopOfPipe, {});
+
   endSingleTimeCommands(cmd_buf);
+
+  dst_buf = std::move(dbuf.device);
 }
 
 vk::CommandBuffer Renderer::beginSingleTimeCommands() {
@@ -1184,7 +1174,7 @@ void Renderer::recordCommandBuffer() {
     swap_.startRender(ds_);
 
     auto scene_output = scene_uses_msaa_ ? resolve_.outputSet()->sets[0]
-                                    : scene_.outputSet()->sets[0];
+                                         : scene_.outputSet()->sets[0];
 
     if (frame_state_->debug_view == DebugView::None) {
       if (frame_state_->stained_glass) {

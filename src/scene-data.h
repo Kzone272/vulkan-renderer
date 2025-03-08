@@ -13,10 +13,8 @@ struct Material {
 };
 
 struct Model {
-  vk::UniqueBuffer vert_buf;
-  vk::UniqueDeviceMemory vert_buf_mem;
-  vk::UniqueBuffer ind_buf;
-  vk::UniqueDeviceMemory ind_buf_mem;
+  Buffer vert_buf;
+  Buffer ind_buf;
   uint32_t index_count = 0;
   uint32_t vertex_count = 0;
 };
