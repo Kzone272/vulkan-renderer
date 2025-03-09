@@ -11,13 +11,11 @@ git submodule update --init
 ```
 cmake --preset Debug
 cmake --build --preset Debug
-cmake --install build/Debug --config Debug
 ```
 And for Release builds:
 ```
 cmake --preset Release
 cmake --build --preset Release
-cmake --install build/Release --config Release
 ```
 
 This will build all deps into deps/build/(Debug|Release) dir and install them

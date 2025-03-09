@@ -65,8 +65,9 @@ set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 0)
 add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
-  ${DEPS_DIR}/include
-  ${DEPS_DIR}/include/imgui
+  ${PROJECT_SOURCE_DIR}/deps
+  # Needed because Imgui itself includes headers relative to this folder.
+  ${IMGUI_DIR} 
   ${Vulkan_INCLUDE_DIRS}
   ${TINYOBJLOADER_INCLUDE_DIRS}
   ${COMMON_INCLUDE_DIRS}

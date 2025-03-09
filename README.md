@@ -11,11 +11,11 @@ Video of procedural walk cycle: https://youtu.be/W4CaiJ9Zog8
 
 ### Building
 
-- (optional) Fetch dependencies with:
+- Fetch dependencies with:
 ```
 git submodule update --init
 ```
-- (optional) Build and install all deps (see deps/README.md)
+- Build all deps (see deps/README.md)
 
 - From this directory, configure using one of the provided presets:
 ```
