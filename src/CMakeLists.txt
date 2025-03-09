@@ -66,6 +66,8 @@ add_dependencies(main shaders)
 
 target_include_directories(main PRIVATE
   ${PROJECT_SOURCE_DIR}/deps
+  ${PROJECT_SOURCE_DIR}/deps/VulkanMemoryAllocator/include
+  ${PROJECT_SOURCE_DIR}/deps/VulkanMemoryAllocator-Hpp/include
   # Needed because Imgui itself includes headers relative to this folder.
   ${IMGUI_DIR} 
   ${Vulkan_INCLUDE_DIRS}

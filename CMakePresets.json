@@ -2,17 +2,8 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "common",
-      "hidden": true,
-      "cacheVariables": {
-        "COMMON_INCLUDE_DIRS":
-          "${sourceDir}/deps/VulkanMemoryAllocator/include;${sourceDir}/deps/VulkanMemoryAllocator-Hpp/include"
-      }
-    },
-    {
       "name": "Debug",
       "hidden": true,
-      "inherits": ["common"],
       "binaryDir": "${sourceDir}/build/Debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -23,7 +14,6 @@
     {
       "name": "Release",
       "hidden": true,
-      "inherits": ["common"],
       "binaryDir": "${sourceDir}/build/Release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -34,7 +24,6 @@
     {
       "name": "RelWithDebInfo",
       "hidden": true,
-      "inherits": ["common"],
       "binaryDir": "${sourceDir}/build/RelWithDebInfo",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
