@@ -27,9 +27,10 @@ struct Pass {
 struct Scene {
   Pass pass;
   std::vector<DynamicBuf> globals;
+  std::vector<DynamicBuf> objects;
   DescLayout* global;
   DescLayout* material;
-  Pipeline* draw;
+  Pipeline* scene;
 
   void init(const VulkanState& vs, vk::SampleCountFlagBits samples);
   DescLayout* outputSet() {
@@ -40,7 +41,7 @@ struct Scene {
   }
   void update(const DrawState& ds, const FrameState& fs);
   void render(
-      const DrawState& ds, std::vector<SceneObject>& objects,
+      const DrawState& ds, std::vector<DrawData>& draws,
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
       const std::vector<std::unique_ptr<Material>>& loaded_mats);
 };

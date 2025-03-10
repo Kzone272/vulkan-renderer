@@ -117,11 +117,11 @@ void Skelly::setMaterials(MaterialId bone_mat, MaterialId control_mat) {
 }
 
 void Skelly::getSceneObjects(
-    const mat4& parent, std::vector<SceneObject>& objs,
-    const std::set<ModelId>& hidden) {
+    const mat4& parent, std::vector<DrawData>& draws,
+    std::vector<ObjectData>& objects, const std::set<ModelId>& hidden) {
   mat4 root = root_.matrix();
-  rig_.getSceneObjects(root, objs, hidden);
-  skeleton_.getSceneObjects(root, objs, hidden);
+  rig_.getSceneObjects(root, draws, objects, hidden);
+  skeleton_.getSceneObjects(root, draws, objects, hidden);
 }
 
 void Skelly::handleInput(const InputState& input) {

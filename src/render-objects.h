@@ -93,10 +93,16 @@ struct MaterialInfo {
 typedef uint32_t MaterialId;
 inline const uint32_t kMaterialIdNone = -1;
 
-struct SceneObject {
+struct DrawData {
   ModelId model = ModelId::None;
   MaterialId material = kMaterialIdNone;
-  mat4 transform;
+  size_t obj_ind = -1;
+};
+
+static constexpr size_t kMaxObjects = 64 * 1024;  // arbitrary big number
+
+struct ObjectData {
+  mat4 model;
 };
 
 struct Vertex2d {
@@ -112,7 +118,8 @@ enum class DebugView {
 
 struct FrameState {
   uint64_t frame_num = 0;
-  std::vector<SceneObject> objects;
+  std::vector<DrawData> draws;
+  std::vector<ObjectData> objects;
   std::vector<Light> lights;
   mat4 model;
   mat4 view;

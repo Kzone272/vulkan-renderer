@@ -574,19 +574,21 @@ void App::flattenObjectTree() {
 
   static const mat4 identity(1);
   auto& hidden = options_.show_controls ? empty_set : control_models;
+  frame_state_.draws.clear();
   frame_state_.objects.clear();
   world_.updateMats();
-  world_.getSceneObjects(frame_state_.objects, hidden);
-  skelly_.getSceneObjects(identity, frame_state_.objects, hidden);
+  world_.getSceneObjects(frame_state_.draws, frame_state_.objects, hidden);
+  skelly_.getSceneObjects(
+      identity, frame_state_.draws, frame_state_.objects, hidden);
 
   static const std::set<ModelId> gooch_models = {
       ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
       ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
   };
   if (ui_.gooch) {
-    for (auto& object : frame_state_.objects) {
-      if (auto it = gooch_models.contains(object.model)) {
-        object.material = mats_.gooch;
+    for (auto& draw : frame_state_.draws) {
+      if (auto it = gooch_models.contains(draw.model)) {
+        draw.material = mats_.gooch;
       }
     }
   }

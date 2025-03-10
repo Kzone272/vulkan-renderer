@@ -1088,9 +1088,12 @@ void Renderer::createDescriptorPool() {
   // Arbitrary. 100 seems fine for now.
   const uint32_t kMaxSamplers = 100;
   const uint32_t kMaxUbos = 100;
+  const uint32_t kMaxStorageBufs = 100;
 
   std::vector<vk::DescriptorPoolSize> pool_sizes{
       {.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = kMaxUbos},
+      {.type = vk::DescriptorType::eStorageBuffer,
+       .descriptorCount = kMaxStorageBufs},
       {.type = vk::DescriptorType::eCombinedImageSampler,
        .descriptorCount = kMaxSamplers},
   };
@@ -1153,7 +1156,7 @@ void Renderer::recordCommandBuffer() {
   if (frame_state_->update_drawing) {
     drawing_.render(ds_);
   }
-  scene_.render(ds_, frame_state_->objects, loaded_models_, loaded_materials_);
+  scene_.render(ds_, frame_state_->draws, loaded_models_, loaded_materials_);
 
   if (frame_state_->stained_glass) {
     edges_.render(ds_, scene_.outputSet()->sets[1]);

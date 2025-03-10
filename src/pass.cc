@@ -43,7 +43,9 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   // Bound per frame.
   global = pass.makeDescLayout();
   *global = {
-      .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
+      .binds =
+          {{.type = vk::DescriptorType::eUniformBuffer},
+           {.type = vk::DescriptorType::eStorageBuffer}},
       .stages =
           vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
   };
@@ -57,23 +59,17 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
-  vk::PushConstantRange scene_push{
-      .stageFlags = vk::ShaderStageFlagBits::eVertex,
-      .offset = 0,
-      .size = sizeof(PushData),
-  };
   vk::PipelineVertexInputStateCreateInfo vertex_in{};
   auto vert_binding = getBindingDesc<Vertex>();
   auto vert_attrs = getAttrDescs<Vertex>();
   vertex_in.setVertexBindingDescriptions(vert_binding);
   vertex_in.setVertexAttributeDescriptions(vert_attrs);
 
-  draw = pass.makePipeline();
-  *draw = {
+  scene = pass.makePipeline();
+  *scene = {
       .vert_shader = vs.shaders.get("scene.vert.spv"),
       .frag_shader = vs.shaders.get("scene.frag.spv"),
       .desc_layouts = {global, material},
-      .push_ranges = {scene_push},
       .vert_in = vertex_in,
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
@@ -83,10 +79,14 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   for (size_t i = 0; i < vs.kMaxFramesInFlight; i++) {
     globals.push_back(createDynamicBuffer(
         vs, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
+    objects.push_back(createDynamicBuffer(
+        vs, kMaxObjects * sizeof(ObjectData),
+        vk::BufferUsageFlagBits::eStorageBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
   global->updateUboBind(0, uboInfos(globals), writes);
+  global->updateUboBind(1, uboInfos(objects), writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
@@ -111,21 +111,25 @@ void Scene::update(const DrawState& ds, const FrameState& fs) {
   updateDynamicBuf(
       ds.cmd, globals[ds.frame], std::span<GlobalData>(&data, 1), stages,
       vk::AccessFlagBits::eUniformRead);
+  updateDynamicBuf(
+      ds.cmd, objects[ds.frame], std::span(fs.objects),
+      vk::PipelineStageFlagBits::eVertexShader,
+      vk::AccessFlagBits::eShaderRead);
 }
 
 void Scene::render(
-    const DrawState& ds, std::vector<SceneObject>& objects,
+    const DrawState& ds, std::vector<DrawData>& draws,
     const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
     const std::vector<std::unique_ptr<Material>>& loaded_mats) {
   pass.fbo.beginRp(ds);
 
-  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *draw->pipeline);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene->pipeline);
   ds.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *draw->layout, 0,
+      vk::PipelineBindPoint::eGraphics, *scene->layout, 0,
       global->sets[ds.frame], nullptr);
 
-  // TODO: Sort by material, then by model.
-  std::sort(objects.begin(), objects.end(), [](auto& left, auto& right) {
+  // Sort by material, then by model.
+  std::sort(draws.begin(), draws.end(), [](auto& left, auto& right) {
     if (left.material != right.material) {
       return left.material < right.material;
     } else {
@@ -136,24 +140,24 @@ void Scene::render(
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
   MaterialId curr_mat_id = kMaterialIdNone;
-  for (auto& obj : objects) {
-    if (obj.material == kMaterialIdNone || obj.model == ModelId::None) {
+  for (auto& draw : draws) {
+    if (draw.material == kMaterialIdNone || draw.model == ModelId::None) {
       continue;
     }
 
-    if (curr_mat_id != obj.material) {
-      curr_mat_id = obj.material;
+    if (curr_mat_id != draw.material) {
+      curr_mat_id = draw.material;
       ASSERT(curr_mat_id < loaded_mats.size());
       auto* mat = loaded_mats[curr_mat_id].get();
 
       ds.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *draw->layout, 1, mat->desc_set,
+          vk::PipelineBindPoint::eGraphics, *scene->layout, 1, mat->desc_set,
           nullptr);
     }
 
-    if (curr_model_id != obj.model) {
-      curr_model_id = obj.model;
-      auto it = loaded_models.find(obj.model);
+    if (curr_model_id != draw.model) {
+      curr_model_id = draw.model;
+      auto it = loaded_models.find(draw.model);
       ASSERT(it != loaded_models.end());
       curr_model = it->second.get();
 
@@ -165,14 +169,13 @@ void Scene::render(
       }
     }
 
-    PushData push_data{obj.transform};
-    ds.cmd.pushConstants<PushData>(
-        *draw->layout, vk::ShaderStageFlagBits::eVertex, 0, push_data);
-
     if (curr_model->index_count) {
-      ds.cmd.drawIndexed(curr_model->index_count, 1, 0, 0, 0);
+      ds.cmd.drawIndexed(
+          curr_model->index_count, 1, 0, 0,
+          static_cast<uint32_t>(draw.obj_ind));
     } else {
-      ds.cmd.draw(curr_model->vertex_count, 1, 0, 0);
+      ds.cmd.draw(
+          curr_model->vertex_count, 1, 0, static_cast<uint32_t>(draw.obj_ind));
     }
   }
 

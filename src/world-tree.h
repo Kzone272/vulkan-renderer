@@ -65,6 +65,7 @@ class WorldTree {
     root_ms_.emplace_back(1.f);
     root_dirty_.emplace_back(true);
     model_ms_.emplace_back(obj->getModelMatrix());
+    obj_ms_.emplace_back(1.f);
     models_.emplace_back(obj->getModel());
     mats_.emplace_back(obj->getMaterial());
   }
@@ -137,23 +138,29 @@ class WorldTree {
         fastMult(root_ms_[parent], local, root);
         root_dirty_[i] = true;  // If this updates, make sure children update.
       }
+
+      if (local_dirty_[i] || root_dirty_[i]) {
+        fastMult(root, model_ms_[i], obj_ms_[i]);
+      }
     }
     std::fill(local_dirty_.begin(), local_dirty_.end(), false);
     std::fill(root_dirty_.begin(), root_dirty_.end(), false);
   }
 
   void getSceneObjects(
-      std::vector<SceneObject>& objs, const std::set<ModelId>& hidden) {
+      std::vector<DrawData>& draws, std::vector<ObjectData>& objects,
+      const std::set<ModelId>& hidden) {
+    size_t base_index = objects.size();
     for (size_t i = 0; i < count_; i++) {
       auto model = models_[i];
-      if (model == ModelId::None || hidden.contains(model)) {
-        continue;
+      if (hidden.contains(model)) {
+        model = ModelId::None;
       }
 
-      mat4 temp;
-      fastMult(root_ms_[i], model_ms_[i], temp);
-      objs.emplace_back(model, mats_[i], temp);
+      draws.emplace_back(
+          model, mats_[i], static_cast<uint32_t>(base_index + i));
     }
+    objects.insert(objects.begin(), obj_ms_.begin(), obj_ms_.end());
   }
 
  private:
@@ -179,6 +186,8 @@ class WorldTree {
     new_roots.reserve(count_);
     std::vector<bool> new_root_dirtys;
     new_root_dirtys.reserve(count_);
+    std::vector<mat4> new_objs;
+    new_objs.reserve(count_);
 
     for (size_t i = 0; i < count_; i++) {
       auto* obj = objects_[i];
@@ -188,6 +197,7 @@ class WorldTree {
       new_local_dirtys.emplace_back(local_dirty_[prev_ind]);
       new_roots.emplace_back(root_ms_[prev_ind]);
       new_root_dirtys.emplace_back(root_dirty_[prev_ind]);
+      new_objs.emplace_back(obj_ms_[prev_ind]);
 
       obj->setObjectIndex(i);
       auto* parent = obj->getParent();
@@ -202,6 +212,7 @@ class WorldTree {
     local_dirty_ = std::move(new_local_dirtys);
     root_ms_ = std::move(new_roots);
     root_dirty_ = std::move(new_root_dirtys);
+    obj_ms_ = std::move(new_objs);
     in_order_ = true;
   }
 
@@ -227,6 +238,7 @@ class WorldTree {
   std::vector<mat4> root_ms_;
   std::vector<bool> root_dirty_;
   std::vector<mat4> model_ms_;
+  std::vector<mat4> obj_ms_;  // output object matrices
   std::vector<ModelId> models_;
   std::vector<MaterialId> mats_;
 };

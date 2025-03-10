@@ -30,3 +30,7 @@ struct MaterialData {
 };
 const uint kPhongMaterial = 0;
 const uint kGoochMaterial = 1;
+
+struct ObjectData {
+  mat4 model;
+};

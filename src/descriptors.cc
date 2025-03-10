@@ -43,6 +43,7 @@ void updateDescSet(
     auto& bind = layout.binds[i];
     switch (bind.type) {
       case vk::DescriptorType::eUniformBuffer:
+      case vk::DescriptorType::eStorageBuffer:
         DASSERT(std::holds_alternative<vk::DescriptorBufferInfo*>(update));
         writes.push_back(
             uboWrite(set, bind, std::get<vk::DescriptorBufferInfo*>(update)));
@@ -106,7 +107,9 @@ void DescLayout::updateUboBind(
     std::vector<vk::WriteDescriptorSet>& writes) {
   DASSERT(sets.size() == infos.size());
   auto& bind = binds[index];
-  DASSERT(bind.type == vk::DescriptorType::eUniformBuffer);
+  DASSERT(
+      bind.type == vk::DescriptorType::eUniformBuffer ||
+      bind.type == vk::DescriptorType::eStorageBuffer);
 
   for (uint32_t i = 0; i < sets.size(); i++) {
     writes.push_back(uboWrite(sets[i], bind, infos[i]));
