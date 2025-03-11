@@ -41,7 +41,7 @@ struct BipedSkeleton {
   void setMaterial(MaterialId material);
   void getSceneObjects(
       const mat4& parent, std::vector<DrawData>& draws,
-      std::vector<ObjectData>& objects, const std::set<ModelId>& hidden);
+      std::vector<mat4>& objects, const std::set<ModelId>& hidden);
 
   void setBone(Id bone, const vec3& pos, const mat4& model_t);
   void setPose(const std::vector<mat4>& pose) {
@@ -130,7 +130,7 @@ struct BipedRig {
 
   void getSceneObjects(
       const mat4& parent, std::vector<DrawData>& draws,
-      std::vector<ObjectData>& objects, const std::set<ModelId>& hidden);
+      std::vector<mat4>& objects, const std::set<ModelId>& hidden);
 
   Skeleton skl_ = {Id::COUNT};
   Pose zero_pose_ = {&skl_};

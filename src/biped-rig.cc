@@ -97,7 +97,7 @@ void BipedSkeleton::setMaterial(MaterialId material) {
 
 void BipedSkeleton::getSceneObjects(
     const mat4& parent, std::vector<DrawData>& draws,
-    std::vector<ObjectData>& objects, const std::set<ModelId>& hidden) {
+    std::vector<mat4>& objects, const std::set<ModelId>& hidden) {
   for (size_t i = 0; i < Id::COUNT; i++) {
     auto model = models_[i];
     if (model == ModelId::None || hidden.contains(model)) {
@@ -350,7 +350,7 @@ void BipedRig::makeRig(const Pose& anim_pose) {
 
 void BipedRig::getSceneObjects(
     const mat4& parent, std::vector<DrawData>& draws,
-    std::vector<ObjectData>& objects, const std::set<ModelId>& hidden) {
+    std::vector<mat4>& objects, const std::set<ModelId>& hidden) {
   static mat4 control_t = glm::scale(vec3(5));
   static mat4 pelvis_t = glm::scale(vec3(15, 1, 15));
   static mat4 small_t = glm::scale(vec3(3));

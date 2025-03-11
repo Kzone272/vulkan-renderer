@@ -221,7 +221,7 @@ class Skelly {
   void setMaterials(MaterialId bone_mat, MaterialId control_mat);
   void getSceneObjects(
       const mat4& parent, std::vector<DrawData>& draws,
-      std::vector<ObjectData>& objects, const std::set<ModelId>& hidden);
+      std::vector<mat4>& objects, const std::set<ModelId>& hidden);
   void handleInput(const InputState& input);
   void update(float delta_s);
 

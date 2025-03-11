@@ -148,7 +148,7 @@ class WorldTree {
   }
 
   void getSceneObjects(
-      std::vector<DrawData>& draws, std::vector<ObjectData>& objects,
+      std::vector<DrawData>& draws, std::vector<mat4>& objects,
       const std::set<ModelId>& hidden) {
     size_t base_index = objects.size();
     for (size_t i = 0; i < count_; i++) {

@@ -119,7 +119,7 @@ enum class DebugView {
 struct FrameState {
   uint64_t frame_num = 0;
   std::vector<DrawData> draws;
-  std::vector<ObjectData> objects;
+  std::vector<mat4> objects;
   std::vector<Light> lights;
   mat4 model;
   mat4 view;

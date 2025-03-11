@@ -80,7 +80,7 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
     globals.push_back(createDynamicBuffer(
         vs, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
     objects.push_back(createDynamicBuffer(
-        vs, kMaxObjects * sizeof(ObjectData),
+        vs, kMaxObjects * sizeof(mat4),
         vk::BufferUsageFlagBits::eStorageBuffer));
   }
 
