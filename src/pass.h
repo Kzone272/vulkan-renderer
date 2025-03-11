@@ -27,10 +27,20 @@ struct Pass {
 struct Scene {
   Pass pass;
   std::vector<DynamicBuf> globals;
-  std::vector<DynamicBuf> objects;
+  std::vector<DynamicBuf> object_buf;
+  std::vector<DynamicBuf> transform_buf;
   DescLayout* global;
   DescLayout* material;
   Pipeline* scene;
+
+  struct InstanceDraws {
+    uint32_t first_instance = 0;
+    uint32_t instances = 0;
+    MaterialId material = kMaterialIdNone;
+    ModelId model = ModelId::None;
+  };
+  std::vector<InstanceDraws> inst_draws;
+  std::vector<ObjectData> objects;
 
   void init(const VulkanState& vs, vk::SampleCountFlagBits samples);
   DescLayout* outputSet() {
@@ -39,9 +49,9 @@ struct Scene {
   void resize(const VulkanState& vs) {
     pass.fbo.resize(vs, vs.swap_size);
   }
-  void update(const DrawState& ds, const FrameState& fs);
+  void update(const DrawState& ds, FrameState& fs);
   void render(
-      const DrawState& ds, std::vector<DrawData>& draws,
+      const DrawState& ds,
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
       const std::vector<std::unique_ptr<Material>>& loaded_mats);
 };

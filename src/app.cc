@@ -575,11 +575,11 @@ void App::flattenObjectTree() {
   static const mat4 identity(1);
   auto& hidden = options_.show_controls ? empty_set : control_models;
   frame_state_.draws.clear();
-  frame_state_.objects.clear();
+  frame_state_.transforms.clear();
   world_.updateMats();
-  world_.getSceneObjects(frame_state_.draws, frame_state_.objects, hidden);
+  world_.getSceneObjects(frame_state_.draws, frame_state_.transforms, hidden);
   skelly_.getSceneObjects(
-      identity, frame_state_.draws, frame_state_.objects, hidden);
+      identity, frame_state_.draws, frame_state_.transforms, hidden);
 
   static const std::set<ModelId> gooch_models = {
       ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
@@ -671,7 +671,7 @@ void App::updateImgui() {
     ImGui::Checkbox("Animate", &options_.animate);
     ImGui::Checkbox("Show Controls", &options_.show_controls);
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
-    if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 50)) {
+    if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 200)) {
       remakeGrid(options_.grid_size);
     }
 

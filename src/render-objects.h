@@ -102,7 +102,10 @@ struct DrawData {
 static constexpr size_t kMaxObjects = 64 * 1024;  // arbitrary big number
 
 struct ObjectData {
-  mat4 model;
+  uint32_t index = -1;
+  uint32_t pad1 = 0;
+  uint32_t pad2 = 0;
+  uint32_t pad3 = 0;
 };
 
 struct Vertex2d {
@@ -119,7 +122,7 @@ enum class DebugView {
 struct FrameState {
   uint64_t frame_num = 0;
   std::vector<DrawData> draws;
-  std::vector<mat4> objects;
+  std::vector<mat4> transforms;
   std::vector<Light> lights;
   mat4 model;
   mat4 view;

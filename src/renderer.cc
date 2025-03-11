@@ -1156,7 +1156,7 @@ void Renderer::recordCommandBuffer() {
   if (frame_state_->update_drawing) {
     drawing_.render(ds_);
   }
-  scene_.render(ds_, frame_state_->draws, loaded_models_, loaded_materials_);
+  scene_.render(ds_, loaded_models_, loaded_materials_);
 
   if (frame_state_->stained_glass) {
     edges_.render(ds_, scene_.outputSet()->sets[1]);

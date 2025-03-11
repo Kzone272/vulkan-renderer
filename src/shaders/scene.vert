@@ -6,7 +6,10 @@ layout(set = 0, binding = 0) uniform GlobalBlock {
   GlobalData global;
 };
 layout(set = 0, binding = 1) readonly buffer ObjectBlock {
-  mat4 model[];
+  ObjectData objects[]; // Ordered by instance id
+};
+layout(set = 0, binding = 2) readonly buffer TransformBlock {
+  mat4 models[];
 };
 
 layout(location = 0) in vec3 inPosition;
@@ -20,7 +23,7 @@ layout(location = 2) out vec2 fragUv;
 layout(location = 3) out vec3 fragPos;
 
 void main() {
-  mat4 to_view = global.view * model[gl_InstanceIndex];
+  mat4 to_view = global.view * models[objects[gl_InstanceIndex].index];
   fragPos = vec3(to_view * vec4(inPosition, 1.0));
   gl_Position = global.proj * vec4(fragPos, 1.0);
   fragNormal = vec3(to_view * vec4(inNormal, 0));

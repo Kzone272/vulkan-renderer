@@ -44,8 +44,11 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   global = pass.makeDescLayout();
   *global = {
       .binds =
-          {{.type = vk::DescriptorType::eUniformBuffer},
-           {.type = vk::DescriptorType::eStorageBuffer}},
+          {
+              {.type = vk::DescriptorType::eUniformBuffer},
+              {.type = vk::DescriptorType::eStorageBuffer},
+              {.type = vk::DescriptorType::eStorageBuffer},
+          },
       .stages =
           vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
   };
@@ -79,18 +82,22 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   for (size_t i = 0; i < vs.kMaxFramesInFlight; i++) {
     globals.push_back(createDynamicBuffer(
         vs, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer));
-    objects.push_back(createDynamicBuffer(
+    object_buf.push_back(createDynamicBuffer(
+        vs, kMaxObjects * sizeof(ObjectData),
+        vk::BufferUsageFlagBits::eStorageBuffer));
+    transform_buf.push_back(createDynamicBuffer(
         vs, kMaxObjects * sizeof(mat4),
         vk::BufferUsageFlagBits::eStorageBuffer));
   }
 
   std::vector<vk::WriteDescriptorSet> writes;
   global->updateUboBind(0, uboInfos(globals), writes);
-  global->updateUboBind(1, uboInfos(objects), writes);
+  global->updateUboBind(1, uboInfos(object_buf), writes);
+  global->updateUboBind(2, uboInfos(transform_buf), writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
-void Scene::update(const DrawState& ds, const FrameState& fs) {
+void Scene::update(const DrawState& ds, FrameState& fs) {
   GlobalData data;
   data.view = fs.view;
   data.proj = fs.proj;
@@ -112,13 +119,47 @@ void Scene::update(const DrawState& ds, const FrameState& fs) {
       ds.cmd, globals[ds.frame], std::span<GlobalData>(&data, 1), stages,
       vk::AccessFlagBits::eUniformRead);
   updateDynamicBuf(
-      ds.cmd, objects[ds.frame], std::span(fs.objects),
+      ds.cmd, transform_buf[ds.frame], std::span(fs.transforms),
+      vk::PipelineStageFlagBits::eVertexShader,
+      vk::AccessFlagBits::eShaderRead);
+
+  // Sort by material, then by model.
+  std::sort(fs.draws.begin(), fs.draws.end(), [](auto& left, auto& right) {
+    if (left.material != right.material) {
+      return left.material < right.material;
+    } else {
+      return left.model < right.model;
+    }
+  });
+
+  inst_draws.clear();
+  objects.clear();
+  
+  for (size_t i = 0; i < fs.draws.size(); i++) {
+    auto& draw = fs.draws[i];
+    if (draw.material == kMaterialIdNone || draw.model == ModelId::None) {
+      continue;
+    }
+    
+    auto& last_draw = inst_draws.back();
+    if (inst_draws.size() && last_draw.material == draw.material &&
+        last_draw.model == draw.model) {
+      last_draw.instances++;
+    } else {
+      inst_draws.emplace_back(
+          objects.size(), 1, draw.material, draw.model);
+    }
+    objects.emplace_back(static_cast<uint32_t>(draw.obj_ind));
+  }
+
+  updateDynamicBuf(
+      ds.cmd, object_buf[ds.frame], std::span(objects),
       vk::PipelineStageFlagBits::eVertexShader,
       vk::AccessFlagBits::eShaderRead);
 }
 
 void Scene::render(
-    const DrawState& ds, std::vector<DrawData>& draws,
+    const DrawState& ds,
     const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
     const std::vector<std::unique_ptr<Material>>& loaded_mats) {
   pass.fbo.beginRp(ds);
@@ -128,23 +169,10 @@ void Scene::render(
       vk::PipelineBindPoint::eGraphics, *scene->layout, 0,
       global->sets[ds.frame], nullptr);
 
-  // Sort by material, then by model.
-  std::sort(draws.begin(), draws.end(), [](auto& left, auto& right) {
-    if (left.material != right.material) {
-      return left.material < right.material;
-    } else {
-      return left.model < right.model;
-    }
-  });
-
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
   MaterialId curr_mat_id = kMaterialIdNone;
-  for (auto& draw : draws) {
-    if (draw.material == kMaterialIdNone || draw.model == ModelId::None) {
-      continue;
-    }
-
+  for (auto& draw : inst_draws) {
     if (curr_mat_id != draw.material) {
       curr_mat_id = draw.material;
       ASSERT(curr_mat_id < loaded_mats.size());
@@ -171,11 +199,10 @@ void Scene::render(
 
     if (curr_model->index_count) {
       ds.cmd.drawIndexed(
-          curr_model->index_count, 1, 0, 0,
-          static_cast<uint32_t>(draw.obj_ind));
+          curr_model->index_count, draw.instances, 0, 0, draw.first_instance);
     } else {
       ds.cmd.draw(
-          curr_model->vertex_count, 1, 0, static_cast<uint32_t>(draw.obj_ind));
+          curr_model->vertex_count, draw.instances, 0, draw.first_instance);
     }
   }
 
