@@ -20,7 +20,7 @@ struct DynamicBuf {
   DynamicBuf(const DynamicBuf& other) = delete;
   DynamicBuf& operator=(const DynamicBuf& other) = delete;
 
-  Buffer staging;
+  std::vector<Buffer> staging;
   Buffer device;
   vma::Allocator vma;
 };
@@ -32,19 +32,23 @@ Buffer createStagingBuffer(const VulkanState& vs, vk::DeviceSize size);
 Buffer createDeviceBuffer(
     const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage);
 
+void copyBufferToBuffer(
+    const vk::CommandBuffer& cmd, const Buffer& src, const Buffer& dst,
+    size_t size, vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access);
+
 DynamicBuf createDynamicBuffer(
     const VulkanState& vs, vk::DeviceSize size, vk::BufferUsageFlags usage);
 std::vector<vk::DescriptorBufferInfo*> uboInfos(std::vector<DynamicBuf>& dbufs);
 void updateDynamicBuf(
-    vk::CommandBuffer cmd, DynamicBuf& dbuf, void* data, size_t data_size,
+    const DrawState& ds, DynamicBuf& dbuf, void* data, size_t data_size,
     vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access);
 
 template <class T>
 void updateDynamicBuf(
-    vk::CommandBuffer cmd, DynamicBuf& dbuf, std::span<T> data,
+    const DrawState& ds, DynamicBuf& dbuf, std::span<T> data,
     vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access) {
   updateDynamicBuf(
-      cmd, dbuf, (void*)data.data(), data.size_bytes(), dst_stage, dst_access);
+      ds, dbuf, (void*)data.data(), data.size_bytes(), dst_stage, dst_access);
 }
 
 uint32_t findMemoryType(

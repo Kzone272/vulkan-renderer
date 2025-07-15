@@ -24,6 +24,6 @@ struct VulkanState {
 
 struct DrawState {
   vk::CommandBuffer cmd = {};
-  int frame = -1;
+  int frame = -1;  // always % kMaxFramesInFlight
   uint32_t img_ind = 0;
 };

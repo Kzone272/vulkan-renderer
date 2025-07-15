@@ -132,7 +132,7 @@ void Renderer::initVulkan() {
   scene_.init(vs_, scene_samples_);
   edges_.init(
       vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
-      uboInfos(scene_.globals));
+      {&scene_.global_buf.device.info});
   jf_.init(vs_);
   swap_.init(vs_);
   resolve_.init(vs_);
@@ -823,9 +823,10 @@ void Renderer::generateMipmaps(
     uint32_t mip_levels) {
   vk::FormatProperties format_props =
       physical_device_.getFormatProperties(format);
-  ASSERT(static_cast<bool>(
-      format_props.optimalTilingFeatures &
-      vk::FormatFeatureFlagBits::eSampledImageFilterLinear));
+  ASSERT(
+      static_cast<bool>(
+          format_props.optimalTilingFeatures &
+          vk::FormatFeatureFlagBits::eSampledImageFilterLinear));
 
   vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
@@ -1044,16 +1045,19 @@ void Renderer::stageIndices(
 void Renderer::stageBuffer(
     vk::DeviceSize size, void* data, vk::BufferUsageFlags usage,
     Buffer& dst_buf) {
-  auto dbuf = createDynamicBuffer(vs_, size, usage);
+  auto staging_buf = createStagingBuffer(vs_, size);
+  dst_buf = createDeviceBuffer(
+      vs_, size, usage | vk::BufferUsageFlagBits::eTransferDst);
+
+  vma_->copyMemoryToAllocation(data, *staging_buf.alloc, 0, size);
 
   vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
 
-  updateDynamicBuf(
-      cmd_buf, dbuf, data, size, vk::PipelineStageFlagBits::eTopOfPipe, {});
+  copyBufferToBuffer(
+      cmd_buf, staging_buf, dst_buf, size,
+      vk::PipelineStageFlagBits::eTopOfPipe, {});
 
   endSingleTimeCommands(cmd_buf);
-
-  dst_buf = std::move(dbuf.device);
 }
 
 vk::CommandBuffer Renderer::beginSingleTimeCommands() {

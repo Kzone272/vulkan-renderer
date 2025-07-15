@@ -1,8 +1,10 @@
 #include "buffers.h"
 
 DynamicBuf::~DynamicBuf() {
-  if (staging.alloc) {
-    vma.unmapMemory(*staging.alloc);
+  for (auto& staging_buf : staging) {
+    if (staging_buf.alloc) {
+      vma.unmapMemory(*staging_buf.alloc);
+    }
   }
 }
 
@@ -49,8 +51,11 @@ DynamicBuf createDynamicBuffer(
   DynamicBuf dbuf;
   dbuf.vma = vs.vma;
 
-  dbuf.staging = createStagingBuffer(vs, size);
-  dbuf.staging.mapped = vs.vma.mapMemory(*dbuf.staging.alloc).value;
+  for (uint32_t i = 0; i < vs.kMaxFramesInFlight; i++) {
+    auto staging_buf = createStagingBuffer(vs, size);
+    staging_buf.mapped = vs.vma.mapMemory(*staging_buf.alloc).value;
+    dbuf.staging.push_back(std::move(staging_buf));
+  }
 
   dbuf.device = createDeviceBuffer(
       vs, size, usage | vk::BufferUsageFlagBits::eTransferDst);
@@ -58,32 +63,40 @@ DynamicBuf createDynamicBuffer(
   return std::move(dbuf);
 }
 
-void updateDynamicBuf(
-    vk::CommandBuffer cmd, DynamicBuf& dbuf, void* data, size_t data_size,
-    vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access) {
-  size_t size = std::min((size_t)dbuf.staging.info.range, data_size);
-  memcpy(dbuf.staging.mapped, data, size);
-  if (!(dbuf.staging.props & vk::MemoryPropertyFlagBits::eHostCoherent)) {
-    dbuf.vma.flushAllocation(*dbuf.staging.alloc, 0, size);
-  }
-
+void copyBufferToBuffer(
+    const vk::CommandBuffer& cmd, const Buffer& src, const Buffer& dst,
+    size_t size, vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access) {
   vk::BufferCopy copy{
-      .srcOffset = dbuf.staging.info.offset,
-      .dstOffset = dbuf.device.info.offset,
+      .srcOffset = src.info.offset,
+      .dstOffset = dst.info.offset,
       .size = size,
   };
-  cmd.copyBuffer(*dbuf.staging.buf, *dbuf.device.buf, copy);
+  cmd.copyBuffer(*src.buf, *dst.buf, copy);
 
   vk::BufferMemoryBarrier barrier{
       .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
       .dstAccessMask = dst_access,
-      .buffer = *dbuf.device.buf,
-      .offset = dbuf.device.info.offset,
+      .buffer = *dst.buf,
+      .offset = dst.info.offset,
       .size = size,
   };
   cmd.pipelineBarrier(
       vk::PipelineStageFlagBits::eTransfer, dst_stage, {}, nullptr, barrier,
       nullptr);
+}
+
+void updateDynamicBuf(
+    const DrawState& ds, DynamicBuf& dbuf, void* data, size_t data_size,
+    vk::PipelineStageFlags dst_stage, vk::AccessFlags dst_access) {
+  auto& staging = dbuf.staging[ds.frame];
+
+  size_t size = std::min((size_t)staging.info.range, data_size);
+  memcpy(staging.mapped, data, size);
+  if (!(staging.props & vk::MemoryPropertyFlagBits::eHostCoherent)) {
+    dbuf.vma.flushAllocation(*staging.alloc, 0, size);
+  }
+
+  copyBufferToBuffer(ds.cmd, staging, dbuf.device, size, dst_stage, dst_access);
 }
 
 std::vector<vk::DescriptorBufferInfo*> uboInfos(

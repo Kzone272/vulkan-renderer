@@ -26,9 +26,9 @@ struct Pass {
 
 struct Scene {
   Pass pass;
-  std::vector<DynamicBuf> globals;
-  std::vector<DynamicBuf> object_buf;
-  std::vector<DynamicBuf> transform_buf;
+  DynamicBuf global_buf;
+  DynamicBuf object_buf;
+  DynamicBuf transform_buf;
   DescLayout* global;
   DescLayout* material;
   Pipeline* scene;
@@ -58,7 +58,7 @@ struct Scene {
 
 struct Edges {
   Pass pass;
-  std::vector<DynamicBuf> debugs;
+  DynamicBuf debug_buf;
   DescLayout* inputs;
   DescLayout* sample_points_;
   Pipeline* fxaa_draw;
@@ -149,7 +149,7 @@ struct Swap {
 struct Drawing {
   Pass pass;
   Pipeline* draw;
-  std::vector<DynamicBuf> debugs;
+  DynamicBuf debug_buf;
   DescLayout* inputs;
 
   void init(const VulkanState& vs);
@@ -160,7 +160,7 @@ struct Drawing {
 struct Voronoi {
   Pass pass;
   Pipeline* draw;
-  std::vector<DynamicBuf> verts;
+  DynamicBuf verts;
   size_t num_cells = 0;
 
   void init(const VulkanState& vs);
