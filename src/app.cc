@@ -139,6 +139,7 @@ void App::setupWorld() {
 
 void App::loadMaterials() {
   mats_.cube = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
+  mats_.cube2 = renderer_->useMaterial({.data{.color1{0.8, 0.8, 0}}});
   mats_.bone = renderer_->useMaterial({.data{.color1{0.9, 0.2, 0.1}}});
   mats_.control = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
   mats_.viking = renderer_->useMaterial({
@@ -155,9 +156,9 @@ void App::loadMaterials() {
   });
   floor_mats_ = {mats_.viking, mats_.drawing, mats_.voronoi};
   mats_.gooch = renderer_->useMaterial({.data{
-      .type = MaterialData::Type::Gooch,
       .color1{fromHex(0xff8d83)},
       .color2{fromHex(0x8e9ce2)},
+      .type = MaterialData::Type::Gooch,
   }});
 }
 
@@ -204,7 +205,7 @@ void App::remakeGrid(int grid) {
       ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       mat4 model_t = glm::scale(vec3(100));
       auto* obj = grid_.addChild(Object(&world_, id, model_t));
-      obj->setMaterial(mats_.cube);
+      obj->setMaterial((i % 2) == 0 ? mats_.cube : mats_.cube2);
       obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
     }
   }

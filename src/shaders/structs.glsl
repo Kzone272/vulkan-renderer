@@ -24,16 +24,21 @@ struct DebugData {
 };
 
 struct MaterialData {
-  uint type;
   vec3 color1;
+  float pad1;
   vec3 color2;
+  float pad2;
+  uint type;
+  uint pad3;
+  uint pad4;
+  uint pad5;
 };
 const uint kPhongMaterial = 0;
 const uint kGoochMaterial = 1;
 
 struct ObjectData {
   uint index;
-  uint pad1;
+  uint matIndex;
   uint pad2;
   uint pad3;
 };

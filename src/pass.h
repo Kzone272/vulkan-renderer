@@ -29,6 +29,7 @@ struct Scene {
   DynamicBuf global_buf;
   DynamicBuf object_buf;
   DynamicBuf transform_buf;
+  DynamicBuf material_buf;
   DescLayout* global;
   DescLayout* material;
   Pipeline* scene;
@@ -36,7 +37,7 @@ struct Scene {
   struct InstanceDraws {
     uint32_t first_instance = 0;
     uint32_t instances = 0;
-    MaterialId material = kMaterialIdNone;
+    vk::DescriptorSet material_desc = {};
     ModelId model = ModelId::None;
   };
   std::vector<InstanceDraws> inst_draws;
@@ -49,7 +50,10 @@ struct Scene {
   void resize(const VulkanState& vs) {
     pass.fbo.resize(vs, vs.swap_size);
   }
-  void update(const DrawState& ds, FrameState& fs);
+  void update(
+      const DrawState& ds, FrameState& fs,
+      const std::vector<MaterialData>& mat_datas,
+      const std::vector<std::unique_ptr<Material>>& loaded_mats);
   void render(
       const DrawState& ds,
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,

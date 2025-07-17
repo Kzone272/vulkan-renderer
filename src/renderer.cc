@@ -23,6 +23,7 @@
 #include "fbo.h"
 #include "files.h"
 #include "glm-include.h"
+#include "hash.h"
 #include "images.h"
 #include "pipelines.h"
 #include "render-objects.h"
@@ -88,8 +89,8 @@ void Renderer::resizeWindow(uint32_t width, uint32_t height) {
 }
 
 MaterialId Renderer::useMaterial(const MaterialInfo& mat_info) {
-  loadMaterial(mat_info);
-  return loaded_materials_.size() - 1;
+  auto* material = loadMaterial(mat_info);
+  return material->id;
 }
 
 void Renderer::useMesh(ModelId model_id, const Mesh& mesh) {
@@ -97,13 +98,14 @@ void Renderer::useMesh(ModelId model_id, const Mesh& mesh) {
   loaded_models_[model_id] = std::move(model);
 }
 
-// TODO: Return a TextureId instead.
-Texture* Renderer::getDrawingTexture() {
-  return &drawing_.pass.fbo.colors[0];
+TextureId Renderer::getDrawingTexture() {
+  // TODO: Using pointer to vector element!
+  return getTextureId(&drawing_.pass.fbo.colors[0]);
 }
-// TODO: Return a TextureId instead.
-Texture* Renderer::getVoronoiTexture() {
-  return &voronoi_.pass.fbo.colors[0];
+
+TextureId Renderer::getVoronoiTexture() {
+  // TODO: Using pointer to vector element!
+  return getTextureId(&voronoi_.pass.fbo.colors[0]);
 }
 
 void Renderer::initVulkan() {
@@ -196,7 +198,7 @@ void Renderer::drawFrame() {
   if (frame_state_->update_voronoi) {
     voronoi_.update(ds_, frame_state_->voronoi_cells);
   }
-  scene_.update(ds_, *frame_state_);
+  scene_.update(ds_, *frame_state_, material_datas_, loaded_materials_);
   edges_.update(ds_, frame_state_->edges);
 
   recordCommandBuffer();
@@ -697,6 +699,14 @@ SDL_Surface* Renderer::loadImage(std::string texture_path) {
   return texture_surface;
 }
 
+TextureId Renderer::getTextureId(Texture* texture) {
+  if (texture->id == kTextureIdNone) {
+    texture->id = (TextureId)refd_textures_.size();
+    refd_textures_.push_back(texture);
+  }
+  return texture->id;
+}
+
 Texture* Renderer::createTexture(
     void* texture_data, uint32_t width, uint32_t height) {
   auto texture = std::make_unique<Texture>();
@@ -955,46 +965,50 @@ void Renderer::createSamplers() {
 }
 
 Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
-  auto material = std::make_unique<Material>();
+  MaterialId id = loaded_materials_.size();
+  auto material = std::make_unique<Material>(id);
   auto* ptr = material.get();
 
-  if (mat_info.diffuse_texture) {
-    material->diffuse = mat_info.diffuse_texture;
+  TextureId diffuse;
+  if (mat_info.diffuse_texture != kTextureIdNone) {
+    diffuse = mat_info.diffuse_texture;
   } else if (mat_info.diffuse_path) {
-    material->diffuse = loadTexture(*mat_info.diffuse_path);
+    diffuse = loadTexture(*mat_info.diffuse_path);
   } else {
     // Use 1x1 pixel white texture when none is specified.
-    material->diffuse = getColorTexture(0xFFFFFFFF);
+    diffuse = getColorTexture(0xFFFFFFFF);
   }
 
-  stageBuffer(
-      sizeof(MaterialData), (void*)&mat_info.data,
-      vk::BufferUsageFlagBits::eUniformBuffer, material->ubo);
-  material->ubo.info = vk::DescriptorBufferInfo{
-      .buffer = *material->ubo.buf,
-      .offset = 0,
-      .range = sizeof(MaterialData),
-  };
+  TextureId textureIds[] = {diffuse};
+  uint32_t textureHash = hashBytes(std::span(textureIds));
 
-  material->desc_set = allocDescSet(vs_, *scene_.material->layout);
-  std::vector<vk::WriteDescriptorSet> writes;
-  updateDescSet(
-      material->desc_set, *scene_.material,
-      {&material->diffuse->info, &material->ubo.info}, writes);
-  device_->updateDescriptorSets(writes, nullptr);
+  auto desc_it = texture_descs_.find(textureHash);
+  if (desc_it != texture_descs_.end()) {
+    material->desc_set = desc_it->second;
+  } else {
+    material->desc_set = allocDescSet(vs_, *scene_.material->layout);
+    std::vector<vk::WriteDescriptorSet> writes;
+    updateDescSet(
+        material->desc_set, *scene_.material,
+        {&(refd_textures_[diffuse]->info)}, writes);
+    device_->updateDescriptorSets(writes, nullptr);
 
+    texture_descs_.emplace(textureHash, material->desc_set);
+  }
+
+  material_datas_.emplace_back(mat_info.data);
   loaded_materials_.push_back(std::move(material));
 
   return ptr;
 }
 
-Texture* Renderer::loadTexture(std::string path) {
+TextureId Renderer::loadTexture(std::string path) {
   auto* texture_surface = loadImage(path);
   Texture* texture = createTexture(
       texture_surface->pixels, texture_surface->w, texture_surface->h);
   SDL_FreeSurface(texture_surface);
 
-  return texture;
+  return getTextureId(texture);
 }
 
 std::unique_ptr<Model> Renderer::loadMesh(const Mesh& mesh) {
@@ -1010,17 +1024,17 @@ std::unique_ptr<Model> Renderer::loadMesh(const Mesh& mesh) {
   return model;
 }
 
-Texture* Renderer::getColorTexture(uint32_t color) {
+TextureId Renderer::getColorTexture(uint32_t color) {
   auto it = color_textures_.find(color);
   if (it != color_textures_.end()) {
-    return it->second;
+    return getTextureId(it->second);
   }
 
   // Create 1x1 color texture.
   auto* texture = createTexture(&color, 1, 1);
   color_textures_.emplace(color, texture);
 
-  return texture;
+  return getTextureId(texture);
 }
 
 void Renderer::stageVertices(

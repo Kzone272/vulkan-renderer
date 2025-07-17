@@ -1,5 +1,6 @@
 #pragma once
 
+#include "render-objects.h"
 #include "render-state.h"
 #include "vulkan-include.h"
 
@@ -14,6 +15,7 @@ struct Texture {
   vk::UniqueDeviceMemory image_mem;
   vk::UniqueImageView image_view;
   vk::DescriptorImageInfo info;
+  TextureId id = kTextureIdNone;
 };
 
 void createImage(

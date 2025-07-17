@@ -57,9 +57,7 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   // TODO: Don't allocate any here. These sets are allocated per material.
   material = pass.makeDescLayout();
   *material = {
-      .binds =
-          {{.type = vk::DescriptorType::eCombinedImageSampler},
-           {.type = vk::DescriptorType::eUniformBuffer}},
+      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
       .stages = vk::ShaderStageFlagBits::eFragment,
   };
 
@@ -87,15 +85,22 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
       vk::BufferUsageFlagBits::eStorageBuffer);
   transform_buf = createDynamicBuffer(
       vs, kMaxObjects * sizeof(mat4), vk::BufferUsageFlagBits::eStorageBuffer);
+  material_buf = createDynamicBuffer(
+      vs, kMaxMaterials * sizeof(MaterialData),
+      vk::BufferUsageFlagBits::eStorageBuffer);
 
   std::vector<vk::WriteDescriptorSet> writes;
   global->updateUboBind(0, {&global_buf.device.info}, writes);
   global->updateUboBind(1, {&object_buf.device.info}, writes);
   global->updateUboBind(2, {&transform_buf.device.info}, writes);
+  global->updateUboBind(3, {&material_buf.device.info}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
-void Scene::update(const DrawState& ds, FrameState& fs) {
+void Scene::update(
+    const DrawState& ds, FrameState& fs,
+    const std::vector<MaterialData>& mat_datas,
+    const std::vector<std::unique_ptr<Material>>& loaded_mats) {
   GlobalData data;
   data.view = fs.view;
   data.proj = fs.proj;
@@ -120,34 +125,58 @@ void Scene::update(const DrawState& ds, FrameState& fs) {
       ds, transform_buf, std::span(fs.transforms),
       vk::PipelineStageFlagBits::eVertexShader,
       vk::AccessFlagBits::eShaderRead);
+  updateDynamicBuf(
+      ds, material_buf, std::span(mat_datas),
+      vk::PipelineStageFlagBits::eFragmentShader,
+      vk::AccessFlagBits::eShaderRead);
 
   // Sort by material, then by model.
-  std::sort(fs.draws.begin(), fs.draws.end(), [](auto& left, auto& right) {
-    if (left.material != right.material) {
-      return left.material < right.material;
-    } else {
-      return left.model < right.model;
-    }
-  });
+  std::sort(
+      fs.draws.begin(), fs.draws.end(),
+      [&loaded_mats](auto& left, auto& right) {
+        if (left.material == kMaterialIdNone) {
+          return false;
+        } else if (right.material == kMaterialIdNone) {
+          return true;
+        }
+        const auto& leftMat = *loaded_mats[left.material];
+        const auto& rightMat = *loaded_mats[right.material];
+        if (leftMat.desc_set != rightMat.desc_set) {
+          return leftMat.desc_set < rightMat.desc_set;
+        } else {
+          return left.model < right.model;
+        }
+      });
 
   inst_draws.clear();
   objects.clear();
-  
+
   for (size_t i = 0; i < fs.draws.size(); i++) {
     auto& draw = fs.draws[i];
     if (draw.material == kMaterialIdNone || draw.model == ModelId::None) {
       continue;
     }
-    
-    auto& last_draw = inst_draws.back();
-    if (inst_draws.size() && last_draw.material == draw.material &&
-        last_draw.model == draw.model) {
-      last_draw.instances++;
-    } else {
-      inst_draws.emplace_back(
-          objects.size(), 1, draw.material, draw.model);
+
+    auto draw_mat_desc = loaded_mats[draw.material]->desc_set;
+
+    bool is_new = true;
+    if (inst_draws.size()) {
+      auto& last_draw = inst_draws.back();
+      if (last_draw.material_desc == draw_mat_desc &&
+          last_draw.model == draw.model) {
+        last_draw.instances++;
+        is_new = false;
+      }
     }
-    objects.emplace_back(static_cast<uint32_t>(draw.obj_ind));
+
+    if (is_new) {
+      inst_draws.emplace_back(
+          static_cast<uint32_t>(objects.size()), 1, draw_mat_desc, draw.model);
+    }
+
+    objects.emplace_back(
+        static_cast<uint32_t>(draw.obj_ind),
+        static_cast<uint32_t>(draw.material));
   }
 
   updateDynamicBuf(
@@ -169,15 +198,13 @@ void Scene::render(
 
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
-  MaterialId curr_mat_id = kMaterialIdNone;
+  vk::DescriptorSet curr_mat_desc = {};
   for (auto& draw : inst_draws) {
-    if (curr_mat_id != draw.material) {
-      curr_mat_id = draw.material;
-      ASSERT(curr_mat_id < loaded_mats.size());
-      auto* mat = loaded_mats[curr_mat_id].get();
+    if (draw.material_desc != curr_mat_desc) {
+      curr_mat_desc = draw.material_desc;
 
       ds.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *scene->layout, 1, mat->desc_set,
+          vk::PipelineBindPoint::eGraphics, *scene->layout, 1, curr_mat_desc,
           nullptr);
     }
 

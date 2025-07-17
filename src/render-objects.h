@@ -73,20 +73,26 @@ struct ModelInfo {
   mat4 model_transform{1};
 };
 
+static constexpr size_t kMaxMaterials = 1024;  // arbitrary big number
+
 struct MaterialData {
-  enum class Type {
+  enum class Type : uint32_t {
     Phong,
     Gooch,
   };
+  vec3 color1 = {1, 1, 1};  // This takes up the size of a vec4
+  vec3 color2 = {0, 0, 0};  // This takes up the size of a vec4
   Type type = Type::Phong;
-  alignas(16) vec3 color1 = {1, 1, 1};
-  alignas(16) vec3 color2 = {0, 0, 0};
+  uint32_t pad3 = 0;
+  uint32_t pad4 = 0;
+  uint32_t pad5 = 0;
 };
 
-struct Texture;
+typedef uint32_t TextureId;
+inline const uint32_t kTextureIdNone = -1;
+
 struct MaterialInfo {
-  // TODO: Make this a TextureId
-  Texture* diffuse_texture;
+  TextureId diffuse_texture = kTextureIdNone;
   std::optional<std::string> diffuse_path;
   MaterialData data;
 };
@@ -103,7 +109,7 @@ static constexpr size_t kMaxObjects = 64 * 1024;  // arbitrary big number
 
 struct ObjectData {
   uint32_t index = -1;
-  uint32_t pad1 = 0;
+  uint32_t matIndex = kMaterialIdNone;
   uint32_t pad2 = 0;
   uint32_t pad3 = 0;
 };

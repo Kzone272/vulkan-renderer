@@ -21,12 +21,15 @@ layout(location = 0) out vec3 fragNormal;
 layout(location = 1) out vec3 fragColor;
 layout(location = 2) out vec2 fragUv;
 layout(location = 3) out vec3 fragPos;
+layout(location = 4) flat out uint matIndex;
 
 void main() {
-  mat4 to_view = global.view * models[objects[gl_InstanceIndex].index];
+  ObjectData obj = objects[gl_InstanceIndex];
+  mat4 to_view = global.view * models[obj.index];
   fragPos = vec3(to_view * vec4(inPosition, 1.0));
   gl_Position = global.proj * vec4(fragPos, 1.0);
   fragNormal = vec3(to_view * vec4(inNormal, 0));
   fragColor = inColor;
   fragUv = inUv;
+  matIndex = obj.matIndex;
 }

@@ -32,9 +32,8 @@ class Renderer {
   MaterialId useMaterial(const MaterialInfo& mat_info);
   // TODO: Also return a non-enum model id?
   void useMesh(ModelId model_id, const Mesh& mesh);
-  // TODO: Return a TextureId instead.
-  Texture* getDrawingTexture();
-  Texture* getVoronoiTexture();
+  TextureId getDrawingTexture();
+  TextureId getVoronoiTexture();
   void imguiNewFrame();
 
  private:
@@ -91,6 +90,7 @@ class Renderer {
   void createSamplers();
   void initSdlImage();
   SDL_Surface* loadImage(std::string texture_path);
+  TextureId getTextureId(Texture* texture);
   Texture* createTexture(void* texture_data, uint32_t width, uint32_t height);
   void transitionImageLayout(
       vk::Image img, vk::Format format, uint32_t mip_levels,
@@ -102,9 +102,9 @@ class Renderer {
       uint32_t mip_levels);
 
   Material* loadMaterial(const MaterialInfo& mat_info);
-  Texture* loadTexture(std::string path);
+  TextureId loadTexture(std::string path);
   std::unique_ptr<Model> loadMesh(const Mesh& mesh);
-  Texture* getColorTexture(uint32_t color);
+  TextureId getColorTexture(uint32_t color);
   void stageVertices(const std::vector<Vertex>& vertices, Model& model);
   void stageIndices(const std::vector<uint32_t>& indices, Model& model);
 
@@ -174,6 +174,10 @@ class Renderer {
   std::vector<std::unique_ptr<Material>> loaded_materials_;
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
+
+  std::vector<Texture*> refd_textures_;
+  std::vector<MaterialData> material_datas_;
+  std::map<uint32_t, vk::DescriptorSet> texture_descs_;
 
   Drawing drawing_;
   Voronoi voronoi_;

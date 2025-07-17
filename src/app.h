@@ -156,6 +156,7 @@ class App {
 
   struct Materials {
     MaterialId cube = kMaterialIdNone;
+    MaterialId cube2 = kMaterialIdNone;
     MaterialId bone = kMaterialIdNone;
     MaterialId control = kMaterialIdNone;
     MaterialId viking = kMaterialIdNone;

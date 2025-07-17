@@ -19,8 +19,9 @@ file(GLOB shader_files
   jf-sdf.frag
   voronoi-seed.frag
   uv-sample.frag
-  # TODO: Detect changes in .glsl files to rebuild shaders.
 )
+
+file(GLOB shader_deps *.glsl)
 
 set(shader_binary_dir "${PROJECT_BINARY_DIR}/shaders")
 
@@ -32,7 +33,7 @@ foreach(shader_path IN LISTS shader_files)
     OUTPUT ${spirv_path}
     COMMAND ${CMAKE_COMMAND} -E make_directory "${shader_binary_dir}/"
     COMMAND ${glslc_executable} ${shader_path} -o ${spirv_path}
-    DEPENDS ${shader_path}
+    DEPENDS ${shader_path} ${shader_deps}
   )
   list(APPEND spirv_shaders ${spirv_path})
 endforeach()

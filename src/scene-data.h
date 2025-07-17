@@ -4,11 +4,9 @@
 #include "render-objects.h"
 #include "vulkan-include.h"
 
-struct Texture;
-
+// TODO: Delete? Only the desc_set is really needed.
 struct Material {
-  Texture* diffuse = nullptr;
-  Buffer ubo;
+  MaterialId id = kMaterialIdNone;
   vk::DescriptorSet desc_set;
 };
 
