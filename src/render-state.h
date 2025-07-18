@@ -1,5 +1,6 @@
 #pragma once
 
+#include "materials.h"
 #include "shaders.h"
 #include "vma-usage.h"
 
@@ -7,6 +8,7 @@
 // properties are set.
 struct VulkanState {
   const uint32_t kMaxFramesInFlight;
+  vk::PhysicalDevice physical_device;
   vk::Device device;
   vma::Allocator vma = nullptr;
   vk::DescriptorPool desc_pool;
@@ -15,11 +17,12 @@ struct VulkanState {
   vk::Sampler nearest_sampler;
   vk::PhysicalDeviceProperties device_props;
   vk::PhysicalDeviceMemoryProperties mem_props;
-  Shaders shaders;
   vk::Format depth_format;
   vk::Extent2D swap_size;
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;
+  Shaders shaders;
+  Materials materials;
 };
 
 struct DrawState {

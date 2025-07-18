@@ -85,9 +85,6 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
       vk::BufferUsageFlagBits::eStorageBuffer);
   transform_buf = createDynamicBuffer(
       vs, kMaxObjects * sizeof(mat4), vk::BufferUsageFlagBits::eStorageBuffer);
-  material_buf = createDynamicBuffer(
-      vs, kMaxMaterials * sizeof(MaterialData),
-      vk::BufferUsageFlagBits::eStorageBuffer);
 
   std::vector<vk::WriteDescriptorSet> writes;
   global->updateUboBind(0, {&global_buf.device.info}, writes);
@@ -187,8 +184,7 @@ void Scene::update(
 
 void Scene::render(
     const DrawState& ds,
-    const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
-    const std::vector<std::unique_ptr<Material>>& loaded_mats) {
+    const std::map<ModelId, std::unique_ptr<Model>>& loaded_models) {
   pass.fbo.beginRp(ds);
 
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene->pipeline);

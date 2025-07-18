@@ -79,7 +79,6 @@ class Renderer {
   void createCommandBuffers();
 
   void findDepthFormat();
-  bool hasStencilComponent(vk::Format format);
   vk::Format findSupportedFormat(
       const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
       vk::FormatFeatureFlags features);
@@ -92,14 +91,6 @@ class Renderer {
   SDL_Surface* loadImage(std::string texture_path);
   TextureId getTextureId(Texture* texture);
   Texture* createTexture(void* texture_data, uint32_t width, uint32_t height);
-  void transitionImageLayout(
-      vk::Image img, vk::Format format, uint32_t mip_levels,
-      vk::ImageLayout old_layout, vk::ImageLayout new_layout);
-  void copyBufferToImage(
-      vk::Buffer buf, vk::Image img, uint32_t width, uint32_t height);
-  void generateMipmaps(
-      vk::Image img, int32_t width, int32_t height, vk::Format format,
-      uint32_t mip_levels);
 
   Material* loadMaterial(const MaterialInfo& mat_info);
   TextureId loadTexture(std::string path);
@@ -171,7 +162,6 @@ class Renderer {
   DrawState ds_{};
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
-  std::vector<std::unique_ptr<Material>> loaded_materials_;
   std::vector<std::unique_ptr<Texture>> loaded_textures_;
   std::map<uint32_t, Texture*> color_textures_;
 

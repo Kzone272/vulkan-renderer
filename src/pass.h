@@ -56,8 +56,7 @@ struct Scene {
       const std::vector<std::unique_ptr<Material>>& loaded_mats);
   void render(
       const DrawState& ds,
-      const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
-      const std::vector<std::unique_ptr<Material>>& loaded_mats);
+      const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
 };
 
 struct Edges {

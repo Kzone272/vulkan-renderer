@@ -154,7 +154,7 @@ class App {
   Object* floor_ = nullptr;
   Skelly skelly_ = {&world_};
 
-  struct Materials {
+  struct AppMaterials {
     MaterialId cube = kMaterialIdNone;
     MaterialId cube2 = kMaterialIdNone;
     MaterialId bone = kMaterialIdNone;

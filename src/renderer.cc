@@ -89,8 +89,7 @@ void Renderer::resizeWindow(uint32_t width, uint32_t height) {
 }
 
 MaterialId Renderer::useMaterial(const MaterialInfo& mat_info) {
-  auto* material = loadMaterial(mat_info);
-  return material->id;
+  return vs_.materials.loadMaterial(vs_, mat_info);
 }
 
 void Renderer::useMesh(ModelId model_id, const Mesh& mesh) {
@@ -126,7 +125,7 @@ void Renderer::initVulkan() {
   createSyncObjects();
   createShaders();
   findDepthFormat();
-  // VulkanState should now fully defined.
+  // VulkanState should now be fully defined.
 
   sample_query_.init(vs_, scene_samples_);
   drawing_.init(vs_);
@@ -393,6 +392,7 @@ void Renderer::pickPhysicalDevice() {
     break;
   }
   ASSERT(physical_device_);
+  vs_.physical_device = physical_device_;
   vs_.device_props = physical_device_.getProperties();
   vs_.mem_props = physical_device_.getMemoryProperties();
   max_samples_ = getMaxSampleCount();
@@ -643,11 +643,6 @@ void Renderer::findDepthFormat() {
       vk::FormatFeatureFlagBits::eDepthStencilAttachment);
 }
 
-bool Renderer::hasStencilComponent(vk::Format format) {
-  return format == vk::Format::eD32SfloatS8Uint ||
-         format == vk::Format::eD24UnormS8Uint;
-}
-
 vk::Format Renderer::findSupportedFormat(
     const std::vector<vk::Format>& formats, vk::ImageTiling tiling,
     vk::FormatFeatureFlags features) {
@@ -707,226 +702,6 @@ TextureId Renderer::getTextureId(Texture* texture) {
   return texture->id;
 }
 
-Texture* Renderer::createTexture(
-    void* texture_data, uint32_t width, uint32_t height) {
-  auto texture = std::make_unique<Texture>();
-  texture->size = {width, height};
-  texture->format = vk::Format::eB8G8R8A8Srgb;
-  texture->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
-
-  vk::DeviceSize image_size = width * height * 4;
-  auto staging = createStagingBuffer(vs_, image_size);
-
-  vs_.vma.copyMemoryToAllocation(texture_data, *staging.alloc, 0, image_size);
-
-  createImage(
-      vs_, *texture.get(), vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eTransferSrc |
-          vk::ImageUsageFlagBits::eTransferDst |
-          vk::ImageUsageFlagBits::eSampled,
-      vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor,
-      *linear_sampler_);
-
-  transitionImageLayout(
-      *texture->image, texture->format, texture->mip_levels,
-      vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-  copyBufferToImage(*staging.buf, *texture->image, width, height);
-  generateMipmaps(
-      *texture->image, width, height, texture->format, texture->mip_levels);
-  // Transitioned to vk::ImageLayout::eShaderReadOnlyOptimal while generating
-  // mipmaps.
-
-  auto* ptr = texture.get();
-  loaded_textures_.push_back(std::move(texture));
-  return ptr;
-}
-
-void Renderer::transitionImageLayout(
-    vk::Image img, vk::Format format, uint32_t mip_levels,
-    vk::ImageLayout old_layout, vk::ImageLayout new_layout) {
-  vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
-
-  vk::ImageMemoryBarrier barrier{
-      .oldLayout = old_layout,
-      .newLayout = new_layout,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = img,
-      .subresourceRange = {
-          .baseMipLevel = 0,
-          .levelCount = mip_levels,
-          .baseArrayLayer = 0,
-          .layerCount = 1,
-      }};
-
-  if (new_layout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
-    barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-    if (hasStencilComponent(format)) {
-      barrier.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
-    }
-  } else {
-    barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-  }
-
-  vk::PipelineStageFlags src_stage;
-  vk::PipelineStageFlags dst_stage;
-  if (old_layout == vk::ImageLayout::eUndefined &&
-      new_layout == vk::ImageLayout::eTransferDstOptimal) {
-    barrier.srcAccessMask = {};
-    barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
-    src_stage = vk::PipelineStageFlagBits::eTopOfPipe;
-    dst_stage = vk::PipelineStageFlagBits::eTransfer;
-  } else if (
-      old_layout == vk::ImageLayout::eTransferDstOptimal &&
-      new_layout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-    src_stage = vk::PipelineStageFlagBits::eTransfer;
-    dst_stage = vk::PipelineStageFlagBits::eFragmentShader;
-  } else if (
-      old_layout == vk::ImageLayout::eUndefined &&
-      new_layout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
-    barrier.srcAccessMask = {};
-    barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead |
-                            vk::AccessFlagBits::eDepthStencilAttachmentWrite;
-    src_stage = vk::PipelineStageFlagBits::eTopOfPipe;
-    dst_stage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
-  } else {
-    std::println(
-        "Unsupported layout transition! ({} -> {})", (int)old_layout,
-        (int)new_layout);
-    ASSERT(false);
-  }
-
-  cmd_buf.pipelineBarrier(src_stage, dst_stage, {}, nullptr, nullptr, barrier);
-
-  endSingleTimeCommands(cmd_buf);
-}
-
-void Renderer::copyBufferToImage(
-    vk::Buffer buf, vk::Image img, uint32_t width, uint32_t height) {
-  vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
-
-  vk::BufferImageCopy region{
-      .bufferOffset = 0,
-      .bufferRowLength = 0,
-      .bufferImageHeight = 0,
-      .imageSubresource =
-          {
-              .aspectMask = vk::ImageAspectFlagBits::eColor,
-              .mipLevel = 0,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-      .imageOffset = {0, 0, 0},
-      .imageExtent = {width, height, 1},
-  };
-
-  cmd_buf.copyBufferToImage(
-      buf, img, vk::ImageLayout::eTransferDstOptimal, region);
-
-  endSingleTimeCommands(cmd_buf);
-}
-
-void Renderer::generateMipmaps(
-    vk::Image img, int32_t width, int32_t height, vk::Format format,
-    uint32_t mip_levels) {
-  vk::FormatProperties format_props =
-      physical_device_.getFormatProperties(format);
-  ASSERT(
-      static_cast<bool>(
-          format_props.optimalTilingFeatures &
-          vk::FormatFeatureFlagBits::eSampledImageFilterLinear));
-
-  vk::CommandBuffer cmd_buf = beginSingleTimeCommands();
-
-  vk::ImageMemoryBarrier barrier{
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = img,
-      .subresourceRange =
-          {
-              .aspectMask = vk::ImageAspectFlagBits::eColor,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
-
-  int32_t mip_width = width;
-  int32_t mip_height = height;
-  for (uint32_t i = 0; i < mip_levels - 1; i++) {
-    // Transition mip i to to be a copy source.
-    barrier.subresourceRange.baseMipLevel = i;
-    barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-    barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
-    cmd_buf.pipelineBarrier(
-        vk::PipelineStageFlagBits::eTransfer,
-        vk::PipelineStageFlagBits::eTransfer, {}, nullptr, nullptr, barrier);
-
-    int32_t src_width = mip_width;
-    int32_t src_height = mip_height;
-    if (src_width > 1) {
-      mip_width /= 2;
-    }
-    if (src_height > 1) {
-      mip_height /= 2;
-    }
-
-    // Blit from mip i to mip i+1 at half the size.
-    vk::ImageBlit blit{
-        .srcSubresource =
-            {
-                .aspectMask = vk::ImageAspectFlagBits::eColor,
-                .mipLevel = i,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        .srcOffsets = {{
-            vk::Offset3D{0, 0, 0},
-            vk::Offset3D{src_width, src_height, 1},
-        }},
-        .dstSubresource =
-            {
-                .aspectMask = vk::ImageAspectFlagBits::eColor,
-                .mipLevel = i + 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        .dstOffsets = {{
-            vk::Offset3D{0, 0, 0},
-            vk::Offset3D{mip_width, mip_height, 1},
-        }}};
-    cmd_buf.blitImage(
-        img, vk::ImageLayout::eTransferSrcOptimal, img,
-        vk::ImageLayout::eTransferDstOptimal, blit, vk::Filter::eLinear);
-
-    // Transition mip i to be shader readable.
-    barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
-    barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
-    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-    cmd_buf.pipelineBarrier(
-        vk::PipelineStageFlagBits::eTransfer,
-        vk::PipelineStageFlagBits::eFragmentShader, {}, nullptr, nullptr,
-        barrier);
-  }
-  // Transition last mip level to be shader readable.
-  barrier.subresourceRange.baseMipLevel = mip_levels - 1;
-  barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-  barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-  barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-  cmd_buf.pipelineBarrier(
-      vk::PipelineStageFlagBits::eTransfer,
-      vk::PipelineStageFlagBits::eFragmentShader, {}, nullptr, nullptr,
-      barrier);
-
-  endSingleTimeCommands(cmd_buf);
-}
-
 void Renderer::createSamplers() {
   vk::SamplerCreateInfo ci{
       .magFilter = vk::Filter::eLinear,
@@ -962,44 +737,6 @@ void Renderer::createSamplers() {
   nearest_ci.anisotropyEnable = VK_FALSE;
   nearest_sampler_ = device_->createSamplerUnique(nearest_ci).value;
   vs_.nearest_sampler = *nearest_sampler_;
-}
-
-Material* Renderer::loadMaterial(const MaterialInfo& mat_info) {
-  MaterialId id = loaded_materials_.size();
-  auto material = std::make_unique<Material>(id);
-  auto* ptr = material.get();
-
-  TextureId diffuse;
-  if (mat_info.diffuse_texture != kTextureIdNone) {
-    diffuse = mat_info.diffuse_texture;
-  } else if (mat_info.diffuse_path) {
-    diffuse = loadTexture(*mat_info.diffuse_path);
-  } else {
-    // Use 1x1 pixel white texture when none is specified.
-    diffuse = getColorTexture(0xFFFFFFFF);
-  }
-
-  TextureId textureIds[] = {diffuse};
-  uint32_t textureHash = hashBytes(std::span(textureIds));
-
-  auto desc_it = texture_descs_.find(textureHash);
-  if (desc_it != texture_descs_.end()) {
-    material->desc_set = desc_it->second;
-  } else {
-    material->desc_set = allocDescSet(vs_, *scene_.material->layout);
-    std::vector<vk::WriteDescriptorSet> writes;
-    updateDescSet(
-        material->desc_set, *scene_.material,
-        {&(refd_textures_[diffuse]->info)}, writes);
-    device_->updateDescriptorSets(writes, nullptr);
-
-    texture_descs_.emplace(textureHash, material->desc_set);
-  }
-
-  material_datas_.emplace_back(mat_info.data);
-  loaded_materials_.push_back(std::move(material));
-
-  return ptr;
 }
 
 TextureId Renderer::loadTexture(std::string path) {
@@ -1174,7 +911,7 @@ void Renderer::recordCommandBuffer() {
   if (frame_state_->update_drawing) {
     drawing_.render(ds_);
   }
-  scene_.render(ds_, loaded_models_, loaded_materials_);
+  scene_.render(ds_, loaded_models_);
 
   if (frame_state_->stained_glass) {
     edges_.render(ds_, scene_.outputSet()->sets[1]);

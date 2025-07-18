@@ -56,6 +56,7 @@ add_executable(main
   imgui-helpers.cc
   vma-usage.h
   vma-usage.cc
+  materials.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)
