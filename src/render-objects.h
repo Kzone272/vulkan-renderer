@@ -79,6 +79,7 @@ struct MaterialData {
   enum class Type : uint32_t {
     Phong,
     Gooch,
+    Toon,
   };
   vec3 color1 = {1, 1, 1};  // This takes up the size of a vec4
   vec3 color2 = {0, 0, 0};  // This takes up the size of a vec4

@@ -43,12 +43,15 @@ void main() {
   MaterialData material = materials[matIndex];
 
   vec3 color;
-  if (material.type == kPhongMaterial) {
+  if (material.type == kPhongMaterial ||
+      material.type == kToonMaterial) {
     vec3 diffuse = texture(texSampler, fragUv).rgb
         * fragColor
         * material.color1;
 
-    vec3 lambert = vec3(0);
+    // Global illumination
+    // TODO: Make this a light type.
+    vec3 lambert = vec3(0.2);
     for (int i = 0; i < global.lights.length(); i++) {
       Light light = global.lights[i];
 
@@ -59,13 +62,15 @@ void main() {
         intensity = pointLight(light.vec.xyz, light.color.w, vnorm);
       }
 
-      lambert += intensity * light.color.rgb * diffuse;
+      lambert += intensity * light.color.rgb;
     }
 
-    // Global illumination
-    // TODO: Make this a light type.
-    lambert += vec3(0.2) * diffuse;
-    color = clamp(lambert, 0, 1);
+    if (material.type == kToonMaterial) {
+      float value = step(greyscale(lambert), 0.5);
+      color = mix(material.color1, material.color2, value);
+    } else {
+      color = clamp(lambert * diffuse, 0, 1);
+    }
 
   } else if (material.type == kGoochMaterial) {
     vec3 L = vec3(1, 1, 1);

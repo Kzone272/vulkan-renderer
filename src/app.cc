@@ -138,9 +138,16 @@ void App::setupWorld() {
 }
 
 void App::loadMaterials() {
-  mats_.cube = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
+  mats_.cube_data = {
+      .color1{0, 0.8, 0.8},
+      .color2{0.4, 0, 0.6},
+  };
+  mats_.cube = renderer_->useMaterial({.data = mats_.cube_data});
   mats_.cube2 = renderer_->useMaterial({.data{.color1{0.8, 0.8, 0}}});
-  mats_.bone_data = {.color1{0.9, 0.2, 0.1}};
+  mats_.bone_data = {
+      .color1{0.9, 0.2, 0.1},
+      .color2{0.25, 0.02, 0.1},
+  };
   mats_.bone = renderer_->useMaterial({.data = mats_.bone_data});
   mats_.control = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
   mats_.viking = renderer_->useMaterial({
@@ -661,11 +668,14 @@ void App::updateImgui() {
   }
 
   if (ImGui::BeginTabItem("Materials")) {
-    if (ImGuiMaterial(mats_.gooch_data, "Gooch")) {
-      renderer_->updateMaterial(mats_.gooch, mats_.gooch_data);
-    }
     if (ImGuiMaterial(mats_.bone_data, "Bone")) {
       renderer_->updateMaterial(mats_.bone, mats_.bone_data);
+    }
+    if (ImGuiMaterial(mats_.cube_data, "Cube1")) {
+      renderer_->updateMaterial(mats_.cube, mats_.cube_data);
+    }
+    if (ImGuiMaterial(mats_.gooch_data, "Gooch")) {
+      renderer_->updateMaterial(mats_.gooch, mats_.gooch_data);
     }
 
     ImGui::EndTabItem();
@@ -711,10 +721,16 @@ void App::updateImgui() {
 bool ImGuiMaterial(MaterialData& data, std::string label) {
   auto label1 = std::format("{}-1##2f", label);
   auto label2 = std::format("{}-2##2f", label);
+  auto label3 = std::format("{}-Type", label);
   bool update = ImGui::ColorEdit3(
       label1.c_str(), (float*)&data.color1, ImGuiColorEditFlags_Float);
   update |= ImGui::ColorEdit3(
       label2.c_str(), (float*)&data.color2, ImGuiColorEditFlags_Float);
+
+  const char* types[] = {"Phong", "Gooch", "Toon"};
+  update |= ImGui::Combo(
+      label3.c_str(), (int*)(&data.type), types, IM_ARRAYSIZE(types));
+
   return update;
 }
 

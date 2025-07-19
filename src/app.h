@@ -155,6 +155,7 @@ class App {
   Skelly skelly_ = {&world_};
 
   struct AppMaterials {
+    MaterialData cube_data;
     MaterialId cube = kMaterialIdNone;
     MaterialId cube2 = kMaterialIdNone;
     MaterialData bone_data;
