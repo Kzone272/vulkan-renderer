@@ -4,12 +4,6 @@
 #include "render-objects.h"
 #include "vulkan-include.h"
 
-// TODO: Delete? Only the desc_set is really needed.
-struct Material {
-  MaterialId id = kMaterialIdNone;
-  vk::DescriptorSet desc_set;
-};
-
 struct Model {
   Buffer vert_buf;
   Buffer ind_buf;
