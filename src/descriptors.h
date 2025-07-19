@@ -3,7 +3,6 @@
 #include <variant>
 #include <vector>
 
-#include "render-state.h"
 #include "vulkan-include.h"
 
 struct Binding {
@@ -11,6 +10,8 @@ struct Binding {
   uint32_t index;
   uint32_t count = 1;
 };
+
+struct VulkanState;
 
 struct DescLayout {
   // Input

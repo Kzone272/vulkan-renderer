@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render-state.h"
+#include "vma-usage.h"
 #include "vulkan-include.h"
 
 struct Buffer {
@@ -24,6 +24,9 @@ struct DynamicBuf {
   Buffer device;
   vma::Allocator vma;
 };
+
+struct VulkanState;
+struct DrawState;
 
 Buffer createBuffer(
     const VulkanState& vs, const vk::BufferCreateInfo& buffer_ci,

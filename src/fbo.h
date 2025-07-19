@@ -1,11 +1,15 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "descriptors.h"
 #include "images.h"
 #include "render-state.h"
 #include "vulkan-include.h"
+
+struct VulkanState;
+struct DrawState;
 
 struct Fbo {
   // Inputs
@@ -21,10 +25,10 @@ struct Fbo {
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;
   // Outputs
-  std::vector<Texture> colors;
-  std::vector<Texture> resolves;
+  std::vector<std::unique_ptr<Texture>> colors;
+  std::vector<std::unique_ptr<Texture>> resolves;
   DescLayout output_set;
-  Texture depth;
+  std::unique_ptr<Texture> depth;
   vk::UniqueRenderPass rp;
   std::vector<vk::ClearValue> clears;
   std::vector<vk::UniqueFramebuffer> fbs;

@@ -1,5 +1,7 @@
 #include "buffers.h"
 
+#include "render-state.h"
+
 DynamicBuf::~DynamicBuf() {
   for (auto& staging_buf : staging) {
     if (staging_buf.alloc) {

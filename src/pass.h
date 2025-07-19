@@ -43,21 +43,17 @@ struct Scene {
   std::vector<InstanceDraws> inst_draws;
   std::vector<ObjectData> objects;
 
-  void init(const VulkanState& vs, vk::SampleCountFlagBits samples);
+  void init(VulkanState& vs, vk::SampleCountFlagBits samples);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
   void resize(const VulkanState& vs) {
     pass.fbo.resize(vs, vs.swap_size);
   }
-  void update(
-      const DrawState& ds, FrameState& fs,
-      const std::vector<MaterialData>& mat_datas,
-      const std::vector<std::unique_ptr<Material>>& loaded_mats);
+  void update(VulkanState& vs, const DrawState& ds, FrameState& fs);
   void render(
       const DrawState& ds,
-      const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
-      const std::vector<std::unique_ptr<Material>>& loaded_mats);
+      const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
 };
 
 struct Edges {

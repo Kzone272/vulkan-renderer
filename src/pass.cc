@@ -2,6 +2,7 @@
 
 #include "descriptors.h"
 #include "pipelines.h"
+#include "render-state.h"
 #include "scene-data.h"
 
 DescLayout* Pass::makeDescLayout() {
@@ -27,7 +28,7 @@ void Pass::init(const VulkanState& vs) {
   }
 }
 
-void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
+void Scene::init(VulkanState& vs, vk::SampleCountFlagBits samples) {
   pass.fbo = {
       .size = vs.swap_size,
       .color_fmts =
@@ -53,13 +54,6 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
       .stages =
           vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
   };
-  // Bound per material
-  // TODO: Don't allocate any here. These sets are allocated per material.
-  material = pass.makeDescLayout();
-  *material = {
-      .binds = {{.type = vk::DescriptorType::eCombinedImageSampler}},
-      .stages = vk::ShaderStageFlagBits::eFragment,
-  };
 
   vk::PipelineVertexInputStateCreateInfo vertex_in{};
   auto vert_binding = getBindingDesc<Vertex>();
@@ -71,7 +65,7 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
   *scene = {
       .vert_shader = vs.shaders.get("scene.vert.spv"),
       .frag_shader = vs.shaders.get("scene.frag.spv"),
-      .desc_layouts = {global, material},
+      .desc_layouts = {global, vs.materials.layout()},
       .vert_in = vertex_in,
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
@@ -85,22 +79,16 @@ void Scene::init(const VulkanState& vs, vk::SampleCountFlagBits samples) {
       vk::BufferUsageFlagBits::eStorageBuffer);
   transform_buf = createDynamicBuffer(
       vs, kMaxObjects * sizeof(mat4), vk::BufferUsageFlagBits::eStorageBuffer);
-  material_buf = createDynamicBuffer(
-      vs, kMaxMaterials * sizeof(MaterialData),
-      vk::BufferUsageFlagBits::eStorageBuffer);
 
   std::vector<vk::WriteDescriptorSet> writes;
   global->updateUboBind(0, {&global_buf.device.info}, writes);
   global->updateUboBind(1, {&object_buf.device.info}, writes);
   global->updateUboBind(2, {&transform_buf.device.info}, writes);
-  global->updateUboBind(3, {&material_buf.device.info}, writes);
+  global->updateUboBind(3, {vs.materials.bufferInfo()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
-void Scene::update(
-    const DrawState& ds, FrameState& fs,
-    const std::vector<MaterialData>& mat_datas,
-    const std::vector<std::unique_ptr<Material>>& loaded_mats) {
+void Scene::update(VulkanState& vs, const DrawState& ds, FrameState& fs) {
   GlobalData data;
   data.view = fs.view;
   data.proj = fs.proj;
@@ -125,24 +113,20 @@ void Scene::update(
       ds, transform_buf, std::span(fs.transforms),
       vk::PipelineStageFlagBits::eVertexShader,
       vk::AccessFlagBits::eShaderRead);
-  updateDynamicBuf(
-      ds, material_buf, std::span(mat_datas),
-      vk::PipelineStageFlagBits::eFragmentShader,
-      vk::AccessFlagBits::eShaderRead);
 
+  auto& materials = vs.materials;
   // Sort by material, then by model.
   std::sort(
-      fs.draws.begin(), fs.draws.end(),
-      [&loaded_mats](auto& left, auto& right) {
+      fs.draws.begin(), fs.draws.end(), [&materials](auto& left, auto& right) {
         if (left.material == kMaterialIdNone) {
           return false;
         } else if (right.material == kMaterialIdNone) {
           return true;
         }
-        const auto& leftMat = *loaded_mats[left.material];
-        const auto& rightMat = *loaded_mats[right.material];
-        if (leftMat.desc_set != rightMat.desc_set) {
-          return leftMat.desc_set < rightMat.desc_set;
+        const auto& leftMat = materials.getDesc(left.material);
+        const auto& rightMat = materials.getDesc(right.material);
+        if (leftMat != rightMat) {
+          return leftMat < rightMat;
         } else {
           return left.model < right.model;
         }
@@ -157,7 +141,7 @@ void Scene::update(
       continue;
     }
 
-    auto draw_mat_desc = loaded_mats[draw.material]->desc_set;
+    auto draw_mat_desc = vs.materials.getDesc(draw.material);
 
     bool is_new = true;
     if (inst_draws.size()) {
@@ -187,8 +171,7 @@ void Scene::update(
 
 void Scene::render(
     const DrawState& ds,
-    const std::map<ModelId, std::unique_ptr<Model>>& loaded_models,
-    const std::vector<std::unique_ptr<Material>>& loaded_mats) {
+    const std::map<ModelId, std::unique_ptr<Model>>& loaded_models) {
   pass.fbo.beginRp(ds);
 
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene->pipeline);

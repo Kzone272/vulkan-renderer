@@ -1,7 +1,6 @@
 #pragma once
 
 #include "render-objects.h"
-#include "render-state.h"
 #include "vulkan-include.h"
 
 struct Texture {
@@ -18,6 +17,8 @@ struct Texture {
   TextureId id = kTextureIdNone;
 };
 
+struct VulkanState;
+
 void createImage(
     const VulkanState& vs, Texture& texture, vk::ImageTiling tiling,
     vk::ImageUsageFlags usage, vk::MemoryPropertyFlags props,
@@ -25,3 +26,17 @@ void createImage(
 vk::UniqueImageView createImageView(
     const VulkanState& vs, vk::Image img, vk::Format format,
     uint32_t mip_levels, vk::ImageAspectFlags aspect_flags);
+
+struct SDL_Surface;
+SDL_Surface* loadImage(std::string_view texture_path);
+
+void transitionImageLayout(
+    vk::CommandBuffer cmd_buf, vk::Image img, vk::Format format,
+    uint32_t mip_levels, vk::ImageLayout old_layout,
+    vk::ImageLayout new_layout);
+void copyBufferToImage(
+    vk::CommandBuffer cmd_buf, vk::Buffer buf, vk::Image img, uint32_t width,
+    uint32_t height);
+void generateMipmaps(
+    vk::CommandBuffer cmd_buf, vk::Image img, int32_t width, int32_t height,
+    uint32_t mip_levels);

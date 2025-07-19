@@ -53,28 +53,28 @@ void Fbo::resetImages() {
 void Fbo::initImages(const VulkanState& vs) {
   vk::Sampler sampler = output_sampler ? output_sampler : vs.linear_sampler;
   for (auto& format : color_fmts) {
-    Texture color{
+    auto color = std::make_unique<Texture>(Texture{
         .size = size,
         .format = format,
         .samples = samples,
-    };
+    });
     auto usage = vk::ImageUsageFlagBits::eColorAttachment |
                  (resolve ? vk::ImageUsageFlagBits::eTransientAttachment
                           : vk::ImageUsageFlagBits::eSampled);
     createImage(
-        vs, color, vk::ImageTiling::eOptimal, usage,
+        vs, *color, vk::ImageTiling::eOptimal, usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eColor, sampler);
     colors.push_back(std::move(color));
 
     if (resolve && !swap) {
-      Texture resolve{
+      auto resolve = std::make_unique<Texture>(Texture{
           .size = size,
           .format = format,
           .samples = vk::SampleCountFlagBits::e1,
-      };
+      });
       createImage(
-          vs, resolve, vk::ImageTiling::eOptimal,
+          vs, *resolve, vk::ImageTiling::eOptimal,
           vk::ImageUsageFlagBits::eColorAttachment |
               vk::ImageUsageFlagBits::eSampled,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
@@ -84,13 +84,13 @@ void Fbo::initImages(const VulkanState& vs) {
   }
 
   if (depth_fmt) {
-    depth = {
+    depth = std::make_unique<Texture>(Texture{
         .size = size,
         .format = *depth_fmt,
         .samples = samples,
-    };
+    });
     createImage(
-        vs, depth, vk::ImageTiling::eOptimal,
+        vs, *depth, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth, {});
@@ -119,7 +119,7 @@ void Fbo::updateDescs(const VulkanState& vs) {
   auto& outputs = resolve ? resolves : colors;
   std::vector<vk::WriteDescriptorSet> writes;
   for (int i = 0; i < outputs.size(); i++) {
-    updateDescSet(output_set.sets[i], output_set, {&outputs[i].info}, writes);
+    updateDescSet(output_set.sets[i], output_set, {&outputs[i]->info}, writes);
   }
   vs.device.updateDescriptorSets(writes, nullptr);
 }
@@ -215,8 +215,8 @@ void Fbo::initRp(const VulkanState& vs) {
   };
   if (depth_fmt) {
     atts.push_back({
-        .format = depth.format,
-        .samples = depth.samples,
+        .format = depth->format,
+        .samples = depth->samples,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
@@ -282,13 +282,13 @@ void Fbo::initFb(const VulkanState& vs) {
   };
   std::vector<vk::ImageView> views;
   for (auto& texture : colors) {
-    views.push_back(*texture.image_view);
+    views.push_back(*texture->image_view);
   }
   for (auto& texture : resolves) {
-    views.push_back(*texture.image_view);
+    views.push_back(*texture->image_view);
   }
   if (depth_fmt) {
-    views.push_back(*depth.image_view);
+    views.push_back(*depth->image_view);
   }
   if (swap) {
     views.push_back({});
