@@ -140,7 +140,8 @@ void App::setupWorld() {
 void App::loadMaterials() {
   mats_.cube = renderer_->useMaterial({.data{.color1{0, 0.8, 0.8}}});
   mats_.cube2 = renderer_->useMaterial({.data{.color1{0.8, 0.8, 0}}});
-  mats_.bone = renderer_->useMaterial({.data{.color1{0.9, 0.2, 0.1}}});
+  mats_.bone_data = {.color1{0.9, 0.2, 0.1}};
+  mats_.bone = renderer_->useMaterial({.data = mats_.bone_data});
   mats_.control = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
   mats_.viking = renderer_->useMaterial({
       .diffuse_path = "assets/textures/viking_room.png",
@@ -155,11 +156,12 @@ void App::loadMaterials() {
       .data{.color1{0.2, 0.2, 0.2}},
   });
   floor_mats_ = {mats_.viking, mats_.drawing, mats_.voronoi};
-  mats_.gooch = renderer_->useMaterial({.data{
-      .color1{fromHex(0xff8d83)},
-      .color2{fromHex(0x8e9ce2)},
+  mats_.gooch_data = {
+      .color1{1, 0.8, 0},
+      .color2{0, 0.2, 1},
       .type = MaterialData::Type::Gooch,
-  }});
+  };
+  mats_.gooch = renderer_->useMaterial({.data = mats_.gooch_data});
 }
 
 void App::loadModels() {
@@ -604,6 +606,8 @@ void App::updateImgui() {
   ImGui_ImplSDL2_NewFrame();
   ImGui::NewFrame();
 
+  // ImGui::ShowDemoWindow();
+
   ImGui::Begin("Stats");
   ImGui::Text("%s", ui_.fps.c_str());
   ImGui::Text("%s", ui_.skelly.c_str());
@@ -639,6 +643,34 @@ void App::updateImgui() {
         ImGuiSliderFlags_Logarithmic);
     ImGui::EndTabItem();
   }
+  if (ImGui::BeginTabItem("Objects")) {
+    ImGui::Checkbox("Animate", &options_.animate);
+    ImGui::Checkbox("Show Controls", &options_.show_controls);
+    ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
+    if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 200)) {
+      remakeGrid(options_.grid_size);
+    }
+
+    if (ImGui::Checkbox("In", &options_.tetra_in)) {
+      loadPrimitives();
+    }
+    if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
+      loadPrimitives();
+    }
+    ImGui::EndTabItem();
+  }
+
+  if (ImGui::BeginTabItem("Materials")) {
+    if (ImGuiMaterial(mats_.gooch_data, "Gooch")) {
+      renderer_->updateMaterial(mats_.gooch, mats_.gooch_data);
+    }
+    if (ImGuiMaterial(mats_.bone_data, "Bone")) {
+      renderer_->updateMaterial(mats_.bone, mats_.bone_data);
+    }
+
+    ImGui::EndTabItem();
+  }
+
   if (ImGui::BeginTabItem("Edges")) {
     ImGuiDebugData(frame_state_.edges);
     ImGui::EndTabItem();
@@ -668,28 +700,22 @@ void App::updateImgui() {
     ImGui::Text(cam_str.c_str());
     ImGui::EndTabItem();
   }
-  if (ImGui::BeginTabItem("Objects")) {
-    ImGui::Checkbox("Animate", &options_.animate);
-    ImGui::Checkbox("Show Controls", &options_.show_controls);
-    ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
-    if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 200)) {
-      remakeGrid(options_.grid_size);
-    }
-
-    if (ImGui::Checkbox("In", &options_.tetra_in)) {
-      loadPrimitives();
-    }
-    if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
-      loadPrimitives();
-    }
-    ImGui::EndTabItem();
-  }
   ImGui::EndTabBar();
   ImGui::End();
 
   skelly_.UpdateImgui();
 
   ImGui::Render();
+}
+
+bool ImGuiMaterial(MaterialData& data, std::string label) {
+  auto label1 = std::format("{}-1##2f", label);
+  auto label2 = std::format("{}-2##2f", label);
+  bool update = ImGui::ColorEdit3(
+      label1.c_str(), (float*)&data.color1, ImGuiColorEditFlags_Float);
+  update |= ImGui::ColorEdit3(
+      label2.c_str(), (float*)&data.color2, ImGuiColorEditFlags_Float);
+  return update;
 }
 
 bool App::ImGuiDebugData(DebugData& debug) {

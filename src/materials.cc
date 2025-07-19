@@ -62,6 +62,11 @@ MaterialId Materials::loadMaterial(
   return id;
 }
 
+void Materials::updateMaterial(MaterialId id, const MaterialData& data) {
+  DASSERT(id >= 0 && id < material_descs_.size());
+  material_datas_[id] = data;
+}
+
 vk::DescriptorSet Materials::getDesc(MaterialId id) {
   DASSERT(id >= 0 && id < material_descs_.size());
   return material_descs_[id];

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "materials.h"
 #include "shaders.h"
 #include "vma-usage.h"
 
@@ -24,7 +23,6 @@ struct VulkanState {
   vk::Format swap_format;
   std::vector<vk::ImageView> swap_views;
   Shaders shaders;
-  Materials materials;
 };
 
 struct DrawState {

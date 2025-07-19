@@ -157,11 +157,13 @@ class App {
   struct AppMaterials {
     MaterialId cube = kMaterialIdNone;
     MaterialId cube2 = kMaterialIdNone;
+    MaterialData bone_data;
     MaterialId bone = kMaterialIdNone;
     MaterialId control = kMaterialIdNone;
     MaterialId viking = kMaterialIdNone;
     MaterialId drawing = kMaterialIdNone;
     MaterialId voronoi = kMaterialIdNone;
+    MaterialData gooch_data;
     MaterialId gooch = kMaterialIdNone;
   } mats_;
   std::vector<MaterialId> floor_mats_;
@@ -172,3 +174,5 @@ class App {
   const bool enable_validation_layers_ = false;
 #endif  // DEBUG
 };
+
+bool ImGuiMaterial(MaterialData& data, std::string label);

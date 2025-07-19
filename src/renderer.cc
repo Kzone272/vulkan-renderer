@@ -90,7 +90,11 @@ void Renderer::resizeWindow(uint32_t width, uint32_t height) {
 }
 
 MaterialId Renderer::useMaterial(const MaterialInfo& mat_info) {
-  return vs_.materials.loadMaterial(vs_, mat_info);
+  return mats_.loadMaterial(vs_, mat_info);
+}
+
+void Renderer::updateMaterial(MaterialId id, const MaterialData& data) {
+  return mats_.updateMaterial(id, data);
 }
 
 void Renderer::useMesh(ModelId model_id, const Mesh& mesh) {
@@ -99,11 +103,11 @@ void Renderer::useMesh(ModelId model_id, const Mesh& mesh) {
 }
 
 TextureId Renderer::getDrawingTexture() {
-  return vs_.materials.getTextureId(drawing_.pass.fbo.colors[0].get());
+  return mats_.getTextureId(drawing_.pass.fbo.colors[0].get());
 }
 
 TextureId Renderer::getVoronoiTexture() {
-  return vs_.materials.getTextureId(voronoi_.pass.fbo.colors[0].get());
+  return mats_.getTextureId(voronoi_.pass.fbo.colors[0].get());
 }
 
 void Renderer::initVulkan() {
@@ -126,11 +130,11 @@ void Renderer::initVulkan() {
   findDepthFormat();
   // VulkanState should now be fully defined.
 
-  vs_.materials.init(vs_);
+  mats_.init(vs_);
   sample_query_.init(vs_, scene_samples_);
   drawing_.init(vs_);
   voronoi_.init(vs_);
-  scene_.init(vs_, scene_samples_);
+  scene_.init(vs_, scene_samples_, &mats_);
   edges_.init(
       vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
       {&scene_.global_buf.device.info});
@@ -197,7 +201,7 @@ void Renderer::drawFrame() {
   if (frame_state_->update_voronoi) {
     voronoi_.update(ds_, frame_state_->voronoi_cells);
   }
-  vs_.materials.update(ds_);
+  mats_.update(ds_);
   scene_.update(vs_, ds_, *frame_state_);
   edges_.update(ds_, frame_state_->edges);
 

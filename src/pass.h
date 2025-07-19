@@ -12,6 +12,7 @@
 struct Model;
 struct DescLayout;
 struct Pipeline;
+struct Materials;
 
 struct Pass {
   Fbo fbo;
@@ -25,6 +26,7 @@ struct Pass {
 };
 
 struct Scene {
+  Materials* mats_ = nullptr;
   Pass pass;
   DynamicBuf global_buf;
   DynamicBuf object_buf;
@@ -43,14 +45,15 @@ struct Scene {
   std::vector<InstanceDraws> inst_draws;
   std::vector<ObjectData> objects;
 
-  void init(VulkanState& vs, vk::SampleCountFlagBits samples);
+  void init(
+      const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
   void resize(const VulkanState& vs) {
     pass.fbo.resize(vs, vs.swap_size);
   }
-  void update(VulkanState& vs, const DrawState& ds, FrameState& fs);
+  void update(const VulkanState& vs, const DrawState& ds, FrameState& fs);
   void render(
       const DrawState& ds,
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);

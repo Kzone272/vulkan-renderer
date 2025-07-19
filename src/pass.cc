@@ -1,6 +1,7 @@
 #include "pass.h"
 
 #include "descriptors.h"
+#include "materials.h"
 #include "pipelines.h"
 #include "render-state.h"
 #include "scene-data.h"
@@ -28,7 +29,10 @@ void Pass::init(const VulkanState& vs) {
   }
 }
 
-void Scene::init(VulkanState& vs, vk::SampleCountFlagBits samples) {
+void Scene::init(
+    const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats) {
+  mats_ = mats;
+
   pass.fbo = {
       .size = vs.swap_size,
       .color_fmts =
@@ -65,7 +69,7 @@ void Scene::init(VulkanState& vs, vk::SampleCountFlagBits samples) {
   *scene = {
       .vert_shader = vs.shaders.get("scene.vert.spv"),
       .frag_shader = vs.shaders.get("scene.frag.spv"),
-      .desc_layouts = {global, vs.materials.layout()},
+      .desc_layouts = {global, mats_->layout()},
       .vert_in = vertex_in,
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
@@ -84,11 +88,11 @@ void Scene::init(VulkanState& vs, vk::SampleCountFlagBits samples) {
   global->updateUboBind(0, {&global_buf.device.info}, writes);
   global->updateUboBind(1, {&object_buf.device.info}, writes);
   global->updateUboBind(2, {&transform_buf.device.info}, writes);
-  global->updateUboBind(3, {vs.materials.bufferInfo()}, writes);
+  global->updateUboBind(3, {mats_->bufferInfo()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
-void Scene::update(VulkanState& vs, const DrawState& ds, FrameState& fs) {
+void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
   GlobalData data;
   data.view = fs.view;
   data.proj = fs.proj;
@@ -114,23 +118,22 @@ void Scene::update(VulkanState& vs, const DrawState& ds, FrameState& fs) {
       vk::PipelineStageFlagBits::eVertexShader,
       vk::AccessFlagBits::eShaderRead);
 
-  auto& materials = vs.materials;
+  auto& mats = *mats_;
   // Sort by material, then by model.
-  std::sort(
-      fs.draws.begin(), fs.draws.end(), [&materials](auto& left, auto& right) {
-        if (left.material == kMaterialIdNone) {
-          return false;
-        } else if (right.material == kMaterialIdNone) {
-          return true;
-        }
-        const auto& leftMat = materials.getDesc(left.material);
-        const auto& rightMat = materials.getDesc(right.material);
-        if (leftMat != rightMat) {
-          return leftMat < rightMat;
-        } else {
-          return left.model < right.model;
-        }
-      });
+  std::sort(fs.draws.begin(), fs.draws.end(), [&mats](auto& left, auto& right) {
+    if (left.material == kMaterialIdNone) {
+      return false;
+    } else if (right.material == kMaterialIdNone) {
+      return true;
+    }
+    const auto& leftMat = mats.getDesc(left.material);
+    const auto& rightMat = mats.getDesc(right.material);
+    if (leftMat != rightMat) {
+      return leftMat < rightMat;
+    } else {
+      return left.model < right.model;
+    }
+  });
 
   inst_draws.clear();
   objects.clear();
@@ -141,7 +144,7 @@ void Scene::update(VulkanState& vs, const DrawState& ds, FrameState& fs) {
       continue;
     }
 
-    auto draw_mat_desc = vs.materials.getDesc(draw.material);
+    auto draw_mat_desc = mats_->getDesc(draw.material);
 
     bool is_new = true;
     if (inst_draws.size()) {

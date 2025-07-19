@@ -25,6 +25,7 @@ class Materials {
   }
 
   MaterialId loadMaterial(const VulkanState& vs, const MaterialInfo& mat_info);
+  void updateMaterial(MaterialId id, const MaterialData& data);
   vk::DescriptorSet getDesc(MaterialId id);
   TextureId getTextureId(Texture* texture);
 

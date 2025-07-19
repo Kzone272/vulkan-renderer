@@ -8,6 +8,7 @@
 #include "descriptors.h"
 #include "fbo.h"
 #include "images.h"
+#include "materials.h"
 #include "pass.h"
 #include "pipelines.h"
 #include "render-objects.h"
@@ -30,6 +31,7 @@ class Renderer {
   void drawFrame(FrameState* frame_state);
   void resizeWindow(uint32_t width, uint32_t height);
   MaterialId useMaterial(const MaterialInfo& mat_info);
+  void updateMaterial(MaterialId id, const MaterialData& data);
   // TODO: Also return a non-enum model id?
   void useMesh(ModelId model_id, const Mesh& mesh);
   TextureId getDrawingTexture();
@@ -151,6 +153,8 @@ class Renderer {
   DrawState ds_{};
 
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
+
+  Materials mats_;
 
   Drawing drawing_;
   Voronoi voronoi_;

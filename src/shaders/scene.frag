@@ -66,8 +66,10 @@ void main() {
     // TODO: Make this a light type.
     lambert += vec3(0.2) * diffuse;
     color = clamp(lambert, 0, 1);
+
   } else if (material.type == kGoochMaterial) {
-    vec3 L = normalize(vec3(1, 1, 1));
+    vec3 L = vec3(1, 1, 1);
+    L = normalize(vec3(global.view * vec4(L, 0)));
     float gooch = (1 + dot(vnorm, L)) / 2;
     color = mix(material.color2, material.color1, gooch);
   }
