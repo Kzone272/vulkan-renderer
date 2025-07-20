@@ -36,7 +36,7 @@ void Scene::init(
   pass.fbo = {
       .size = vs.swap_size,
       .color_fmts =
-          {vk::Format::eB8G8R8A8Unorm, vk::Format::eR32G32B32A32Sfloat},
+          {vk::Format::eB8G8R8A8Srgb, vk::Format::eR32G32B32A32Sfloat},
       // Opaque Black, (Away Vector, FarZ)
       .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 1.f}},
       .samples = samples,
