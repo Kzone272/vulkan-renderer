@@ -25,6 +25,10 @@ struct GlobalData {
   alignas(16) mat4 view;
   alignas(16) mat4 proj;
   alignas(16) mat4 inv_proj;
+  uint32_t width;
+  uint32_t height;
+  float near;
+  float far;
   alignas(16) Light lights[8];
 };
 
@@ -92,10 +96,16 @@ struct MaterialData {
 typedef uint32_t TextureId;
 inline const uint32_t kTextureIdNone = -1;
 
+enum class ScenePipeline : uint32_t {
+  Basic,
+  Gradient,
+};
+
 struct MaterialInfo {
   TextureId diffuse_texture = kTextureIdNone;
   std::optional<std::string> diffuse_path;
   MaterialData data;
+  ScenePipeline pipeline = ScenePipeline::Basic;
 };
 typedef uint32_t MaterialId;
 inline const uint32_t kMaterialIdNone = -1;
@@ -134,6 +144,10 @@ struct FrameState {
   mat4 model;
   mat4 view;
   mat4 proj;
+  uint32_t width;
+  uint32_t height;
+  float near;
+  float far;
   DebugData drawing{
       .f1 = 0.5,
   };

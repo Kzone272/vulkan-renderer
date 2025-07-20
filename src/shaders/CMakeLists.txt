@@ -1,8 +1,9 @@
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 
 file(GLOB shader_files
-  scene.vert
-  scene.frag
+  scene-basic.vert
+  scene-basic.frag
+  scene-gradient.frag
   fullscreen.vert
   edges.frag
   edges-prepass.frag

@@ -15,6 +15,10 @@ struct GlobalData {
   mat4 view;
   mat4 proj;
   mat4 inv_proj;
+  uint width;
+  uint height;
+  float near;
+  float far;
   Light lights[8];
 };
 

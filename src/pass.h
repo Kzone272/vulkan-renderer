@@ -34,11 +34,12 @@ struct Scene {
   DynamicBuf material_buf;
   DescLayout* global;
   DescLayout* material;
-  Pipeline* scene;
+  std::map<ScenePipeline, Pipeline*> pipelines_;
 
   struct InstanceDraws {
     uint32_t first_instance = 0;
     uint32_t instances = 0;
+    ScenePipeline pipeline = ScenePipeline::Basic;
     vk::DescriptorSet material_desc = {};
     ModelId model = ModelId::None;
   };

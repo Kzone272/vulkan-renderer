@@ -27,9 +27,12 @@ class Materials {
   MaterialId loadMaterial(const VulkanState& vs, const MaterialInfo& mat_info);
   void updateMaterial(MaterialId id, const MaterialData& data);
   vk::DescriptorSet getDesc(MaterialId id);
+  ScenePipeline getPipeline(MaterialId id);
   TextureId getTextureId(Texture* texture);
 
  private:
+  vk::DescriptorSet getTextureDesc(
+      const VulkanState& vs, const MaterialInfo& mat_info);
   TextureId loadTexture(const VulkanState& vs, std::string_view path);
   TextureId getColorTexture(const VulkanState& vs, uint32_t color);
   Texture* createTexture(
@@ -46,4 +49,5 @@ class Materials {
 
   std::vector<MaterialData> material_datas_;
   std::vector<vk::DescriptorSet> material_descs_;
+  std::vector<ScenePipeline> material_pipelines_;
 };

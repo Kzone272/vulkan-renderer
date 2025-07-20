@@ -65,14 +65,25 @@ void Scene::init(
   vertex_in.setVertexBindingDescriptions(vert_binding);
   vertex_in.setVertexAttributeDescriptions(vert_attrs);
 
-  scene = pass.makePipeline();
-  *scene = {
-      .vert_shader = vs.shaders.get("scene.vert.spv"),
-      .frag_shader = vs.shaders.get("scene.frag.spv"),
+  auto* basic = pass.makePipeline();
+  *basic = {
+      .vert_shader = vs.shaders.get("scene-basic.vert.spv"),
+      .frag_shader = vs.shaders.get("scene-basic.frag.spv"),
       .desc_layouts = {global, mats_->layout()},
       .vert_in = vertex_in,
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
+  pipelines_.emplace(ScenePipeline::Basic, basic);
+
+  auto* gradient = pass.makePipeline();
+  *gradient = {
+      .vert_shader = vs.shaders.get("scene-basic.vert.spv"),
+      .frag_shader = vs.shaders.get("scene-gradient.frag.spv"),
+      .desc_layouts = {global},
+      .vert_in = vertex_in,
+      .cull_mode = vk::CullModeFlagBits::eNone,
+  };
+  pipelines_.emplace(ScenePipeline::Gradient, gradient);
 
   pass.init(vs);
 
@@ -97,6 +108,10 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
   data.view = fs.view;
   data.proj = fs.proj;
   data.inv_proj = glm::inverse(fs.proj);
+  data.width = fs.width;
+  data.height = fs.height;
+  data.near = fs.near;
+  data.far = fs.far;
 
   const size_t max_lights = std::size(data.lights);
   // Add the first max_lights lights to the frame UBO, and set the rest to
@@ -126,6 +141,11 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
     } else if (right.material == kMaterialIdNone) {
       return true;
     }
+    const auto& leftPipeline = mats.getPipeline(left.material);
+    const auto& rightPipeline = mats.getPipeline(right.material);
+    if (leftPipeline != rightPipeline) {
+      return leftPipeline < rightPipeline;
+    }
     const auto& leftMat = mats.getDesc(left.material);
     const auto& rightMat = mats.getDesc(right.material);
     if (leftMat != rightMat) {
@@ -144,12 +164,14 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
       continue;
     }
 
+    auto draw_mat_pipeline = mats_->getPipeline(draw.material);
     auto draw_mat_desc = mats_->getDesc(draw.material);
 
     bool is_new = true;
     if (inst_draws.size()) {
       auto& last_draw = inst_draws.back();
-      if (last_draw.material_desc == draw_mat_desc &&
+      if (last_draw.pipeline == draw_mat_pipeline &&
+          last_draw.material_desc == draw_mat_desc &&
           last_draw.model == draw.model) {
         last_draw.instances++;
         is_new = false;
@@ -158,7 +180,8 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
 
     if (is_new) {
       inst_draws.emplace_back(
-          static_cast<uint32_t>(objects.size()), 1, draw_mat_desc, draw.model);
+          static_cast<uint32_t>(objects.size()), 1, draw_mat_pipeline,
+          draw_mat_desc, draw.model);
     }
 
     objects.emplace_back(
@@ -177,20 +200,32 @@ void Scene::render(
     const std::map<ModelId, std::unique_ptr<Model>>& loaded_models) {
   pass.fbo.beginRp(ds);
 
-  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *scene->pipeline);
-  ds.cmd.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, *scene->layout, 0, global->sets[0],
-      nullptr);
-
+  Pipeline* currPipeline = nullptr;
+  vk::DescriptorSet currDesc0 = {};
+  vk::DescriptorSet currDesc1 = {};
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
-  vk::DescriptorSet curr_mat_desc = {};
-  for (auto& draw : inst_draws) {
-    if (draw.material_desc != curr_mat_desc) {
-      curr_mat_desc = draw.material_desc;
 
+  for (auto& draw : inst_draws) {
+    auto* drawPipeline = pipelines_.at(draw.pipeline);
+    if (currPipeline != drawPipeline) {
+      currPipeline = drawPipeline;
+      ds.cmd.bindPipeline(
+          vk::PipelineBindPoint::eGraphics, *currPipeline->pipeline);
+    }
+
+    if (!currDesc0) {
+      currDesc0 = global->sets[0];
       ds.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *scene->layout, 1, curr_mat_desc,
+          vk::PipelineBindPoint::eGraphics, *currPipeline->layout, 0,
+          global->sets[0], nullptr);
+    }
+
+    if (draw.pipeline == ScenePipeline::Basic &&
+        currDesc1 != draw.material_desc) {
+      currDesc1 = draw.material_desc;
+      ds.cmd.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics, *currPipeline->layout, 1, currDesc1,
           nullptr);
     }
 

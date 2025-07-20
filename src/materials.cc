@@ -28,6 +28,21 @@ void Materials::update(const DrawState& ds) {
 
 MaterialId Materials::loadMaterial(
     const VulkanState& vs, const MaterialInfo& mat_info) {
+  vk::DescriptorSet mat_desc = {};
+  if (mat_info.pipeline == ScenePipeline::Basic) {
+    mat_desc = getTextureDesc(vs, mat_info);
+  }
+
+  MaterialId id = material_datas_.size();
+  material_datas_.emplace_back(mat_info.data);
+  material_pipelines_.emplace_back(mat_info.pipeline);
+  material_descs_.emplace_back(mat_desc);
+
+  return id;
+}
+
+vk::DescriptorSet Materials::getTextureDesc(
+    const VulkanState& vs, const MaterialInfo& mat_info) {
   TextureId diffuse;
   if (mat_info.diffuse_texture != kTextureIdNone) {
     diffuse = mat_info.diffuse_texture;
@@ -55,11 +70,7 @@ MaterialId Materials::loadMaterial(
     texture_descs_.emplace(textureHash, mat_desc);
   }
 
-  MaterialId id = material_datas_.size();
-  material_descs_.emplace_back(mat_desc);
-  material_datas_.emplace_back(mat_info.data);
-
-  return id;
+  return mat_desc;
 }
 
 void Materials::updateMaterial(MaterialId id, const MaterialData& data) {
@@ -70,6 +81,11 @@ void Materials::updateMaterial(MaterialId id, const MaterialData& data) {
 vk::DescriptorSet Materials::getDesc(MaterialId id) {
   DASSERT(id >= 0 && id < material_descs_.size());
   return material_descs_[id];
+}
+
+ScenePipeline Materials::getPipeline(MaterialId id) {
+  DASSERT(id >= 0 && id < material_descs_.size());
+  return material_pipelines_[id];
 }
 
 TextureId Materials::getTextureId(Texture* texture) {

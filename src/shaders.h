@@ -7,8 +7,9 @@
 
 const std::set<std::string> kShaders{
     // clang-format off
-    "scene.vert.spv",
-    "scene.frag.spv",
+    "scene-basic.vert.spv",
+    "scene-basic.frag.spv",
+    "scene-gradient.frag.spv",
     "fullscreen.vert.spv",
     "edges.frag.spv",
     "edges-prepass.frag.spv",

@@ -139,10 +139,11 @@ void App::setupWorld() {
 
 void App::loadMaterials() {
   mats_.cube_data = {
-      .color1{0, 0.8, 0.8},
-      .color2{0.4, 0, 0.6},
+      .color1{0, 0.06, 1},
+      .color2{0.88, 0, 1},
   };
-  mats_.cube = renderer_->useMaterial({.data = mats_.cube_data});
+  mats_.cube = renderer_->useMaterial(
+      {.data = mats_.cube_data, .pipeline = ScenePipeline::Gradient});
   mats_.cube2 = renderer_->useMaterial({.data{.color1{0.8, 0.8, 0}}});
   mats_.bone_data = {
       .color1{0.9, 0.2, 0.1},
@@ -569,8 +570,13 @@ void App::handleInput() {
 }
 
 void App::updateProjectionMatrix() {
+  float near = 20.f;
   frame_state_.proj = perspectiveInfRevZ(
-      glm::radians(45.0f), (float)width_ / (float)height_, 20.f);
+      glm::radians(45.0f), (float)width_ / (float)height_, near);
+  frame_state_.width = width_;
+  frame_state_.height = height_;
+  frame_state_.near = near;
+  frame_state_.far = std::numeric_limits<float>::infinity();
 }
 
 void App::flattenObjectTree() {
