@@ -2,6 +2,7 @@
 
 #include "structs.glsl"
 #include "maths.glsl"
+#include "colors.glsl"
 
 layout(set = 0, binding = 0) uniform GlobalBlock {
   GlobalData global;
@@ -76,7 +77,7 @@ void main() {
     vec3 L = vec3(1, 1, 1);
     L = normalize(vec3(global.view * vec4(L, 0)));
     float gooch = (1 + dot(vnorm, L)) / 2;
-    color = mix(material.color2, material.color1, gooch);
+    color = oklabMix(material.color2, material.color1, gooch);
   }
 
   outColor = vec4(color, 1);

@@ -2,6 +2,7 @@
 
 #include "structs.glsl"
 #include "maths.glsl"
+#include "colors.glsl"
 
 layout(set = 0, binding = 0) uniform GlobalBlock {
   GlobalData global;
@@ -27,7 +28,7 @@ void main() {
   MaterialData material = materials[matIndex];
 
   float t = gl_FragCoord.y / global.height;
-  vec3 color = mix(material.color1, material.color2, t);
+  vec3 color = oklabMix(material.color1, material.color2, t);
 
   outColor = vec4(color, 1);
 }

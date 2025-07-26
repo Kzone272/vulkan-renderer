@@ -163,7 +163,7 @@ void App::loadMaterials() {
       .diffuse_texture = renderer_->getVoronoiTexture(),
       .data{.color1{0.2, 0.2, 0.2}},
   });
-  floor_mats_ = {mats_.viking, mats_.drawing, mats_.voronoi};
+  floor_mats_ = {mats_.viking, mats_.drawing, mats_.voronoi, mats_.cube};
   mats_.gooch_data = {
       .color1{1, 0.8, 0},
       .color2{0, 0.2, 1},

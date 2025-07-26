@@ -118,6 +118,7 @@ class App {
     Viking,
     Drawing,
     Voronoi,
+    Gradient,
     NumFloors,
   };
   struct UiState {
