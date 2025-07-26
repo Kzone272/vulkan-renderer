@@ -411,16 +411,14 @@ void App::updateObjects() {
   anim_.model_rot = updateModelRotation();
 
   for (auto* object : grid_.children()) {
-    vec3 pos = object->getPos();
-    pos.y = 0.f;
-
     if (options_.bounce_objects) {
+      vec3 pos = object->getPos();
       float dist = glm::length(pos);
       float t = dist / 600.f + 4 * time_s_;
       float height = sinf(t) * 25.f;
       pos.y = height;
+      object->setPos(pos);
     }
-    object->setPos(pos);
 
     auto spin =
         glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));

@@ -150,17 +150,15 @@ class WorldTree {
   void getSceneObjects(
       std::vector<DrawData>& draws, std::vector<mat4>& objects,
       const std::set<ModelId>& hidden) {
-    size_t base_index = objects.size();
     for (size_t i = 0; i < count_; i++) {
       auto model = models_[i];
       if (hidden.contains(model)) {
         model = ModelId::None;
       }
 
-      draws.emplace_back(
-          model, mats_[i], static_cast<uint32_t>(base_index + i));
+      draws.emplace_back(model, mats_[i], static_cast<uint32_t>(i));
     }
-    objects.insert(objects.begin(), obj_ms_.begin(), obj_ms_.end());
+    objects = obj_ms_;
   }
 
  private:
