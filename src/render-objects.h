@@ -87,10 +87,11 @@ struct MaterialData {
   };
   vec3 color1 = {1, 1, 1};  // This takes up the size of a vec4
   vec3 color2 = {0, 0, 0};  // This takes up the size of a vec4
-  Type type = Type::Phong;
+  vec4 data3 = {0, 0, 0, 0};
   uint32_t pad3 = 0;
   uint32_t pad4 = 0;
   uint32_t pad5 = 0;
+  Type type = Type::Phong;
 };
 
 typedef uint32_t TextureId;
@@ -144,6 +145,7 @@ struct FrameState {
   mat4 model;
   mat4 view;
   mat4 proj;
+  mat4 viewProj;
   uint32_t width;
   uint32_t height;
   float near;

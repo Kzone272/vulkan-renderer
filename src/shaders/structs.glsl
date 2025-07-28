@@ -32,10 +32,11 @@ struct MaterialData {
   float pad1;
   vec3 color2;
   float pad2;
-  uint type;
+  vec4 data3;
   uint pad3;
   uint pad4;
   uint pad5;
+  uint type;
 };
 const uint kPhongMaterial = 0;
 const uint kGoochMaterial = 1;

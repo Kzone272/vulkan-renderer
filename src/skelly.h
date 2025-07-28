@@ -228,6 +228,7 @@ class Skelly {
   vec3 getPos();
   Object* getObj();
   float getPelvisHeight();
+  vec3 getTopOfHead();
   void UpdateImgui();
 
  private:

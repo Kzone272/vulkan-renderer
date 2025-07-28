@@ -253,23 +253,21 @@ BipedSkeleton::Id BipedRig::map(Id rig_id) {
   return anim_id;
 }
 
-void BipedRig::updateSkeleton(BipedSkeleton& skl) {
-  curr_pose_.computeRootMatrices();
-
+void BipedRig::updateSkeleton(BipedSkeleton& skl, Pose& pose) {
   std::vector<mat4> anim_pose(BipedSkeleton::Id::COUNT);
 
   for (size_t i = 0; i < Id::COUNT; i++) {
     auto anim_id = map((Id)i);
     if (anim_id != -1) {
-      anim_pose[anim_id] = curr_pose_.getRootMatrix(i);
+      anim_pose[anim_id] = pose.getRootMatrix(i);
     }
   }
-  anim_pose[BipedSkeleton::Id::lfoot] = curr_pose_.getRootMatrix(Id::Lankle);
-  anim_pose[BipedSkeleton::Id::rfoot] = curr_pose_.getRootMatrix(Id::Rankle);
-  anim_pose[BipedSkeleton::Id::lhand] = curr_pose_.getRootMatrix(Id::Lhand);
-  anim_pose[BipedSkeleton::Id::rhand] = curr_pose_.getRootMatrix(Id::Rhand);
+  anim_pose[BipedSkeleton::Id::lfoot] = pose.getRootMatrix(Id::Lankle);
+  anim_pose[BipedSkeleton::Id::rfoot] = pose.getRootMatrix(Id::Rankle);
+  anim_pose[BipedSkeleton::Id::lhand] = pose.getRootMatrix(Id::Lhand);
+  anim_pose[BipedSkeleton::Id::rhand] = pose.getRootMatrix(Id::Rhand);
 
-  solveIk(anim_pose);
+  solveIk(pose, anim_pose);
 
   // Hack. Rotate hands so they would be "unrotated" in local space.
   mat4 lforearm_rot =
@@ -349,7 +347,7 @@ void BipedRig::makeRig(const Pose& anim_pose) {
 }
 
 void BipedRig::getSceneObjects(
-    const mat4& parent, std::vector<DrawData>& draws,
+    const Pose& pose, const mat4& parent, std::vector<DrawData>& draws,
     std::vector<mat4>& objects, const std::set<ModelId>& hidden) {
   static mat4 control_t = glm::scale(vec3(5));
   static mat4 pelvis_t = glm::scale(vec3(15, 1, 15));
@@ -362,7 +360,7 @@ void BipedRig::getSceneObjects(
     }
 
     draws.emplace_back(model, mat_, objects.size());
-    objects.emplace_back(parent * curr_pose_.getRootMatrix(i) * model_ts_[i]);
+    objects.emplace_back(parent * pose.getRootMatrix(i) * model_ts_[i]);
   }
 }
 
@@ -370,13 +368,9 @@ void BipedRig::setMaterial(MaterialId material) {
   mat_ = material;
 }
 
-void BipedRig::solveIk(std::vector<mat4>& anim_pose) {
-  larm_.solve(curr_pose_, anim_pose);
-  rarm_.solve(curr_pose_, anim_pose);
-  lleg_.solve(curr_pose_, anim_pose);
-  rleg_.solve(curr_pose_, anim_pose);
-}
-
-void BipedRig::applyPose(const Pose& pose) {
-  curr_pose_ = pose;
+void BipedRig::solveIk(const Pose& pose, std::vector<mat4>& anim_pose) {
+  larm_.solve(pose, anim_pose);
+  rarm_.solve(pose, anim_pose);
+  lleg_.solve(pose, anim_pose);
+  rleg_.solve(pose, anim_pose);
 }

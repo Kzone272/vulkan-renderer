@@ -118,9 +118,8 @@ struct BipedRig {
   Pose getZeroPose() {
     return zero_pose_;
   }
-  void updateSkeleton(BipedSkeleton& skeleton);
-  void solveIk(std::vector<mat4>& anim_pose);
-  void applyPose(const Pose& pose);
+  void updateSkeleton(BipedSkeleton& skeleton, Pose& pose);
+  void solveIk(const Pose& pose, std::vector<mat4>& anim_pose);
   Skeleton* skeleton() {
     return &skl_;
   };
@@ -129,12 +128,11 @@ struct BipedRig {
   BipedSkeleton::Id map(Id rig_id);
 
   void getSceneObjects(
-      const mat4& parent, std::vector<DrawData>& draws,
+      const Pose& pose, const mat4& parent, std::vector<DrawData>& draws,
       std::vector<mat4>& objects, const std::set<ModelId>& hidden);
 
   Skeleton skl_ = {Id::COUNT};
   Pose zero_pose_ = {&skl_};
-  Pose curr_pose_;
 
   MaterialId mat_ = kMaterialIdNone;
   std::vector<ModelId> models_ = {Id::COUNT, ModelId::BallControl};

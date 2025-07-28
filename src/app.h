@@ -61,6 +61,7 @@ class App {
   void resetFrameState();
   float updateModelRotation();
   void updateObjects();
+  void updateMaterials();
 
   void updateCamera();
   void updateSpinCamera();
@@ -126,7 +127,7 @@ class App {
     std::string skelly;
     std::string flatten;
     bool gooch = false;
-    int floor = (int)Floor::Viking;
+    int floor = (int)Floor::Gradient;
   } ui_;
   struct Stats {
     float skelly_total = 0;
@@ -156,6 +157,8 @@ class App {
   Skelly skelly_ = {&world_};
 
   struct AppMaterials {
+    MaterialData botData;
+    MaterialId bot = kMaterialIdNone;
     MaterialData cube_data;
     MaterialId cube = kMaterialIdNone;
     MaterialId cube2 = kMaterialIdNone;
@@ -167,6 +170,8 @@ class App {
     MaterialId voronoi = kMaterialIdNone;
     MaterialData gooch_data;
     MaterialId gooch = kMaterialIdNone;
+    MaterialData gradient_floor_data;
+    MaterialId gradient_floor = kMaterialIdNone;
   } mats_;
   std::vector<MaterialId> floor_mats_;
 

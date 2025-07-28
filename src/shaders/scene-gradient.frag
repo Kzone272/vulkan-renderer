@@ -27,7 +27,9 @@ void main() {
 
   MaterialData material = materials[matIndex];
 
-  float t = gl_FragCoord.y / global.height;
+  vec2 uv = gl_FragCoord.xy / vec2(global.width, global.height);
+  float t = pctAlong(uv, material.data3.xy, material.data3.zw);
+
   vec3 color = oklabMix(material.color1, material.color2, t);
 
   outColor = vec4(color, 1);

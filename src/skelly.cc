@@ -120,7 +120,7 @@ void Skelly::getSceneObjects(
     const mat4& parent, std::vector<DrawData>& draws,
     std::vector<mat4>& objects, const std::set<ModelId>& hidden) {
   mat4 root = root_.matrix();
-  rig_.getSceneObjects(root, draws, objects, hidden);
+  rig_.getSceneObjects(pose_, root, draws, objects, hidden);
   skeleton_.getSceneObjects(root, draws, objects, hidden);
 }
 
@@ -176,6 +176,12 @@ float Skelly::getPelvisHeight() {
   return sizes_.pelvis_y;
 }
 
+vec3 Skelly::getTopOfHead() {
+  vec4 top{0, sizes_.head_h, 0, 1};
+  auto head_mat = root_.matrix() * pose_.getRootMatrix(BipedRigId::Head);
+  return (head_mat * top).xyz();
+}
+
 void Skelly::update(float delta_s) {
   updateSpeed(delta_s);
   updateCycle(delta_s);
@@ -207,8 +213,8 @@ void Skelly::update(float delta_s) {
   updateHandPose(pose_);
   pose_ = Pose::blend(pose_, hand_pose_, mods_.hand_blend);
 
-  rig_.applyPose(pose_);
-  rig_.updateSkeleton(skeleton_);
+  pose_.computeRootMatrices();
+  rig_.updateSkeleton(skeleton_, pose_);
 }
 
 void Skelly::updateCycle(float delta_s) {

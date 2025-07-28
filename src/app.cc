@@ -101,7 +101,7 @@ void App::setupWorld() {
   loadMaterials();
 
   skelly_.getObj()->setPos(vec3(200, 0, 0));
-  skelly_.setMaterials(mats_.bone, mats_.control);
+  skelly_.setMaterials(mats_.bot, mats_.control);
   world_.addChild(&grid_);
   remakeGrid(options_.grid_size);
   floor_ = world_.makeObject(ModelId::Floor);
@@ -141,15 +141,35 @@ void App::loadMaterials() {
   mats_.cube_data = {
       .color1{0, 0.06, 1},
       .color2{0.88, 0, 1},
+      .data3{0, 0, 1, 0},  // left -> right
   };
   mats_.cube = renderer_->useMaterial(
       {.data = mats_.cube_data, .pipeline = ScenePipeline::Gradient});
+
+  mats_.gradient_floor_data = {
+      .color1{0.912, 1, 0},
+      .color2{0, 0.314, 0.212},
+      .data3{0, 0, 1, 1},  // top left -> bottom right
+  };
+  mats_.gradient_floor = renderer_->useMaterial(
+      {.data = mats_.gradient_floor_data, .pipeline = ScenePipeline::Gradient});
+
   mats_.cube2 = renderer_->useMaterial({.data{.color1{0.8, 0.8, 0}}});
+
+  mats_.botData = {
+      .color1{0.335, 0.877, 0.862},
+      .color2{0.056, 0.103, 0.284},
+      .data3{0, 0, 0, 1},  // placeholder
+  };
+  mats_.bot = renderer_->useMaterial(
+      {.data = mats_.botData, .pipeline = ScenePipeline::Gradient});
+
   mats_.bone_data = {
       .color1{0.9, 0.2, 0.1},
       .color2{0.25, 0.02, 0.1},
   };
   mats_.bone = renderer_->useMaterial({.data = mats_.bone_data});
+
   mats_.control = renderer_->useMaterial({.data{.color1{0.1, 1, 0.2}}});
   mats_.viking = renderer_->useMaterial({
       .diffuse_path = "assets/textures/viking_room.png",
@@ -163,7 +183,8 @@ void App::loadMaterials() {
       .diffuse_texture = renderer_->getVoronoiTexture(),
       .data{.color1{0.2, 0.2, 0.2}},
   });
-  floor_mats_ = {mats_.viking, mats_.drawing, mats_.voronoi, mats_.cube};
+  floor_mats_ = {
+      mats_.viking, mats_.drawing, mats_.voronoi, mats_.gradient_floor};
   mats_.gooch_data = {
       .color1{1, 0.8, 0},
       .color2{0, 0.2, 1},
@@ -335,6 +356,8 @@ void App::update() {
     updateCamera();
 
     flattenObjectTree();
+    updateMaterials();
+
     renderer_->drawFrame(&frame_state_);
     frame_state_.frame_num++;
   }
@@ -443,6 +466,15 @@ void App::updateObjects() {
   }
 }
 
+void App::updateMaterials() {
+  vec3 end = skelly_.getPos();
+  vec3 start = skelly_.getTopOfHead();
+  mats_.botData.data3 = vec4(
+      toScreenSpace(start, frame_state_.viewProj),
+      toScreenSpace(end, frame_state_.viewProj));
+  renderer_->updateMaterial(mats_.bot, mats_.botData);
+}
+
 void App::updateCamera() {
   if (options_.cam_type == CameraType::Spin) {
     updateSpinCamera();
@@ -455,6 +487,7 @@ void App::updateCamera() {
   } else {
     ASSERT(false);
   }
+  frame_state_.viewProj = frame_state_.proj * frame_state_.view;
 }
 
 void App::updateSpinCamera() {
@@ -672,11 +705,18 @@ void App::updateImgui() {
   }
 
   if (ImGui::BeginTabItem("Materials")) {
-    if (ImGuiMaterial(mats_.bone_data, "Bone")) {
-      renderer_->updateMaterial(mats_.bone, mats_.bone_data);
+    if (ImGuiMaterial(mats_.botData, "Bot")) {
+      renderer_->updateMaterial(mats_.bot, mats_.botData);
     }
     if (ImGuiMaterial(mats_.cube_data, "Cube1")) {
       renderer_->updateMaterial(mats_.cube, mats_.cube_data);
+    }
+    if (ImGuiMaterial(mats_.gradient_floor_data, "Floor")) {
+      renderer_->updateMaterial(
+          mats_.gradient_floor, mats_.gradient_floor_data);
+    }
+    if (ImGuiMaterial(mats_.bone_data, "Bone")) {
+      renderer_->updateMaterial(mats_.bone, mats_.bone_data);
     }
     if (ImGuiMaterial(mats_.gooch_data, "Gooch")) {
       renderer_->updateMaterial(mats_.gooch, mats_.gooch_data);
@@ -725,15 +765,15 @@ void App::updateImgui() {
 bool ImGuiMaterial(MaterialData& data, std::string label) {
   auto label1 = std::format("{}-1##2f", label);
   auto label2 = std::format("{}-2##2f", label);
-  auto label3 = std::format("{}-Type", label);
-  bool update = ImGui::ColorEdit3(
+  auto typeLabel = std::format("{}-Type", label);
+
+  const char* types[] = {"Phong", "Gooch", "Toon"};
+  bool update = ImGui::Combo(
+      typeLabel.c_str(), (int*)(&data.type), types, IM_ARRAYSIZE(types));
+  update |= ImGui::ColorEdit3(
       label1.c_str(), (float*)&data.color1, ImGuiColorEditFlags_Float);
   update |= ImGui::ColorEdit3(
       label2.c_str(), (float*)&data.color2, ImGuiColorEditFlags_Float);
-
-  const char* types[] = {"Phong", "Gooch", "Toon"};
-  update |= ImGui::Combo(
-      label3.c_str(), (int*)(&data.type), types, IM_ARRAYSIZE(types));
 
   return update;
 }
