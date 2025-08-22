@@ -44,7 +44,6 @@ struct Scene {
     ModelId model = ModelId::None;
   };
   std::vector<InstanceDraws> inst_draws;
-  std::vector<ObjectData> objects;
 
   void init(
       const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats);

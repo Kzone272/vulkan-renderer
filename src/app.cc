@@ -90,7 +90,7 @@ void App::initFrameState() {
   fps_cam_.pos = {0, 300, -100 * options_.grid_size / 2};
   follow_cam_ = {
       .dist = 800.f,
-      .focus = skelly_.getPos(),
+      .focus = getSkellyPos(),
       .yaw = 0,
       .pitch = -30,
   };
@@ -98,26 +98,32 @@ void App::initFrameState() {
 }
 
 void App::setupWorld() {
+  loadModels();
   loadMaterials();
 
-  skelly_.getObj()->setPos(vec3(200, 0, 0));
+  skellyId_ = skelly_.getEntity();
+  auto skellyI = world_.getIndex(skellyId_);
+  world_.setPos(skellyI, vec3(200, 0, 0));
   skelly_.setMaterials(mats_.bot, mats_.control);
-  world_.addChild(&grid_);
+
+  grid_ = world_.makeObject();
   remakeGrid(options_.grid_size);
-  floor_ = world_.makeObject(ModelId::Floor);
-  floor_->setMaterial(floor_mats_[ui_.floor]);
+  floor_ = world_.makeObject(ModelId::Floor, floor_mats_[ui_.floor]);
 
-  auto* car = world_.makeObject(ModelId::Pony);
-  car->setPos(vec3(-300, -1, 0));
+  auto& ponyInfo = kModelRegistry[ModelId::Pony];
+  auto car = world_.makeObject(
+      ModelId::Pony, ponyInfo.material, ponyInfo.model_transform);
+  world_.setPos(car, vec3(-300, -1, 0));
 
-  auto* room = world_.makeObject(ModelId::Viking);
-  room->setPos(vec3(300, 1, 300));
+  auto& vikingInfo = kModelRegistry[ModelId::Viking];
+  auto viking = world_.makeObject(
+      ModelId::Viking, vikingInfo.material, vikingInfo.model_transform);
+  world_.setPos(viking, vec3(300, 1, 300));
 
-  auto* ball = world_.makeObject(ModelId::Sphere, glm::scale(vec3(100)));
-  ball->setPos(vec3(-300, 100, 600));
-  ball->setMaterial(mats_.cube);
+  auto ball =
+      world_.makeObject(ModelId::Sphere, mats_.cube, glm::scale(vec3(100)));
+  world_.setPos(ball, vec3(-300, 100, 600));
 
-  loadModels();
   loadPrimitives();
 
   // Random points. Chose by fair dice roll.
@@ -135,6 +141,10 @@ void App::setupWorld() {
   frame_state_.voronoi_cells.push_back({.color{0.2, 0.8, 0.6}});
 
   setupLights();
+}
+
+vec3 App::getSkellyPos() {
+  return world_.getPos(skellyId_);
 }
 
 void App::loadMaterials() {
@@ -194,22 +204,12 @@ void App::loadMaterials() {
 }
 
 void App::loadModels() {
-  std::vector<std::pair<Object*, ModelId>> models;
-  world_.getModels(models);
-  for (auto& [object, id] : models) {
-    if (id == ModelId::None) {
-      continue;
-    }
-    auto it = kModelRegistry.find(id);
-    if (it == kModelRegistry.end()) {
-      continue;
-    }
-    auto& info = it->second;
-    auto mat_id = renderer_->useMaterial({.diffuse_path = info.texture_path});
-    object->setMaterial(mat_id);
+  for (auto& [model, modelInfo] : kModelRegistry) {
+    modelInfo.material =
+        renderer_->useMaterial({.diffuse_path = modelInfo.texture_path});
 
-    Mesh mesh = loadObj(info.obj_path);
-    renderer_->useMesh(id, mesh);
+    Mesh mesh = loadObj(modelInfo.obj_path);
+    renderer_->useMesh(model, mesh);
   }
 }
 
@@ -229,15 +229,20 @@ void App::loadPrimitives() {
 }
 
 void App::remakeGrid(int grid) {
-  grid_.clearChildren();
+  for (auto id : gridItems_) {
+    world_.deleteEntity(id);
+  }
+  gridItems_.clear();
 
   for (int i = 0; i < grid; i++) {
     for (int j = 0; j < grid; j++) {
-      ModelId id = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
+      ModelId model = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
+      MaterialId material = (i % 2) == 0 ? mats_.cube : mats_.cube2;
       mat4 model_t = glm::scale(vec3(100));
-      auto* obj = grid_.addChild(Object(&world_, id, model_t));
-      obj->setMaterial((i % 2) == 0 ? mats_.cube : mats_.cube2);
-      obj->setPos(500.f * vec3(i - grid / 2, 0, j - grid / 2));
+      auto id = world_.makeObject(model, material, model_t);
+      world_.setParent(id, grid_);
+      world_.setPos(id, 500.f * vec3(i - grid / 2, 0, j - grid / 2));
+      gridItems_.push_back(id);
     }
   }
 }
@@ -433,24 +438,24 @@ float App::updateModelRotation() {
 void App::updateObjects() {
   anim_.model_rot = updateModelRotation();
 
-  for (auto* object : grid_.children()) {
+  for (auto id : gridItems_) {
+    auto& transform = world_.getTransform(id);
     if (options_.bounce_objects) {
-      vec3 pos = object->getPos();
-      float dist = glm::length(pos);
+      float dist = glm::length(transform.pos);
       float t = dist / 600.f + 4 * time_s_;
       float height = sinf(t) * 25.f;
-      pos.y = height;
-      object->setPos(pos);
+      transform.pos.y = height;
     }
 
     auto spin =
         glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
-    object->setRot(spin);
+    transform.rot = spin;
   }
 
   {
     Time sk_start = Clock::now();
-    skelly_.update(time_delta_s_);
+    auto& transform = world_.getTransform(skellyId_);
+    skelly_.update(time_delta_s_, transform);
     Time sk_end = Clock::now();
     stats_.skelly_total += FloatMs(sk_end - sk_start).count();
     stats_.skelly_num++;
@@ -467,8 +472,9 @@ void App::updateObjects() {
 }
 
 void App::updateMaterials() {
-  vec3 end = skelly_.getPos();
-  vec3 start = skelly_.getTopOfHead();
+  const mat4& drawM = world_.getDrawMatrix(skellyId_);
+  vec3 end = drawM[3];
+  vec3 start = drawM * vec4(skelly_.getTopOfHead(), 1);
   mats_.botData.data3 = vec4(
       toScreenSpace(start, frame_state_.viewProj),
       toScreenSpace(end, frame_state_.viewProj));
@@ -580,7 +586,7 @@ void App::updateDist(float& dist) {
 }
 
 void App::updateFollowCamera() {
-  follow_cam_.focus = skelly_.getPos() + vec3(0, skelly_.getPelvisHeight(), 0);
+  follow_cam_.focus = getSkellyPos() + vec3(0, skelly_.getPelvisHeight(), 0);
   updateYawPitch(follow_cam_.yaw, follow_cam_.pitch);
   updateDist(follow_cam_.dist);
 
@@ -621,24 +627,31 @@ void App::flattenObjectTree() {
 
   static const mat4 identity(1);
   auto& hidden = options_.show_controls ? empty_set : control_models;
-  frame_state_.draws.clear();
+  // frame_state_.draws.clear();
   frame_state_.transforms.clear();
   world_.updateMats();
-  world_.getSceneObjects(frame_state_.draws, frame_state_.transforms, hidden);
-  skelly_.getSceneObjects(
-      identity, frame_state_.draws, frame_state_.transforms, hidden);
+  frame_state_.transforms = world_.drawMs_;
+  // world_.getSceneObjects(frame_state_.draws, frame_state_.transforms,
+  // hidden);
+  if (world_.drawsDirty_) {
+    frame_state_.draws = world_.draws_;
+    frame_state_.drawsUpdated = true;
+    world_.drawsDirty_ = false;
+  } else {
+    frame_state_.drawsUpdated = false;
+  }
 
   static const std::set<ModelId> gooch_models = {
       ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
       ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
   };
-  if (ui_.gooch) {
-    for (auto& draw : frame_state_.draws) {
-      if (auto it = gooch_models.contains(draw.model)) {
-        draw.material = mats_.gooch;
-      }
-    }
-  }
+  // if (ui_.gooch) {
+  //   for (auto& draw : frame_state_.draws) {
+  //     if (auto it = gooch_models.contains(draw.model)) {
+  //       draw.material = mats_.gooch;
+  //     }
+  //   }
+  // }
 
   Time end = Clock::now();
   stats_.flatten_total += FloatMs(end - start).count();
@@ -658,7 +671,7 @@ void App::updateImgui() {
   ImGui::Text("%s", ui_.flatten.c_str());
   bool show_pos = false;
   if (show_pos) {
-    std::string pos_str = std::format("Pos: {}", toStr(skelly_.getPos()));
+    std::string pos_str = std::format("Pos: {}", toStr(getSkellyPos()));
     ImGui::Text(pos_str.c_str());
   }
   ImGui::End();
@@ -675,7 +688,7 @@ void App::updateImgui() {
     ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
     ImGui::Checkbox("Gooch", &ui_.gooch);
     if (ImGui::SliderInt("Floor", &ui_.floor, 0, (int)Floor::NumFloors - 1)) {
-      floor_->setMaterial(floor_mats_[ui_.floor]);
+      world_.setMaterial(floor_, floor_mats_[ui_.floor]);
     }
     ImGui::Checkbox("Edges", &frame_state_.draw_edges);
     ImGui::SliderFloat(
@@ -808,3 +821,19 @@ void App::cleanup() {
   SDL_DestroyWindow(window_);
   SDL_Quit();
 }
+
+std::map<ModelId, ModelInfo> kModelRegistry = {
+    {ModelId::Viking,
+     {
+         "assets/models/viking_room.obj",
+         "assets/textures/viking_room.png",
+         glm::rotate(glm::radians(-90.f), vec3(1, 0, 0)) *
+             glm::scale(vec3(-300, 300, 300)),
+     }},
+    {ModelId::Pony,
+     {
+         "assets/models/pony/pony.obj",
+         "assets/models/pony/pony-body-diffuse.jpg",
+         glm::scale(vec3(0.5)),
+     }},
+};

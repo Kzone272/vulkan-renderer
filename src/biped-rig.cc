@@ -91,22 +91,11 @@ void BipedSkeleton::makeBones(const SkellySizes& sizes) {
   curr_pose_ = zero_pose_.getRootMatrices();
 }
 
-void BipedSkeleton::setMaterial(MaterialId material) {
-  mat_ = material;
-}
-
-void BipedSkeleton::getSceneObjects(
-    const mat4& parent, std::vector<DrawData>& draws,
-    std::vector<mat4>& objects, const std::set<ModelId>& hidden) {
+const std::vector<mat4>& BipedSkeleton::getMatrices(const mat4& parent) {
   for (size_t i = 0; i < Id::COUNT; i++) {
-    auto model = models_[i];
-    if (model == ModelId::None || hidden.contains(model)) {
-      continue;
-    }
-
-    draws.emplace_back(model, mat_, objects.size());
-    objects.emplace_back(parent * curr_pose_[i] * model_ts_[i]);
+    drawMats_[i] = parent * curr_pose_[i] * model_ts_[i];
   }
+  return drawMats_;
 }
 
 namespace {
@@ -346,26 +335,12 @@ void BipedRig::makeRig(const Pose& anim_pose) {
       BipedSkeleton::Id::rshin, rfemur_l, rshin_l);
 }
 
-void BipedRig::getSceneObjects(
-    const Pose& pose, const mat4& parent, std::vector<DrawData>& draws,
-    std::vector<mat4>& objects, const std::set<ModelId>& hidden) {
-  static mat4 control_t = glm::scale(vec3(5));
-  static mat4 pelvis_t = glm::scale(vec3(15, 1, 15));
-  static mat4 small_t = glm::scale(vec3(3));
-
+const std::vector<mat4>& BipedRig::getMatrices(
+    const mat4& parent, const Pose& pose) {
   for (size_t i = 0; i < Id::COUNT; i++) {
-    ModelId model = models_[i];
-    if (model == ModelId::None || hidden.contains(model)) {
-      continue;
-    }
-
-    draws.emplace_back(model, mat_, objects.size());
-    objects.emplace_back(parent * pose.getRootMatrix(i) * model_ts_[i]);
+    drawMats_[i] = parent * pose.getRootMatrix(i) * model_ts_[i];
   }
-}
-
-void BipedRig::setMaterial(MaterialId material) {
-  mat_ = material;
+  return drawMats_;
 }
 
 void BipedRig::solveIk(const Pose& pose, std::vector<mat4>& anim_pose) {

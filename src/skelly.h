@@ -1,6 +1,7 @@
 #pragma once
 
 #include "biped-rig.h"
+#include "entities.h"
 #include "glm-include.h"
 #include "input.h"
 #include "object.h"
@@ -74,8 +75,6 @@ struct MoveMods {
 };
 
 struct FootMeta {
-  Object* foot;
-  Object* toe;
   bool planted = false;
   bool is_left = false;
   bool just_lifted = false;
@@ -174,8 +173,8 @@ class WalkCycle {
 class WalkPoser {
  public:
   WalkPoser() = default;
-  WalkPoser(WalkCycle walk, Skeleton* skl, const MoveMods& mods, Object* root);
-  Pose getPose(float cycle_t, float delta_s);
+  WalkPoser(WalkCycle walk, Skeleton* skl, const MoveMods& mods);
+  Pose getPose(float cycle_t, float delta_s, const TData& transform);
   float getCycleDur() {
     return walk_.getCycleDur();
   }
@@ -184,9 +183,9 @@ class WalkPoser {
   }
 
  private:
-  void plantFoot(FootMeta& foot_m);
-  void offsetFoot(float cycle_t, FootMeta& foot_m);
-  void setWorld(FootMeta& foot_m);
+  void plantFoot(FootMeta& foot_m, const mat4& toWorld);
+  void offsetFoot(float cycle_t, FootMeta& foot_m, const mat4& toWorld);
+  void setWorld(FootMeta& foot_m, const mat4& toWorld);
 
   WalkCycle walk_ = {};
   Movement<vec3> lstep_offset_;
@@ -194,7 +193,6 @@ class WalkPoser {
   Pose add_pose_ = {};
 
   const MoveMods* mods_ = nullptr;
-  Object* root_ = nullptr;
   bool world_set_ = false;
 };
 
@@ -215,18 +213,14 @@ class Duration {
 
 class Skelly {
  public:
-  Skelly(WorldTree* world);
+  Skelly(Entities* world);
 
   void makeBones();
   void setMaterials(MaterialId bone_mat, MaterialId control_mat);
-  void getSceneObjects(
-      const mat4& parent, std::vector<DrawData>& draws,
-      std::vector<mat4>& objects, const std::set<ModelId>& hidden);
   void handleInput(const InputState& input);
-  void update(float delta_s);
+  void update(float delta_s, TData& transform);
 
-  vec3 getPos();
-  Object* getObj();
+  EntityId getEntity();
   float getPelvisHeight();
   vec3 getTopOfHead();
   void UpdateImgui();
@@ -237,11 +231,11 @@ class Skelly {
     int size_preset = 0;
   } ui_;
 
-  void updateSpeed(float delta_s);
+  void updateSpeed(float delta_s, TData& transform);
 
   void updateCycle(float delta_s);
   void updateMoveCycle();
-  void updateLean(float delta_s);
+  void updateLean(float delta_s, TData& transform);
   void updateHandPose(Pose& pose);
 
   bool cycleUi(Cycle& cycle);
@@ -260,14 +254,17 @@ class Skelly {
   SkellySizes sizes_ = {};
   MoveMods mods_ = {};
 
-  WorldTree* world_;
-  Object root_;
+  Entities* world_;
+  EntityId root_;
   BipedSkeleton skeleton_ = {};
   Pose pose_ = {};
   Pose lean_pose_ = {};
   Pose hand_pose_ = {};
   BipedRig rig_ = {};
   Skeleton* rig_skl_ = nullptr;
+
+  RangeId skeletonRange_ = kRangeIdNone;
+  RangeId rigRange_ = kRangeIdNone;
 
   float cycle_t_ = 0;
   float prev_cycle_t_ = 0;

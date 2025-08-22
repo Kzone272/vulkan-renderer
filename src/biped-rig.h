@@ -38,10 +38,10 @@ struct BipedSkeleton {
   BipedSkeleton& operator=(const BipedSkeleton& other) = delete;
 
   void makeBones(const SkellySizes& sizes);
-  void setMaterial(MaterialId material);
-  void getSceneObjects(
-      const mat4& parent, std::vector<DrawData>& draws,
-      std::vector<mat4>& objects, const std::set<ModelId>& hidden);
+  const std::vector<mat4>& getMatrices(const mat4& parent);
+  const std::vector<ModelId>& getModels() {
+    return models_;
+  }
 
   void setBone(Id bone, const vec3& pos, const mat4& model_t);
   void setPose(const std::vector<mat4>& pose) {
@@ -54,9 +54,9 @@ struct BipedSkeleton {
   Skeleton skl_ = {Id::COUNT};
   Pose zero_pose_ = {&skl_};
 
-  MaterialId mat_ = kMaterialIdNone;
   std::vector<ModelId> models_ = {Id::COUNT, ModelId::Bone};
   std::vector<mat4> model_ts_ = {Id::COUNT, mat4(1)};
+  std::vector<mat4> drawMats_ = {Id::COUNT, mat4(1)};
 
   std::vector<mat4> curr_pose_;
 };
@@ -80,8 +80,8 @@ struct IkChain {
   float b1_l;
   float b2_l;
   // Computed:
-  // The normalized vector pointing from the start to the target when bones are
-  // in zero-pose.
+  // The normalized vector pointing from the start to the target when bones
+  // are in zero-pose.
   vec3 point_zero;
   vec3 rot_axis;
 };
@@ -114,7 +114,6 @@ struct BipedRig {
 
   BipedRig();
   void makeRig(const Pose& anim_pose);
-  void setMaterial(MaterialId material);
   Pose getZeroPose() {
     return zero_pose_;
   }
@@ -127,16 +126,17 @@ struct BipedRig {
   void setBone(Id bone, vec3 pos);
   BipedSkeleton::Id map(Id rig_id);
 
-  void getSceneObjects(
-      const Pose& pose, const mat4& parent, std::vector<DrawData>& draws,
-      std::vector<mat4>& objects, const std::set<ModelId>& hidden);
+  const std::vector<mat4>& getMatrices(const mat4& parent, const Pose& pose);
+  const std::vector<ModelId>& getModels() {
+    return models_;
+  }
 
   Skeleton skl_ = {Id::COUNT};
   Pose zero_pose_ = {&skl_};
 
-  MaterialId mat_ = kMaterialIdNone;
   std::vector<ModelId> models_ = {Id::COUNT, ModelId::BallControl};
   std::vector<mat4> model_ts_ = {Id::COUNT, mat4(1)};
+  std::vector<mat4> drawMats_ = {Id::COUNT, mat4(1)};
 
   IkChain larm_;
   IkChain rarm_;

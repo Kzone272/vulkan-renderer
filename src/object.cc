@@ -4,26 +4,10 @@
 #include <string>
 
 #include "animation.h"
+#include "entities.h"
 #include "glm-include.h"
 #include "render-objects.h"
 #include "vec-maths.h"
-#include "world-tree.h"
-
-const std::map<ModelId, ModelInfo> kModelRegistry = {
-    {ModelId::Viking,
-     {
-         "assets/models/viking_room.obj",
-         "assets/textures/viking_room.png",
-         glm::rotate(glm::radians(-90.f), vec3(1, 0, 0)) *
-             glm::scale(vec3(-300, 300, 300)),
-     }},
-    {ModelId::Pony,
-     {
-         "assets/models/pony/pony.obj",
-         "assets/models/pony/pony-body-diffuse.jpg",
-         glm::scale(vec3(0.5)),
-     }},
-};
 
 Object::Object(
     WorldTree* world, ModelId model, std::optional<mat4> model_transform)
@@ -193,7 +177,7 @@ void Object::clearChildren() {
   }
   children_.clear();
   owned_children_.clear();
-  world_->orderChanged();
+  // world_->orderChanged();
 }
 
 Object* Object::lca(Object* o1, Object* o2) {

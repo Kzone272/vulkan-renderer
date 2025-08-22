@@ -133,6 +133,10 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
       vk::PipelineStageFlagBits::eVertexShader,
       vk::AccessFlagBits::eShaderRead);
 
+  if (!fs.drawsUpdated) {
+    return;
+  }
+
   auto& mats = *mats_;
   // Sort by material, then by model.
   std::sort(fs.draws.begin(), fs.draws.end(), [&mats](auto& left, auto& right) {
@@ -156,7 +160,7 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
   });
 
   inst_draws.clear();
-  objects.clear();
+  std::vector<ObjectData> objects;
 
   for (size_t i = 0; i < fs.draws.size(); i++) {
     auto& draw = fs.draws[i];
@@ -185,7 +189,7 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
     }
 
     objects.emplace_back(
-        static_cast<uint32_t>(draw.obj_ind),
+        static_cast<uint32_t>(draw.objInd),
         static_cast<uint32_t>(draw.material));
   }
 

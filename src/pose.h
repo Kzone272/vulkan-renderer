@@ -13,7 +13,6 @@ enum class PoseType {
   Additive,
 };
 
-class Object;
 struct IkChain;
 struct BipedRig;
 

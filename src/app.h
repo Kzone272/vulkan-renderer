@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "defines.h"
+#include "entities.h"
 #include "glm-include.h"
 #include "input.h"
 #include "object.h"
@@ -15,7 +16,6 @@
 #include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
-#include "world-tree.h"
 
 namespace {
 
@@ -23,6 +23,8 @@ constexpr int WIDTH = 1280;
 constexpr int HEIGHT = 720;
 
 }  // namespace
+
+extern std::map<ModelId, ModelInfo> kModelRegistry;
 
 class App {
  public:
@@ -40,11 +42,11 @@ class App {
 
   void initFrameState();
   void setupWorld();
+  vec3 getSkellyPos();
   void loadMaterials();
   void loadModels();
   void useMesh(ModelId model, const Mesh& mesh);
   void loadPrimitives();
-  void setGooch(bool on);
   void remakeGrid(int grid);
   void setupLights();
 
@@ -151,9 +153,11 @@ class App {
   FrameState frame_state_;
   std::unique_ptr<Renderer> renderer_;
 
-  WorldTree world_;
-  Object grid_ = {&world_};
-  Object* floor_ = nullptr;
+  Entities world_;
+  EntityId grid_ = kNoEntry;
+  std::vector<EntityId> gridItems_;
+  EntityId floor_ = kNoEntry;
+  EntityId skellyId_ = kNoEntry;
   Skelly skelly_ = {&world_};
 
   struct AppMaterials {

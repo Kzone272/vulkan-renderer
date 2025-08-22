@@ -71,12 +71,6 @@ enum class ModelId {
   Sphere,
 };
 
-struct ModelInfo {
-  std::string obj_path;
-  std::string texture_path;
-  mat4 model_transform{1};
-};
-
 static constexpr size_t kMaxMaterials = 1024;  // arbitrary big number
 
 struct MaterialData {
@@ -111,10 +105,17 @@ struct MaterialInfo {
 typedef uint32_t MaterialId;
 inline const uint32_t kMaterialIdNone = -1;
 
+struct ModelInfo {
+  std::string obj_path;
+  std::string texture_path;
+  mat4 model_transform{1};
+  MaterialId material = kMaterialIdNone;
+};
+
 struct DrawData {
   ModelId model = ModelId::None;
   MaterialId material = kMaterialIdNone;
-  size_t obj_ind = -1;
+  uint32_t objInd = (uint32_t)-1;
 };
 
 static constexpr size_t kMaxObjects = 64 * 1024;  // arbitrary big number
@@ -139,6 +140,7 @@ enum class DebugView {
 
 struct FrameState {
   uint64_t frame_num = 0;
+  bool drawsUpdated = true;
   std::vector<DrawData> draws;
   std::vector<mat4> transforms;
   std::vector<Light> lights;

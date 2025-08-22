@@ -14,8 +14,8 @@ add_executable(main
   maths.h
   maths.cc
   glm-include.h
-  object.h
-  object.cc
+  # object.h
+  # object.cc
   render-objects.h
   animation.h
   time-include.h

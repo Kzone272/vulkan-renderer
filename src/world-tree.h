@@ -1,9 +1,11 @@
 #pragma once
 
+#include <map>
 #include <print>
 #include <vector>
 
 #include "asserts.h"
+#include "entities.h"
 #include "glm-include.h"
 #include "object.h"
 #include "transform.h"
@@ -31,6 +33,9 @@ struct TData {
   }
 };
 
+typedef uint32_t RangeId;
+inline constexpr RangeId kRangeIdNone = -1;
+
 // Stores data for all Objects in a flat structure. This makes iterating through
 // them when flattening the tree much faster due to cache-friendly data access.
 class WorldTree {
@@ -38,36 +43,85 @@ class WorldTree {
   WorldTree() {
   }
 
-  void addChild(Object* child) {
-    children_.push_back(child);
-    in_order_ = false;
+  // void addChild(Object* child) {
+  //   children_.push_back(child);
+  //   in_order_ = false;
+  //   drawsDirty_ = true;
+  // }
+
+  // Object* makeObject(
+  //     ModelId model = ModelId::None,
+  //     std::optional<mat4> model_transform = std::nullopt) {
+  //   auto unique_child = std::make_unique<Object>(this, model,
+  //   model_transform); auto* ptr = unique_child.get();
+  //   owned_children_.push_back(std::move(unique_child));
+  //   addChild(ptr);
+  //   return ptr;
+  // }
+
+  // void reg(Object* obj) {
+  //   in_order_ = false;
+  //   drawsDirty_ = true;
+
+  //   size_t objInd = objects_.size();
+  //   obj->setObjectIndex(objInd);
+  //   objects_.emplace_back(obj);
+  //   parents_.emplace_back(kRootParent);
+  //   ts_.emplace_back();
+  //   local_ms_.emplace_back(1.f);
+  //   local_dirty_.emplace_back(true);
+  //   root_ms_.emplace_back(1.f);
+  //   root_dirty_.emplace_back(true);
+  //   model_ms_.emplace_back(obj->getModelMatrix());
+  //   obj_ms_.emplace_back(1.f);
+  //   objDraws_.emplace_back(obj->getModel(), obj->getMaterial(), objInd);
+  // }
+
+  RangeId createRange(uint32_t count) {
+    RangeInfo range{
+        .rangeIndex = rangeObjectCount_,
+        .count = count,
+    };
+    rangeObjectCount_ += count;
+    rangeMatrices_.insert(rangeMatrices_.end(), count, mat4(1));
+
+    rangeDraws_.resize(rangeObjectCount_);
+    uint32_t offset = range.rangeIndex;
+    for (uint32_t i = 0; i < count; i++) {
+      rangeDraws_[i] = DrawData{ModelId::None, kMaterialIdNone, offset + i};
+    }
+    drawsDirty_ = true;
+
+    auto id = nextRangeId_++;
+    ranges_.emplace(id, range);
+    return id;
   }
 
-  Object* makeObject(
-      ModelId model = ModelId::None,
-      std::optional<mat4> model_transform = std::nullopt) {
-    auto unique_child = std::make_unique<Object>(this, model, model_transform);
-    auto* ptr = unique_child.get();
-    owned_children_.push_back(std::move(unique_child));
-    addChild(ptr);
-    return ptr;
+  void updateMatrices(RangeId id, std::vector<mat4> drawMats) {
+    auto& range = getRange(id);
+    DASSERT(drawMats.size() == range.count);
+
+    for (size_t i = 0; i < range.count; i++) {
+      rangeMatrices_[range.rangeIndex + i] = drawMats[i];
+    }
   }
 
-  void reg(Object* obj) {
-    in_order_ = false;
+  void updateMaterials(RangeId id, MaterialId material) {
+    auto& range = getRange(id);
+    for (size_t i = 0; i < range.count; i++) {
+      rangeDraws_[range.rangeIndex + i].material = material;
+    }
+    drawsDirty_ = true;
+  }
 
-    obj->setObjectIndex(objects_.size());
-    objects_.emplace_back(obj);
-    parents_.emplace_back(kRootParent);
-    ts_.emplace_back();
-    local_ms_.emplace_back(1.f);
-    local_dirty_.emplace_back(true);
-    root_ms_.emplace_back(1.f);
-    root_dirty_.emplace_back(true);
-    model_ms_.emplace_back(obj->getModelMatrix());
-    obj_ms_.emplace_back(1.f);
-    models_.emplace_back(obj->getModel());
-    mats_.emplace_back(obj->getMaterial());
+  void updateModels(RangeId id, std::vector<ModelId> models) {
+    auto& range = getRange(id);
+    DASSERT(models.size() == range.count);
+
+    for (size_t i = 0; i < range.count; i++) {
+      rangeDraws_[range.rangeIndex + i].model = models[i];
+    }
+    drawsDirty_ = true;
   }
 
   void orderChanged() {
@@ -106,7 +160,8 @@ class WorldTree {
   }
 
   void setMaterial(size_t i, MaterialId mat) {
-    mats_[i] = mat;
+    objDraws_[i].material = mat;
+    drawsDirty_ = true;
   }
 
   void getModels(std::vector<std::pair<Object*, ModelId>>& pairs) {
@@ -115,7 +170,7 @@ class WorldTree {
     }
 
     for (size_t i = 0; i < count_; i++) {
-      pairs.emplace_back(objects_[i], models_[i]);
+      pairs.emplace_back(objects_[i], objDraws_[i].model);
     }
   }
 
@@ -150,16 +205,27 @@ class WorldTree {
   void getSceneObjects(
       std::vector<DrawData>& draws, std::vector<mat4>& objects,
       const std::set<ModelId>& hidden) {
-    for (size_t i = 0; i < count_; i++) {
-      auto model = models_[i];
-      if (hidden.contains(model)) {
-        model = ModelId::None;
-      }
-
-      draws.emplace_back(model, mats_[i], static_cast<uint32_t>(i));
-    }
-    objects = obj_ms_;
+    objects.reserve(obj_ms_.size() + rangeMatrices_.size());
+    objects.insert(objects.end(), obj_ms_.begin(), obj_ms_.end());
+    objects.insert(objects.end(), rangeMatrices_.begin(), rangeMatrices_.end());
   }
+
+  std::vector<DrawData> getDraws() {
+    size_t count = objDraws_.size() + rangeDraws_.size();
+
+    std::vector<DrawData> draws;
+    draws.reserve(count);
+    draws.insert(draws.end(), objDraws_.begin(), objDraws_.end());
+    draws.insert(draws.end(), rangeDraws_.begin(), rangeDraws_.end());
+
+    for (size_t i = 0; i < count; i++) {
+      draws[i].objInd = i;
+    }
+
+    return std::move(draws);
+  }
+
+  bool drawsDirty_ = true;
 
  private:
   void order() {
@@ -169,49 +235,38 @@ class WorldTree {
     }
     count_ = objects_.size();
 
-    parents_.clear();
-    model_ms_.clear();
-    models_.clear();
-    mats_.clear();
-
-    std::vector<TData> new_ts;
-    new_ts.reserve(count_);
-    std::vector<mat4> new_locals;
-    new_locals.reserve(count_);
-    std::vector<bool> new_local_dirtys;
-    new_local_dirtys.reserve(count_);
-    std::vector<mat4> new_roots;
-    new_roots.reserve(count_);
-    std::vector<bool> new_root_dirtys;
-    new_root_dirtys.reserve(count_);
-    std::vector<mat4> new_objs;
-    new_objs.reserve(count_);
-
+    std::vector<size_t> prev_inds(count_);
     for (size_t i = 0; i < count_; i++) {
       auto* obj = objects_[i];
-      size_t prev_ind = obj->getObjectIndex();
-      new_ts.emplace_back(ts_[prev_ind]);
-      new_locals.emplace_back(local_ms_[prev_ind]);
-      new_local_dirtys.emplace_back(local_dirty_[prev_ind]);
-      new_roots.emplace_back(root_ms_[prev_ind]);
-      new_root_dirtys.emplace_back(root_dirty_[prev_ind]);
-      new_objs.emplace_back(obj_ms_[prev_ind]);
-
+      prev_inds[i] = obj->getObjectIndex();
       obj->setObjectIndex(i);
-      auto* parent = obj->getParent();
-      parents_.emplace_back(parent ? parent->getObjectIndex() : kRootParent);
-      model_ms_.emplace_back(obj->getModelMatrix());
-      models_.emplace_back(obj->getModel());
-      mats_.emplace_back(obj->getMaterial());
     }
 
-    ts_ = std::move(new_ts);
-    local_ms_ = std::move(new_locals);
-    local_dirty_ = std::move(new_local_dirtys);
-    root_ms_ = std::move(new_roots);
-    root_dirty_ = std::move(new_root_dirtys);
-    obj_ms_ = std::move(new_objs);
+    reassign(ts_, prev_inds);
+    reassign(local_ms_, prev_inds);
+    reassign(local_dirty_, prev_inds);
+    reassign(root_ms_, prev_inds);
+    reassign(root_dirty_, prev_inds);
+    reassign(model_ms_, prev_inds);
+    reassign(parents_, prev_inds);
+
+    // TODO: Properly deal with ranges.
+    reassign(obj_ms_, prev_inds);
+    reassign(objDraws_, prev_inds);
+    drawsDirty_ = true;
+
     in_order_ = true;
+  }
+
+  template <class T>
+  void reassign(
+      std::vector<T>& oldValues, const std::vector<size_t>& prevInds) {
+    auto count = prevInds.size();
+    std::vector<T> newValues(count);
+    for (size_t i = 0; i < count; i++) {
+      newValues[i] = oldValues[prevInds[i]];
+    }
+    oldValues = std::move(newValues);
   }
 
   void traverse(Object* obj) {
@@ -221,22 +276,39 @@ class WorldTree {
     }
   }
 
+  struct RangeInfo {
+    uint32_t rangeIndex;
+    uint32_t count;
+  };
+
+  RangeInfo& getRange(RangeId id) {
+    auto it = ranges_.find(id);
+    DASSERT(it != ranges_.end());
+    return it->second;
+  }
+
   const size_t kRootParent = -1;
 
   std::vector<Object*> children_;
   std::vector<std::unique_ptr<Object>> owned_children_;
 
+  RangeId nextRangeId_ = 0;
+  std::map<RangeId, RangeInfo> ranges_;
+  uint32_t rangeObjectCount_ = 0;
+  std::vector<DrawData> rangeDraws_;
+  std::vector<mat4> rangeMatrices_;
+
   bool in_order_ = false;
-  size_t count_ = 0;
+  uint32_t count_ = 0;
   std::vector<Object*> objects_;
-  std::vector<size_t> parents_;
+  std::vector<uint32_t> parents_;
   std::vector<TData> ts_;
   std::vector<mat4> local_ms_;
   std::vector<bool> local_dirty_;
   std::vector<mat4> root_ms_;
   std::vector<bool> root_dirty_;
   std::vector<mat4> model_ms_;
-  std::vector<mat4> obj_ms_;  // output object matrices
-  std::vector<ModelId> models_;
-  std::vector<MaterialId> mats_;
+
+  std::vector<mat4> obj_ms_;        // output object matrices
+  std::vector<DrawData> objDraws_;  // output draws
 };

@@ -12,14 +12,12 @@
 #include "render-objects.h"
 #include "transform.h"
 
-class WorldTree;
-
-extern const std::map<ModelId, ModelInfo> kModelRegistry;
+class Entities;
 
 class Object {
  public:
   Object(
-      WorldTree* world, ModelId model = ModelId::None,
+      Entities* world, ModelId model = ModelId::None,
       std::optional<mat4> model_transform = std::nullopt);
 
   // Move only.
@@ -92,7 +90,7 @@ class Object {
   // Transform that applies to this object's mesh only, and not to children.
   mat4 model_transform_{1};
 
-  WorldTree* world_ = nullptr;
+  Entities* world_ = nullptr;
   Object* parent_ = nullptr;
   size_t obj_ind_ = -1;
   Transform anim_transform_;
