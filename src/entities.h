@@ -186,6 +186,66 @@ struct Entities {
     return std::make_pair(id, index);
   }
 
+  void compress() {
+    if (valid_.size() - count_ <= ALLOC_BATCH) {
+      return;
+    }
+    
+    std::vector<EntityIndex> prevInds;
+    std::vector<EntityIndex> newInds(valid_.size());
+    for (uint32_t i = 0; i < valid_.size(); i++) {
+      if (valid_[i]) {
+        newInds[i] = prevInds.size();
+        prevInds.push_back(i);
+      }
+    }
+    nextIndex_ = prevInds.size();
+    // std::println("entities size: {}", nextIndex_); 
+
+    // Update EntityId mappings.
+    for (auto& entry : entityIndices_) {
+      entry.second = newInds[entry.second];
+    }
+    
+    // Update storage:
+    reassign(valid_, prevInds);
+    // Transform
+    reassign(skipTransform_, prevInds);
+    reassign(ts_, prevInds);
+    reassign(localMs_, prevInds);
+    reassign(localDirty_, prevInds);
+    reassign(rootMs_, prevInds);
+    reassign(rootDirty_, prevInds);
+    reassign(modelMs_, prevInds);
+    reassign(drawMs_, prevInds);
+    reassign(parents_, prevInds);
+    // Update parent indices
+    for (size_t i = 0; i < parents_.size(); i++) {
+      auto parent = parents_[i];
+      if (parent != kNoEntry) {
+        parents_[i] = newInds[parent];
+      }
+    }
+    
+    // Draw
+    reassign(draws_, prevInds);
+    for (size_t i = 0; i < draws_.size(); i++) {
+      draws_[i].objInd = i;
+    }
+    drawsDirty_ = true;
+
+  }
+
+  template <class T>
+  void reassign(
+      std::vector<T>& storage, const std::vector<EntityIndex>& prevInds) {
+    auto count = prevInds.size();
+    for (uint32_t i = 0; i < count; i++) {
+      storage[i] = storage[prevInds[i]];
+    }
+    storage.resize(count);
+  }
+
   void resize(EntityIndex size) {
     valid_.resize(size, false);
     // Transform
@@ -401,11 +461,12 @@ struct Entities {
   EntityIndex nextIndex_ = 0;
   uint32_t count_ = 0;
 
-  std::vector<bool> valid_;
-
+  // Contiguous storage ranges
   std::map<RangeId, RangeInfo> ranges_;
 
-  // Transform
+  // # All entity storage
+  std::vector<bool> valid_;
+  // ## Transform
   std::vector<bool> skipTransform_;
   std::vector<TData> ts_;
   std::vector<mat4> localMs_;
@@ -415,7 +476,7 @@ struct Entities {
   std::vector<mat4> modelMs_;
   std::vector<mat4> drawMs_;  // output object matrices
   std::vector<EntityIndex> parents_;
-  // Draw
+  // ## Draw
   bool drawsDirty_ = true;
   std::vector<DrawData> draws_;  // output draws
 

@@ -629,6 +629,7 @@ void App::flattenObjectTree() {
   auto& hidden = options_.show_controls ? empty_set : control_models;
   // frame_state_.draws.clear();
   frame_state_.transforms.clear();
+  world_.compress();
   world_.updateMats();
   frame_state_.transforms = world_.drawMs_;
   // world_.getSceneObjects(frame_state_.draws, frame_state_.transforms,
