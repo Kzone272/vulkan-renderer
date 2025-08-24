@@ -4,6 +4,7 @@
 #include <map>
 #include <variant>
 #include <vector>
+#include <span>
 
 #include "asserts.h"
 #include "glm-include.h"
@@ -173,10 +174,8 @@ struct Entities {
 
     if (index >= valid_.size()) {
       resize(valid_.size() + ALLOC_BATCH);
-    } else {
-      reset(index);
     }
-    valid_[index] = true;
+    init(index);
     drawsDirty_ = true;
 
     for (auto* component : components_) {
@@ -262,8 +261,8 @@ struct Entities {
     draws_.resize(size);
   }
 
-  void reset(EntityIndex i) {
-    valid_[i] = false;
+  void init(EntityIndex i) {
+    valid_[i] = true;
     // Transform
     skipTransform_[i] = false;
     ts_[i] = {};
@@ -298,14 +297,15 @@ struct Entities {
 
   EntityId makeObject(
       ModelId model = ModelId::None, MaterialId material = kMaterialIdNone,
-      std::optional<mat4> modelMatrix = std::nullopt) {
+      const std::optional<mat4>& modelMatrix = std::nullopt) {
     auto entPair = newEntity();
     auto [id, i] = entPair;
 
     if (modelMatrix) {
       modelMs_[i] = *modelMatrix;
     }
-    draws_[i] = {model, material, i};
+    draws_[i].model = model;
+    draws_[i].material = material;
 
     return id;
   }
@@ -322,6 +322,12 @@ struct Entities {
     DASSERT(valid_[i]);
     draws_[i].material = material;
     drawsDirty_ = true;
+  }
+  
+  void setModelMatrix(EntityId id, const mat4& matrix) {
+    auto i = getIndex(id);
+    DASSERT(valid_[i]);
+    modelMs_[i] = matrix;
   }
 
   TData& getTransform(EntityId id) {
@@ -387,8 +393,6 @@ struct Entities {
     std::fill(rootDirty_.begin(), rootDirty_.end(), false);
   }
 
-  // Begin In progress:
-
   struct RangeInfo {
     RangeId firstEntity;
     uint32_t count;
@@ -413,6 +417,18 @@ struct Entities {
     auto it = ranges_.find(id);
     DASSERT(it != ranges_.end());
     return it->second;
+  }
+
+  void deleteRange(RangeId id) {
+    auto it = ranges_.find(id);
+    if (it == ranges_.end()) {
+      return;
+    }
+
+    auto& range = it->second;
+    for (uint32_t i = 0; i < range.count; i++) {
+      deleteEntity(range.firstEntity + i);
+    }
   }
 
   void updateMatrices(RangeId id, std::vector<mat4> drawMats) {
@@ -454,7 +470,16 @@ struct Entities {
     drawsDirty_ = true;
   }
 
-  // End in-progress
+  std::span<TData> getTransforms(RangeId id) {
+    auto& range = getRange(id);
+    auto start = getIndex(range.firstEntity);
+    for (uint32_t i = 0; i < range.count; i++) {
+      localDirty_[start + i] = true;
+      rootDirty_[start + i] = true;
+    }
+
+    return std::span(ts_.begin() + start, range.count);
+  }
 
   std::map<EntityId, EntityIndex> entityIndices_;
   EntityId nextId_ = 0;

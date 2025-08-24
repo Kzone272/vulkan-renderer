@@ -229,20 +229,22 @@ void App::loadPrimitives() {
 }
 
 void App::remakeGrid(int grid) {
-  for (auto id : gridItems_) {
-    world_.deleteEntity(id);
-  }
-  gridItems_.clear();
+  world_.deleteRange(gridRange_);
+  gridRange_ = world_.createRange(grid * grid);
 
   for (int i = 0; i < grid; i++) {
     for (int j = 0; j < grid; j++) {
+      EntityId id = gridRange_ + i * grid + j;
+
       ModelId model = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       MaterialId material = (i % 2) == 0 ? mats_.cube : mats_.cube2;
       mat4 model_t = glm::scale(vec3(100));
-      auto id = world_.makeObject(model, material, model_t);
+      
+      world_.setModel(id, model);
+      world_.setMaterial(id, material);
+      world_.setModelMatrix(id, model_t);
       world_.setParent(id, grid_);
       world_.setPos(id, 500.f * vec3(i - grid / 2, 0, j - grid / 2));
-      gridItems_.push_back(id);
     }
   }
 }
@@ -404,6 +406,11 @@ void App::checkFps(Time now) {
     int fps = frame_state_.frame_num - last_fps_frame_;
     ui_.fps = std::format("{:.2f}ms avg frame ({} fps)\n", avg_time, fps);
 
+    float grid_avg = stats_.grid_total / stats_.grid_num;
+    stats_.grid_total = 0;
+    stats_.grid_num = 0;
+    ui_.grid = std::format("Grid avg time: {:.3f}ms", grid_avg);
+
     float skelly_avg = stats_.skelly_total / stats_.skelly_num;
     stats_.skelly_total = 0;
     stats_.skelly_num = 0;
@@ -436,20 +443,29 @@ float App::updateModelRotation() {
 }
 
 void App::updateObjects() {
-  anim_.model_rot = updateModelRotation();
+  {
+    Time gridStart = Clock::now();
+    
+    anim_.model_rot = updateModelRotation();
+    
+    auto transforms = world_.getTransforms(gridRange_);
+    for (uint32_t i = 0; i < transforms.size(); i++) {
+      auto& transform = transforms[i];
+      if (options_.bounce_objects) {
+        float dist = glm::length(transform.pos);
+        float t = dist / 600.f + 4 * time_s_;
+        float height = sinf(t) * 25.f;
+        transform.pos.y = height;
+      }
 
-  for (auto id : gridItems_) {
-    auto& transform = world_.getTransform(id);
-    if (options_.bounce_objects) {
-      float dist = glm::length(transform.pos);
-      float t = dist / 600.f + 4 * time_s_;
-      float height = sinf(t) * 25.f;
-      transform.pos.y = height;
+      auto spin =
+          glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
+      transform.rot = spin;
     }
 
-    auto spin =
-        glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
-    transform.rot = spin;
+    Time gridEnd = Clock::now();
+    stats_.grid_total += FloatMs(gridEnd - gridStart).count();
+    stats_.grid_num++;
   }
 
   {
@@ -668,6 +684,7 @@ void App::updateImgui() {
 
   ImGui::Begin("Stats");
   ImGui::Text("%s", ui_.fps.c_str());
+  ImGui::Text("%s", ui_.grid.c_str());
   ImGui::Text("%s", ui_.skelly.c_str());
   ImGui::Text("%s", ui_.flatten.c_str());
   bool show_pos = false;

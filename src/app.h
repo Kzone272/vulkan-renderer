@@ -126,12 +126,15 @@ class App {
   };
   struct UiState {
     std::string fps;
+    std::string grid;
     std::string skelly;
     std::string flatten;
     bool gooch = false;
     int floor = (int)Floor::Gradient;
   } ui_;
   struct Stats {
+    float grid_total = 0;
+    int grid_num = 0;
     float skelly_total = 0;
     int skelly_num = 0;
     float flatten_total = 0;
@@ -155,7 +158,7 @@ class App {
 
   Entities world_;
   EntityId grid_ = kNoEntry;
-  std::vector<EntityId> gridItems_;
+  EntityId gridRange_ = kNoEntry;
   EntityId floor_ = kNoEntry;
   EntityId skellyId_ = kNoEntry;
   Skelly skelly_ = {&world_};
