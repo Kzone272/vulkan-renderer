@@ -104,7 +104,7 @@ void App::setupWorld() {
   skellyId_ = skelly_.getEntity();
   auto skellyI = world_.getIndex(skellyId_);
   world_.setPos(skellyI, vec3(200, 0, 0));
-  skelly_.setMaterials(mats_.bot, mats_.control);
+  skelly_.setMaterials(mats_.bot, kMaterialIdNone);
 
   grid_ = world_.makeObject();
   remakeGrid(options_.grid_size);
@@ -447,7 +447,7 @@ void App::updateObjects() {
     Time gridStart = Clock::now();
     
     anim_.model_rot = updateModelRotation();
-    
+
     auto transforms = world_.getTransforms(gridRange_);
     for (uint32_t i = 0; i < transforms.size(); i++) {
       auto& transform = transforms[i];
@@ -643,13 +643,12 @@ void App::flattenObjectTree() {
 
   static const mat4 identity(1);
   auto& hidden = options_.show_controls ? empty_set : control_models;
-  // frame_state_.draws.clear();
-  frame_state_.transforms.clear();
+
   world_.compress();
   world_.updateMats();
+  frame_state_.transforms.clear();
   frame_state_.transforms = world_.drawMs_;
-  // world_.getSceneObjects(frame_state_.draws, frame_state_.transforms,
-  // hidden);
+
   if (world_.drawsDirty_) {
     frame_state_.draws = world_.draws_;
     frame_state_.drawsUpdated = true;
@@ -720,7 +719,10 @@ void App::updateImgui() {
   }
   if (ImGui::BeginTabItem("Objects")) {
     ImGui::Checkbox("Animate", &options_.animate);
-    ImGui::Checkbox("Show Controls", &options_.show_controls);
+    if (ImGui::Checkbox("Show Controls", &options_.show_controls)) {
+      skelly_.setMaterials(
+          mats_.bot, options_.show_controls ? mats_.control : kMaterialIdNone);
+    }
     ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 200)) {
       remakeGrid(options_.grid_size);

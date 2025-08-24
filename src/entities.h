@@ -2,9 +2,9 @@
 
 #include <array>
 #include <map>
+#include <span>
 #include <variant>
 #include <vector>
-#include <span>
 
 #include "asserts.h"
 #include "glm-include.h"
@@ -189,7 +189,7 @@ struct Entities {
     if (valid_.size() - count_ <= ALLOC_BATCH) {
       return;
     }
-    
+
     std::vector<EntityIndex> prevInds;
     std::vector<EntityIndex> newInds(valid_.size());
     for (uint32_t i = 0; i < valid_.size(); i++) {
@@ -199,13 +199,13 @@ struct Entities {
       }
     }
     nextIndex_ = prevInds.size();
-    // std::println("entities size: {}", nextIndex_); 
+    // std::println("entities size: {}", nextIndex_);
 
     // Update EntityId mappings.
     for (auto& entry : entityIndices_) {
       entry.second = newInds[entry.second];
     }
-    
+
     // Update storage:
     reassign(valid_, prevInds);
     // Transform
@@ -225,14 +225,13 @@ struct Entities {
         parents_[i] = newInds[parent];
       }
     }
-    
+
     // Draw
     reassign(draws_, prevInds);
     for (size_t i = 0; i < draws_.size(); i++) {
       draws_[i].objInd = i;
     }
     drawsDirty_ = true;
-
   }
 
   template <class T>
@@ -323,7 +322,7 @@ struct Entities {
     draws_[i].material = material;
     drawsDirty_ = true;
   }
-  
+
   void setModelMatrix(EntityId id, const mat4& matrix) {
     auto i = getIndex(id);
     DASSERT(valid_[i]);
