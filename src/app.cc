@@ -16,10 +16,14 @@
 #include "animation.h"
 #include "asserts.h"
 #include "assets.h"
+#include "grid.h"
 #include "imgui-helpers.h"
 #include "maths.h"
 #include "primitives.h"
 #include "vec-maths.h"
+
+App::App() = default;
+App::~App() = default;
 
 void App::run() {
   initWindow();
@@ -106,8 +110,9 @@ void App::setupWorld() {
   world_.setPos(skellyI, vec3(200, 0, 0));
   skelly_.setMaterials(mats_.bot, kMaterialIdNone);
 
-  grid_ = world_.makeObject();
-  remakeGrid(options_.grid_size);
+  grid_ = std::make_unique<Grid>(&world_, mats_.cube, mats_.cube2);
+  grid_->makeGrid(options_.grid_size);
+
   floor_ = world_.makeObject(ModelId::Floor, floor_mats_[ui_.floor]);
 
   auto& ponyInfo = kModelRegistry[ModelId::Pony];
@@ -226,27 +231,6 @@ void App::loadPrimitives() {
   useMesh(ModelId::Floor, makePlane(10000, 10000));
   useMesh(ModelId::Tetra, tetrahedron(options_.tetra_steps, options_.tetra_in));
   useMesh(ModelId::Sphere, makeSphere(20));
-}
-
-void App::remakeGrid(int grid) {
-  world_.deleteRange(gridRange_);
-  gridRange_ = world_.createRange(grid * grid);
-
-  for (int i = 0; i < grid; i++) {
-    for (int j = 0; j < grid; j++) {
-      EntityId id = gridRange_ + i * grid + j;
-
-      ModelId model = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
-      MaterialId material = (i % 2) == 0 ? mats_.cube : mats_.cube2;
-      mat4 model_t = glm::scale(vec3(100));
-
-      world_.setModel(id, model);
-      world_.setMaterial(id, material);
-      world_.setModelMatrix(id, model_t);
-      world_.setParent(id, grid_);
-      world_.setPos(id, 500.f * vec3(i - grid / 2, 0, j - grid / 2));
-    }
-  }
 }
 
 void App::setupLights() {
@@ -446,22 +430,7 @@ void App::updateObjects() {
   {
     Time gridStart = Clock::now();
 
-    anim_.model_rot = updateModelRotation();
-    auto spin =
-        glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
-
-    auto transforms = world_.getTransforms(gridRange_);
-    for (uint32_t i = 0; i < transforms.size(); i++) {
-      auto& transform = transforms[i];
-      if (options_.bounce_objects) {
-        float dist = glm::length(transform.pos);
-        float t = dist / 600.f + 4 * time_s_;
-        float height = sinf(t) * 25.f;
-        transform.pos.y = height;
-      }
-
-      transform.rot = spin;
-    }
+    grid_->update(time_delta_s_);
 
     Time gridEnd = Clock::now();
     stats_.grid_total += FloatMs(gridEnd - gridStart).count();
@@ -723,9 +692,11 @@ void App::updateImgui() {
       skelly_.setMaterials(
           mats_.bot, options_.show_controls ? mats_.control : kMaterialIdNone);
     }
-    ImGui::Checkbox("Bounce Objects", &options_.bounce_objects);
+    if (ImGui::Checkbox("Bounce Objects", &options_.bounce_objects)) {
+      grid_->setBounce(options_.bounce_objects);
+    }
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 200)) {
-      remakeGrid(options_.grid_size);
+      grid_->makeGrid(options_.grid_size);
     }
 
     if (ImGui::Checkbox("In", &options_.tetra_in)) {

@@ -26,8 +26,13 @@ constexpr int HEIGHT = 720;
 
 extern std::map<ModelId, ModelInfo> kModelRegistry;
 
+struct Grid;
+
 class App {
  public:
+  App();
+  ~App();
+
   void run();
 
   // Apparently this can be called on another thread by the OS. That could
@@ -47,7 +52,6 @@ class App {
   void loadModels();
   void useMesh(ModelId model, const Mesh& mesh);
   void loadPrimitives();
-  void remakeGrid(int grid);
   void setupLights();
 
   void mainLoop();
@@ -157,8 +161,7 @@ class App {
   std::unique_ptr<Renderer> renderer_;
 
   Entities world_;
-  EntityId grid_ = kNoEntry;
-  EntityId gridRange_ = kNoEntry;
+  std::unique_ptr<Grid> grid_;
   EntityId floor_ = kNoEntry;
   EntityId skellyId_ = kNoEntry;
   Skelly skelly_ = {&world_};
