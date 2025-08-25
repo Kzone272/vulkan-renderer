@@ -11,31 +11,6 @@
 #include "transform.h"
 #include "vec-maths.h"
 
-// TODO: Redundant with Transform.h. Delete one of them.
-struct TData {
-  TData() = default;
-
-  quat rot = glm::identity<quat>();
-  vec3 pos = vec3(0);
-  vec3 scale = vec3(1);
-
-  mat4 matrix() const {
-    // Equivalent to, but faster than:
-    //   glm::translate(pos) * glm::toMat4(rot) * glm::scale(scale);
-    mat4 mat = glm::toMat4(rot);
-    mat[0] *= scale[0];
-    mat[1] *= scale[1];
-    mat[2] *= scale[2];
-    mat[3][0] = pos[0];
-    mat[3][1] = pos[1];
-    mat[3][2] = pos[2];
-    return mat;
-  }
-};
-
-typedef uint32_t RangeId;
-inline constexpr RangeId kRangeIdNone = -1;
-
 // Stores data for all Objects in a flat structure. This makes iterating through
 // them when flattening the tree much faster due to cache-friendly data access.
 class WorldTree {

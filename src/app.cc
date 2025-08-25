@@ -239,7 +239,7 @@ void App::remakeGrid(int grid) {
       ModelId model = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
       MaterialId material = (i % 2) == 0 ? mats_.cube : mats_.cube2;
       mat4 model_t = glm::scale(vec3(100));
-      
+
       world_.setModel(id, model);
       world_.setMaterial(id, material);
       world_.setModelMatrix(id, model_t);
@@ -445,8 +445,10 @@ float App::updateModelRotation() {
 void App::updateObjects() {
   {
     Time gridStart = Clock::now();
-    
+
     anim_.model_rot = updateModelRotation();
+    auto spin =
+        glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
 
     auto transforms = world_.getTransforms(gridRange_);
     for (uint32_t i = 0; i < transforms.size(); i++) {
@@ -458,8 +460,6 @@ void App::updateObjects() {
         transform.pos.y = height;
       }
 
-      auto spin =
-          glm::angleAxis(glm::radians(anim_.model_rot), vec3(0.f, 1.f, 0.f));
       transform.rot = spin;
     }
 

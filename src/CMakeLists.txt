@@ -58,6 +58,7 @@ add_executable(main
   vma-usage.cc
   materials.cc
   command-buffers.cc
+  entities.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)
