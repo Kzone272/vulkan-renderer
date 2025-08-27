@@ -20,20 +20,18 @@ struct Component {
   virtual void compress(const std::vector<EntityIndex>& prevInds) = 0;
 };
 
-struct EntityUpdater {
-  virtual void update(float deltaS) = 0;
-};
-
 struct UpdateComponent : public Component {
+  using UpdateFn = std::function<void(float)>;
+
   virtual void newEntity(EntityIndex i) override;
   virtual void deleteEntity(EntityIndex i) override;
   virtual void compress(const std::vector<EntityIndex>& prevInds) override;
 
-  void setUpdater(EntityIndex i, EntityUpdater* updater);
+  void setUpdater(EntityIndex i, UpdateFn&& updater);
   void update(float deltaS);
 
   std::vector<uint32_t> inds_;
-  std::vector<EntityUpdater*> updaters_;
+  std::vector<UpdateFn> updaters_;
 };
 
 struct RangeInfo {
@@ -91,7 +89,7 @@ struct Entities {
 
   void updateMats();
 
-  void setUpdater(EntityId id, EntityUpdater* updater);
+  void setUpdater(EntityId id, UpdateComponent::UpdateFn&& updater);
   void update(float deltaS);
 
   RangeId createRange(uint32_t count);

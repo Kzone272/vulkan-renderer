@@ -288,10 +288,10 @@ void Entities::updateMats() {
   std::fill(rootDirty_.begin(), rootDirty_.end(), false);
 }
 
-void Entities::setUpdater(EntityId id, EntityUpdater* updater) {
+void Entities::setUpdater(EntityId id, UpdateComponent::UpdateFn&& updater) {
   auto i = getIndex(id);
   DASSERT(valid_[i]);
-  update_.setUpdater(i, updater);
+  update_.setUpdater(i, std::move(updater));
 }
 
 void Entities::update(float deltaS) {
@@ -399,7 +399,7 @@ void UpdateComponent::deleteEntity(EntityIndex i) {
 }
 
 void UpdateComponent::compress(const std::vector<EntityIndex>& prevInds) {
-  std::vector<EntityUpdater*> newUpdaters;
+  std::vector<UpdateFn> newUpdaters;
   newUpdaters.reserve(updaters_.size());
 
   auto count = prevInds.size();
@@ -407,7 +407,7 @@ void UpdateComponent::compress(const std::vector<EntityIndex>& prevInds) {
     auto& ind = inds_[i];
     ind = inds_[prevInds[i]];
     if (ind != kNoEntry) {
-      newUpdaters.push_back(updaters_[ind]);
+      newUpdaters.push_back(std::move(updaters_[ind]));
       ind = newUpdaters.size() - 1;
     }
   }
@@ -415,7 +415,7 @@ void UpdateComponent::compress(const std::vector<EntityIndex>& prevInds) {
   updaters_ = std::move(newUpdaters);
 }
 
-void UpdateComponent::setUpdater(EntityIndex i, EntityUpdater* updater) {
+void UpdateComponent::setUpdater(EntityIndex i, UpdateFn&& updater) {
   auto& ind = inds_[i];
   if (ind != kNoEntry) {
     updaters_[ind] = updater;
@@ -426,10 +426,10 @@ void UpdateComponent::setUpdater(EntityIndex i, EntityUpdater* updater) {
 }
 
 void UpdateComponent::update(float deltaS) {
-  for (auto* updater : updaters_) {
+  for (auto& updater : updaters_) {
     if (!updater) {
       continue;
     }
-    updater->update(deltaS);
+    updater(deltaS);
   }
 }

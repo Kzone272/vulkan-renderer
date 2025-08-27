@@ -76,7 +76,8 @@ void Duration::update(float delta_s) {
 
 Skelly::Skelly(Entities* world) : world_(world) {
   root_ = world_->makeObject();
-  world_->setUpdater(root_, this);
+  world_->setUpdater(
+      root_, std::bind(&Skelly::update, this, std::placeholders::_1));
   makeBones();
 
   skeletonRange_ = world_->createRange(BipedSkeleton::COUNT);
