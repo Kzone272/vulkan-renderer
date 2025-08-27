@@ -211,14 +211,14 @@ class Duration {
   float t_ = 0;
 };
 
-class Skelly {
+class Skelly : public EntityUpdater {
  public:
   Skelly(Entities* world);
 
   void makeBones();
   void setMaterials(MaterialId bone_mat, MaterialId control_mat);
   void handleInput(const InputState& input);
-  void update(float delta_s, TData& transform);
+  virtual void update(float delta_s) override;
 
   EntityId getEntity();
   float getPelvisHeight();

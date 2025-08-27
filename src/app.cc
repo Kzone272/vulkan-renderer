@@ -106,8 +106,7 @@ void App::setupWorld() {
   loadMaterials();
 
   skellyId_ = skelly_.getEntity();
-  auto skellyI = world_.getIndex(skellyId_);
-  world_.setPos(skellyI, vec3(200, 0, 0));
+  world_.setPos(skellyId_, vec3(200, 0, 0));
   skelly_.setMaterials(mats_.bot, kMaterialIdNone);
 
   grid_ = std::make_unique<Grid>(&world_, mats_.cube, mats_.cube2);
@@ -427,24 +426,26 @@ float App::updateModelRotation() {
 }
 
 void App::updateObjects() {
-  {
-    Time gridStart = Clock::now();
+  // TODO: Get update timings from world_.update()
+  // {
+  //   Time gridStart = Clock::now();
 
-    grid_->update(time_delta_s_);
+  //   grid_->update(time_delta_s_);
 
-    Time gridEnd = Clock::now();
-    stats_.grid_total += FloatMs(gridEnd - gridStart).count();
-    stats_.grid_num++;
-  }
+  //   Time gridEnd = Clock::now();
+  //   stats_.grid_total += FloatMs(gridEnd - gridStart).count();
+  //   stats_.grid_num++;
+  // }
 
-  {
-    Time sk_start = Clock::now();
-    auto& transform = world_.getTransform(skellyId_);
-    skelly_.update(time_delta_s_, transform);
-    Time sk_end = Clock::now();
-    stats_.skelly_total += FloatMs(sk_end - sk_start).count();
-    stats_.skelly_num++;
-  }
+  // {
+  //   Time sk_start = Clock::now();
+  //   skelly_.update(time_delta_s_);
+  //   Time sk_end = Clock::now();
+  //   stats_.skelly_total += FloatMs(sk_end - sk_start).count();
+  //   stats_.skelly_num++;
+  // }
+
+  world_.update(time_delta_s_);
 
   if ((Floor)ui_.floor == Floor::Voronoi) {
     for (int i = 0; i < cell_centers_.size(); i++) {

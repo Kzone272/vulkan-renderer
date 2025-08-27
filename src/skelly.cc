@@ -76,6 +76,7 @@ void Duration::update(float delta_s) {
 
 Skelly::Skelly(Entities* world) : world_(world) {
   root_ = world_->makeObject();
+  world_->setUpdater(root_, this);
   makeBones();
 
   skeletonRange_ = world_->createRange(BipedSkeleton::COUNT);
@@ -176,7 +177,8 @@ vec3 Skelly::getTopOfHead() {
   return pose_.getRootMatrix(BipedRigId::Head) * top;
 }
 
-void Skelly::update(float delta_s, TData& transform) {
+void Skelly::update(float delta_s) {
+  auto& transform = world_->getTransform(root_);
   updateSpeed(delta_s, transform);
   updateCycle(delta_s);
 

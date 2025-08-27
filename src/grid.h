@@ -3,10 +3,11 @@
 #include "entities.h"
 #include "render-objects.h"
 
-struct Grid {
+struct Grid : public EntityUpdater {
   Grid(Entities* world, MaterialId mat1, MaterialId mat2)
       : world_(world), mat1_(mat1), mat2_(mat2) {
     gridId_ = world_->makeObject();
+    world_->setUpdater(gridId_, this);
   }
 
   void makeGrid(int size) {
@@ -30,7 +31,7 @@ struct Grid {
     }
   }
 
-  void update(float deltaS) {
+  virtual void update(float deltaS) override {
     updateModelRotation(deltaS);
     auto spin = glm::angleAxis(glm::radians(itemRot_), vec3(0.f, 1.f, 0.f));
 

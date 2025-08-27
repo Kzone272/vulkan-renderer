@@ -7,141 +7,53 @@
 
 // BEGIN EXAMPLES
 
-struct FooData {
-  int a;
-  int b;
-};
+// struct Updater {
+//   virtual void update(float deltaS) = 0;
+// };
 
-void eraseIndex(EntityIndex i, auto& list) {
-  std::swap(list[i], list[list.size() - 1]);
-  list.erase(list.end() - 1);
-}
+// struct UpdaterA {
+//   void update(float deltaS) {
+//     acc += deltaS;
+//   }
+//   float acc = 0;
+// };
 
-struct FooComponent : public Component {
-  void setFoo(EntityIndex i, FooData&& foo) {
-    if (indices_[i] == kNoEntry) {
-      indices_[i] = foos_.size();
-      foos_.emplace_back(foo);
-    } else {
-      foos_[indices_[i]] = foo;
-    }
-  }
+// struct UpdaterB {
+//   void update(float deltaS) {
+//     acc += deltaS;
+//     val = sin(acc);
+//   }
+//   float acc = 0;
+//   float val = 0;
+// };
 
-  FooData& getFoo(EntityIndex i) {
-    DASSERT(indices_[i] != kNoEntry);
-    return foos_[indices_[i]];
-  }
+// struct UpdateComponent : public Component {
+//   using UpdaterType = std::variant<UpdaterA, UpdaterB>;
 
-  void deleteEntity(EntityIndex i) override {
-    if (indices_[i] != kNoEntry) {
-      eraseIndex(i, foos_);
-      indices_[i] = kNoEntry;
-    }
-  }
+//   void addUpdater(EntityIndex i, UpdaterType&& updater) {
+//     indices_[i] = updaters_.size();
+//     updaters_.emplace_back(updater);
+//   }
 
-  std::vector<FooData> foos_;
-};
+//   void updateAll(float deltaS) {
+//     for (auto& updater : updaters_) {
+//       std::visit(
+//           [deltaS](auto& typedUpdater) { typedUpdater.update(deltaS); },
+//           updater);
+//     }
+//   }
 
-struct BarComponent : public Component {
-  int bar_;
+//   void deleteEntity(EntityIndex i) override {
+//     if (indices_[i] != kNoEntry) {
+//       eraseIndex(i, updaters_);
+//       indices_[i] = kNoEntry;
+//     }
+//   }
 
-  void deleteEntity(EntityIndex i) override {
-    indices_[i] = kNoEntry;
-  }
-};
-
-struct Updater {
-  virtual void update(float deltaS) = 0;
-};
-
-struct UpdaterA {
-  void update(float deltaS) {
-    acc += deltaS;
-  }
-  float acc = 0;
-};
-
-struct UpdaterB {
-  void update(float deltaS) {
-    acc += deltaS;
-    val = sin(acc);
-  }
-  float acc = 0;
-  float val = 0;
-};
-
-struct UpdaterComponent : public Component {
-  using UpdaterType = std::variant<UpdaterA, UpdaterB>;
-
-  void addUpdater(EntityIndex i, UpdaterType&& updater) {
-    indices_[i] = updaters_.size();
-    updaters_.emplace_back(updater);
-  }
-
-  void updateAll(float deltaS) {
-    for (auto& updater : updaters_) {
-      std::visit(
-          [deltaS](auto& typedUpdater) { typedUpdater.update(deltaS); },
-          updater);
-    }
-  }
-
-  void deleteEntity(EntityIndex i) override {
-    if (indices_[i] != kNoEntry) {
-      eraseIndex(i, updaters_);
-      indices_[i] = kNoEntry;
-    }
-  }
-
-  std::vector<UpdaterType> updaters_;
-};
+//   std::vector<UpdaterType> updaters_;
+// };
 
 // END EXAMPLES
-
-// struct TransformComponent : public Component {
-//   void add(EntityIndex i) {
-//     indices_[i] = ts_.size();
-//   }
-
-//   TData& getTransform(EntityIndex i) {
-//     auto tInd = indices_[i];
-//     localDirty_[tInd] = true;
-//     rootDirty_[tInd] = true;
-//     return ts_[tInd];
-//   }
-
-//   void deleteEntity(EntityIndex i) override {
-//     auto tInd = indices_[i];
-//     if (tInd != kNoEntry) {
-//       dataIndices_[tInd] = kNoEntry;
-//       indices_[i] = kNoEntry;
-//     }
-//   }
-// };
-
-// struct DrawComponent : public Component {
-//   void add(EntityIndex i) {
-//     indices_[i] = draws_.size();
-
-//     dataIndices_.emplace_back(i);
-//     draws_.emplace_back(ModelId::None, kMaterialIdNone, i);
-//     dirty_ = true;
-//   }
-
-//   void deleteEntity(EntityIndex i) override {
-//     auto dInd = indices_[i];
-//     if (dInd != kNoEntry) {
-//       std::swap(draws_[dInd], draws_.back());
-//       std::swap(dataIndices_[dInd], dataIndices_.back());
-//       draws_.erase(draws_.end() - 1);
-//       auto moved = dataIndices_[dInd];
-//       dataIndices_.erase(dataIndices_.end() - 1);
-//       indices_[moved] = moved;
-//       // dataIndices_[dInd] = kNoEntry;
-//       indices_[i] = kNoEntry;
-//     }
-//   }
-// };
 
 const uint32_t ALLOC_BATCH = 100;
 
@@ -187,6 +99,11 @@ void Entities::compress() {
       prevInds.push_back(i);
     }
   }
+
+  for (auto* component : components_) {
+    component->compress(prevInds);
+  }
+
   nextIndex_ = prevInds.size();
   // std::println("entities size: {}", nextIndex_);
 
@@ -371,6 +288,16 @@ void Entities::updateMats() {
   std::fill(rootDirty_.begin(), rootDirty_.end(), false);
 }
 
+void Entities::setUpdater(EntityId id, EntityUpdater* updater) {
+  auto i = getIndex(id);
+  DASSERT(valid_[i]);
+  update_.setUpdater(i, updater);
+}
+
+void Entities::update(float deltaS) {
+  update_.update(deltaS);
+}
+
 RangeId Entities::createRange(uint32_t count) {
   RangeInfo range{
       .count = count,
@@ -402,6 +329,7 @@ void Entities::deleteRange(RangeId id) {
   for (uint32_t i = 0; i < range.count; i++) {
     deleteEntity(range.firstEntity + i);
   }
+  ranges_.erase(it);
 }
 
 void Entities::updateMatrices(RangeId id, std::vector<mat4> drawMats) {
@@ -452,4 +380,56 @@ std::span<TData> Entities::getTransforms(RangeId id) {
   }
 
   return std::span(ts_.begin() + start, range.count);
+}
+
+// # UpdateComponent
+
+void UpdateComponent::newEntity(EntityIndex i) {
+  if (i >= inds_.size()) {
+    inds_.resize(i + 1, kNoEntry);
+  }
+}
+
+void UpdateComponent::deleteEntity(EntityIndex i) {
+  auto& ind = inds_[i];
+  if (ind != kNoEntry) {
+    updaters_[ind] = nullptr;
+    ind = kNoEntry;
+  }
+}
+
+void UpdateComponent::compress(const std::vector<EntityIndex>& prevInds) {
+  std::vector<EntityUpdater*> newUpdaters;
+  newUpdaters.reserve(updaters_.size());
+
+  auto count = prevInds.size();
+  for (uint32_t i = 0; i < count; i++) {
+    auto& ind = inds_[i];
+    ind = inds_[prevInds[i]];
+    if (ind != kNoEntry) {
+      newUpdaters.push_back(updaters_[ind]);
+      ind = newUpdaters.size() - 1;
+    }
+  }
+  inds_.resize(count);
+  updaters_ = std::move(newUpdaters);
+}
+
+void UpdateComponent::setUpdater(EntityIndex i, EntityUpdater* updater) {
+  auto& ind = inds_[i];
+  if (ind != kNoEntry) {
+    updaters_[ind] = updater;
+  } else {
+    ind = updaters_.size();
+    updaters_.push_back(updater);
+  }
+}
+
+void UpdateComponent::update(float deltaS) {
+  for (auto* updater : updaters_) {
+    if (!updater) {
+      continue;
+    }
+    updater->update(deltaS);
+  }
 }
