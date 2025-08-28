@@ -6,56 +6,6 @@
 #include "time-include.h"
 #include "vec-maths.h"
 
-// BEGIN EXAMPLES
-
-// struct Updater {
-//   virtual void update(float deltaS) = 0;
-// };
-
-// struct UpdaterA {
-//   void update(float deltaS) {
-//     acc += deltaS;
-//   }
-//   float acc = 0;
-// };
-
-// struct UpdaterB {
-//   void update(float deltaS) {
-//     acc += deltaS;
-//     val = sin(acc);
-//   }
-//   float acc = 0;
-//   float val = 0;
-// };
-
-// struct UpdateComponent : public Component {
-//   using UpdaterType = std::variant<UpdaterA, UpdaterB>;
-
-//   void addUpdater(EntityIndex i, UpdaterType&& updater) {
-//     indices_[i] = updaters_.size();
-//     updaters_.emplace_back(updater);
-//   }
-
-//   void updateAll(float deltaS) {
-//     for (auto& updater : updaters_) {
-//       std::visit(
-//           [deltaS](auto& typedUpdater) { typedUpdater.update(deltaS); },
-//           updater);
-//     }
-//   }
-
-//   void deleteEntity(EntityIndex i) override {
-//     if (indices_[i] != kNoEntry) {
-//       eraseIndex(i, updaters_);
-//       indices_[i] = kNoEntry;
-//     }
-//   }
-
-//   std::vector<UpdaterType> updaters_;
-// };
-
-// END EXAMPLES
-
 const uint32_t ALLOC_BATCH = 100;
 
 std::pair<EntityId, EntityIndex> Entities::newEntity() {
