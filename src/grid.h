@@ -1,6 +1,7 @@
 #pragma once
 
 #include "entities.h"
+#include "maths.h"
 #include "render-objects.h"
 
 struct Grid {
@@ -9,6 +10,11 @@ struct Grid {
     gridId_ = world_->makeObject();
     world_->setUpdater(
         gridId_, std::bind(&Grid::update, this, std::placeholders::_1));
+  }
+
+  ~Grid() {
+    world_->deleteRange(gridRange_);
+    world_->deleteEntity(gridId_);
   }
 
   void makeGrid(int size) {
@@ -36,12 +42,16 @@ struct Grid {
     updateModelRotation(deltaS);
     auto spin = glm::angleAxis(glm::radians(itemRot_), vec3(0.f, 1.f, 0.f));
 
+    if (bounce_) {
+      bounceT_ = fmodClamp(bounceT_ + 4 * deltaS, 2.f * glm::pi<float>());
+    }
+
     auto transforms = world_->getTransforms(gridRange_);
     for (uint32_t i = 0; i < transforms.size(); i++) {
       auto& transform = transforms[i];
       if (bounce_) {
         float dist = glm::length(transform.pos);
-        float t = dist / 600.f + 4 * deltaS;
+        float t = dist / 600.f + bounceT_;
         float height = sinf(t) * 25.f;
         transform.pos.y = height;
       }
@@ -73,4 +83,5 @@ struct Grid {
 
   float itemRot_ = 0;
   bool bounce_ = false;
+  float bounceT_ = 0;
 };

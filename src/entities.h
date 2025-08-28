@@ -2,6 +2,7 @@
 
 #include <map>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 #include "glm-include.h"
@@ -15,22 +16,22 @@ typedef uint32_t RangeId;
 inline const RangeId kRangeIdNone = -1;
 
 struct Component {
-  virtual void newEntity(EntityIndex i) = 0;
-  virtual void deleteEntity(EntityIndex i) = 0;
-  virtual void compress(const std::vector<EntityIndex>& prevInds) = 0;
+  virtual void newEntity(EntityId id) = 0;
+  virtual void deleteEntity(EntityId id) = 0;
+  virtual void compress() = 0;
 };
 
 struct UpdateComponent : public Component {
   using UpdateFn = std::function<void(float)>;
 
-  virtual void newEntity(EntityIndex i) override;
-  virtual void deleteEntity(EntityIndex i) override;
-  virtual void compress(const std::vector<EntityIndex>& prevInds) override;
+  virtual void newEntity(EntityId id) override;
+  virtual void deleteEntity(EntityId id) override;
+  virtual void compress() override;
 
-  void setUpdater(EntityIndex i, UpdateFn&& updater);
+  void setUpdater(EntityId id, UpdateFn&& updater);
   void update(float deltaS);
 
-  std::vector<uint32_t> inds_;
+  std::unordered_map<EntityId, uint32_t> inds_;
   std::vector<UpdateFn> updaters_;
 };
 

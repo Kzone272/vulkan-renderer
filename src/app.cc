@@ -697,6 +697,8 @@ void App::updateImgui() {
       grid_->setBounce(options_.bounce_objects);
     }
     if (ImGui::SliderInt("Grid Size", &options_.grid_size, 1, 200)) {
+      // Make a new Grid here just to test Entity deletion.
+      grid_ = std::make_unique<Grid>(&world_, mats_.cube, mats_.cube2);
       grid_->makeGrid(options_.grid_size);
     }
 
