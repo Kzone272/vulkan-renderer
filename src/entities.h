@@ -7,6 +7,7 @@
 
 #include "glm-include.h"
 #include "render-objects.h"
+#include "time-sampler.h"
 
 typedef uint32_t EntityId;
 typedef uint32_t EntityIndex;
@@ -30,9 +31,11 @@ struct UpdateComponent : public Component {
 
   void setUpdater(EntityId id, UpdateFn&& updater);
   void update(float deltaS);
+  TimeSampler& getTime(EntityId id);
 
   std::unordered_map<EntityId, uint32_t> inds_;
   std::vector<UpdateFn> updaters_;
+  std::vector<TimeSampler> times_;
 };
 
 struct RangeInfo {
@@ -92,6 +95,7 @@ struct Entities {
 
   void setUpdater(EntityId id, UpdateComponent::UpdateFn&& updater);
   void update(float deltaS);
+  TimeSampler& getTime(EntityId id);
 
   RangeId createRange(uint32_t count);
   RangeInfo& getRange(RangeId id);

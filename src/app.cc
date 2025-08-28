@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -389,20 +388,17 @@ void App::checkFps(Time now) {
     int fps = frame_state_.frame_num - last_fps_frame_;
     ui_.fps = std::format("{:.2f}ms avg frame ({} fps)\n", avg_time, fps);
 
-    float grid_avg = stats_.grid_total / stats_.grid_num;
-    stats_.grid_total = 0;
-    stats_.grid_num = 0;
-    ui_.grid = std::format("Grid avg time: {:.3f}ms", grid_avg);
+    auto& gridTime = world_.getTime(grid_->id());
+    ui_.grid = std::format("Grid avg time: {:.3f}ms", gridTime.avg());
+    gridTime.reset();
 
-    float skelly_avg = stats_.skelly_total / stats_.skelly_num;
-    stats_.skelly_total = 0;
-    stats_.skelly_num = 0;
-    ui_.skelly = std::format("Skeleton avg time: {:.3f}ms", skelly_avg);
+    auto& skellyTime = world_.getTime(skellyId_);
+    ui_.skelly = std::format("Skeleton avg time: {:.3f}ms", skellyTime.avg());
+    skellyTime.reset();
 
-    float flatten_avg = stats_.flatten_total / stats_.flatten_num;
-    stats_.flatten_total = 0;
-    stats_.flatten_num = 0;
-    ui_.flatten = std::format("Flatten tree avg time: {:.3f}ms", flatten_avg);
+    ui_.flatten =
+        std::format("Flatten tree avg time: {:.3f}ms", stats_.flatten.avg());
+    stats_.flatten.reset();
 
     next_fps_time_ = now + 1s;
     last_fps_frame_ = frame_state_.frame_num;
@@ -426,25 +422,6 @@ float App::updateModelRotation() {
 }
 
 void App::updateObjects() {
-  // TODO: Get update timings from world_.update()
-  // {
-  //   Time gridStart = Clock::now();
-
-  //   grid_->update(time_delta_s_);
-
-  //   Time gridEnd = Clock::now();
-  //   stats_.grid_total += FloatMs(gridEnd - gridStart).count();
-  //   stats_.grid_num++;
-  // }
-
-  // {
-  //   Time sk_start = Clock::now();
-  //   skelly_.update(time_delta_s_);
-  //   Time sk_end = Clock::now();
-  //   stats_.skelly_total += FloatMs(sk_end - sk_start).count();
-  //   stats_.skelly_num++;
-  // }
-
   world_.update(time_delta_s_);
 
   if ((Floor)ui_.floor == Floor::Voronoi) {
@@ -640,8 +617,7 @@ void App::flattenObjectTree() {
   // }
 
   Time end = Clock::now();
-  stats_.flatten_total += FloatMs(end - start).count();
-  stats_.flatten_num++;
+  stats_.flatten.addTime(FloatMs(end - start).count());
 }
 
 void App::updateImgui() {

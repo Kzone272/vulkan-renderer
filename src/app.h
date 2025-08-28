@@ -16,6 +16,7 @@
 #include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
+#include "time-sampler.h"
 
 namespace {
 
@@ -137,12 +138,7 @@ class App {
     int floor = (int)Floor::Gradient;
   } ui_;
   struct Stats {
-    float grid_total = 0;
-    int grid_num = 0;
-    float skelly_total = 0;
-    int skelly_num = 0;
-    float flatten_total = 0;
-    int flatten_num = 0;
+    TimeSampler flatten{};
   } stats_;
 
   struct AnimationState {

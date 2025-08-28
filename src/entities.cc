@@ -3,6 +3,7 @@
 #include <variant>
 
 #include "asserts.h"
+#include "time-include.h"
 #include "vec-maths.h"
 
 // BEGIN EXAMPLES
@@ -76,6 +77,7 @@ std::pair<EntityId, EntityIndex> Entities::newEntity() {
   return std::make_pair(id, index);
 }
 
+// This assumes that the relative order of all remaining indices is unchanging.
 template <class T>
 void reassign(
     std::vector<T>& storage, const std::vector<EntityIndex>& prevInds) {
@@ -84,6 +86,17 @@ void reassign(
     storage[i] = storage[prevInds[i]];
   }
   storage.resize(count);
+}
+
+template <class T>
+void newReassign(
+    std::vector<T>& storage, const std::vector<EntityIndex>& prevInds) {
+  auto count = prevInds.size();
+  std::vector<T> newStorage(count);
+  for (size_t i = 0; i < count; i++) {
+    newStorage[i] = storage[prevInds[i]];
+  }
+  storage = std::move(newStorage);
 }
 
 void Entities::compress() {
@@ -298,6 +311,10 @@ void Entities::update(float deltaS) {
   update_.update(deltaS);
 }
 
+TimeSampler& Entities::getTime(EntityId id) {
+  return update_.getTime(id);
+}
+
 RangeId Entities::createRange(uint32_t count) {
   RangeInfo range{
       .count = count,
@@ -400,31 +417,47 @@ void UpdateComponent::compress() {
     return;
   }
 
-  std::vector<UpdateFn> newUpdaters;
-  newUpdaters.reserve(updaters_.size());
-
+  std::vector<EntityIndex> prevInds;
+  prevInds.reserve(inds_.size());
   for (auto& [id, ind] : inds_) {
-    newUpdaters.push_back(std::move(updaters_[ind]));
-    ind = newUpdaters.size() - 1;
+    prevInds.push_back(ind);
+    ind = prevInds.size() - 1;
   }
-  updaters_ = std::move(newUpdaters);
+
+  newReassign(updaters_, prevInds);
+  newReassign(times_, prevInds);
 }
 
 void UpdateComponent::setUpdater(EntityId id, UpdateFn&& updater) {
   auto it = inds_.find(id);
   if (it != inds_.end()) {
     updaters_[it->second] = updater;
+    times_[it->second] = TimeSampler();
   } else {
     inds_.emplace(id, static_cast<uint32_t>(updaters_.size()));
     updaters_.push_back(updater);
+    times_.emplace_back();
   }
 }
 
 void UpdateComponent::update(float deltaS) {
-  for (auto& updater : updaters_) {
+  Time start = Clock::now();
+  Time end;
+  for (uint32_t i = 0; i < updaters_.size(); i++) {
+    auto& updater = updaters_[i];
     if (!updater) {
       continue;
     }
     updater(deltaS);
+    end = Clock::now();
+
+    times_[i].addTime(FloatMs(end - start).count());
+    start = end;
   }
+}
+
+TimeSampler& UpdateComponent::getTime(EntityId id) {
+  auto it = inds_.find(id);
+  ASSERT(it != inds_.end());
+  return times_[it->second];
 }

@@ -17,6 +17,10 @@ struct Grid {
     world_->deleteEntity(gridId_);
   }
 
+  EntityId id() {
+    return gridId_;
+  }
+
   void makeGrid(int size) {
     world_->deleteRange(gridRange_);
     gridRange_ = world_->createRange(size * size);
