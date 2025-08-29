@@ -82,6 +82,7 @@ class App {
   void handleInput();
   void updateProjectionMatrix();
   void flattenObjectTree();
+  void updateDraws();
 
   void updateImgui();
   bool ImGuiDebugData(DebugData& debug);

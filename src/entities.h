@@ -88,6 +88,7 @@ struct Entities {
   TData& getTransform(EntityId id);
   void setPos(EntityId id, const vec3& pos);
   const vec3& getPos(EntityId id);
+  void setDrawMatrix(EntityId id, const mat4& matrix);
   const mat4& getDrawMatrix(EntityId id);
   void setParent(EntityId child, EntityId parent);
 

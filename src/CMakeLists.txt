@@ -59,6 +59,7 @@ add_executable(main
   materials.cc
   command-buffers.cc
   entities.cc
+  debug-draws.cc
 )
 
 target_compile_features(main PRIVATE cxx_std_23)

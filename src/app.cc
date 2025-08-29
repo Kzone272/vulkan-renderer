@@ -20,6 +20,7 @@
 #include "maths.h"
 #include "primitives.h"
 #include "vec-maths.h"
+#include "debug-draws.h"
 
 App::App() = default;
 App::~App() = default;
@@ -103,6 +104,7 @@ void App::initFrameState() {
 void App::setupWorld() {
   loadModels();
   loadMaterials();
+  gDebugDraws.init(&world_, mats_.gooch);
 
   skellyId_ = skelly_.getEntity();
   world_.setPos(skellyId_, vec3(200, 0, 0));
@@ -327,6 +329,8 @@ void App::updateWindowSize() {
 void App::update() {
   updateTime();
 
+  gDebugDraws.start();
+
   if (window_resized_) {
     window_resized_ = false;
     updateWindowSize();
@@ -346,7 +350,9 @@ void App::update() {
 
     flattenObjectTree();
     updateMaterials();
-
+    
+    gDebugDraws.finish();
+    updateDraws();
     renderer_->drawFrame(&frame_state_);
     frame_state_.frame_num++;
   }
@@ -438,6 +444,9 @@ void App::updateMaterials() {
   const mat4& drawM = world_.getDrawMatrix(skellyId_);
   vec3 end = drawM[3];
   vec3 start = drawM * vec4(skelly_.getTopOfHead(), 1);
+  DbgSphere(start, 5);
+  DbgBox(end, vec3(5));
+
   mats_.botData.data3 = vec4(
       toScreenSpace(start, frame_state_.viewProj),
       toScreenSpace(end, frame_state_.viewProj));
@@ -582,32 +591,22 @@ void App::updateProjectionMatrix() {
 void App::flattenObjectTree() {
   Time start = Clock::now();
 
-  static const std::set<ModelId> empty_set = {};
-  static const std::set<ModelId> control_models = {
-      ModelId::BoxControl,
-      ModelId::BallControl,
-  };
+  // static const std::set<ModelId> empty_set = {};
+  // static const std::set<ModelId> control_models = {
+  //     ModelId::BoxControl,
+  //     ModelId::BallControl,
+  // };
 
-  static const mat4 identity(1);
-  auto& hidden = options_.show_controls ? empty_set : control_models;
+  // static const mat4 identity(1);
+  // auto& hidden = options_.show_controls ? empty_set : control_models;
 
   world_.compress();
   world_.updateMats();
-  frame_state_.transforms.clear();
-  frame_state_.transforms = world_.drawMs_;
 
-  if (world_.drawsDirty_) {
-    frame_state_.draws = world_.draws_;
-    frame_state_.drawsUpdated = true;
-    world_.drawsDirty_ = false;
-  } else {
-    frame_state_.drawsUpdated = false;
-  }
-
-  static const std::set<ModelId> gooch_models = {
-      ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
-      ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
-  };
+  // static const std::set<ModelId> gooch_models = {
+  //     ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
+  //     ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
+  // };
   // if (ui_.gooch) {
   //   for (auto& draw : frame_state_.draws) {
   //     if (auto it = gooch_models.contains(draw.model)) {
@@ -618,6 +617,18 @@ void App::flattenObjectTree() {
 
   Time end = Clock::now();
   stats_.flatten.addTime(FloatMs(end - start).count());
+}
+
+void App::updateDraws() {
+  frame_state_.transforms = world_.drawMs_;
+
+  if (world_.drawsDirty_) {
+    frame_state_.draws = world_.draws_;
+    frame_state_.drawsUpdated = true;
+    world_.drawsDirty_ = false;
+  } else {
+    frame_state_.drawsUpdated = false;
+  }
 }
 
 void App::updateImgui() {

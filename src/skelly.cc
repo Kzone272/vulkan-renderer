@@ -11,6 +11,7 @@
 #include "maths.h"
 #include "skelly-presets.h"
 #include "time-utils.h"
+#include "debug-draws.h"
 
 namespace {
 

@@ -210,6 +210,12 @@ void Entities::setPos(EntityId id, const vec3& pos) {
   rootDirty_[i] = true;
 }
 
+void Entities::setDrawMatrix(EntityId id, const mat4& matrix) {
+  auto i = getIndex(id);
+  ASSERT(valid_[i]);
+  drawMs_[i] = matrix;
+}
+
 const mat4& Entities::getDrawMatrix(EntityId id) {
   auto i = getIndex(id);
   DASSERT(valid_[i]);
