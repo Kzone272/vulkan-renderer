@@ -26,6 +26,8 @@ const std::set<std::string> kShaders{
     "jf-sdf.frag.spv",
     "voronoi-seed.frag.spv",
     "uv-sample.frag.spv",
+    "draw-2d.vert.spv",
+    "draw-2d.frag.spv",
     // clang-format on
 };
 

@@ -20,7 +20,7 @@ vk::WriteDescriptorSet bindWrite(
 
 vk::WriteDescriptorSet uboWrite(
     const vk::DescriptorSet& set, const Binding& bind,
-    vk::DescriptorBufferInfo* info) {
+    const vk::DescriptorBufferInfo* info) {
   auto write = bindWrite(set, bind);
   write.setBufferInfo(*info);
   return write;
@@ -103,7 +103,7 @@ void DescLayout::alloc(const VulkanState& vs, int count) {
 }
 
 void DescLayout::updateUboBind(
-    uint32_t index, const std::vector<vk::DescriptorBufferInfo*>& infos,
+    uint32_t index, const std::vector<const vk::DescriptorBufferInfo*>& infos,
     std::vector<vk::WriteDescriptorSet>& writes) {
   DASSERT(sets.size() == infos.size());
   auto& bind = binds[index];

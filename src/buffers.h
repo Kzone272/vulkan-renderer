@@ -20,6 +20,10 @@ struct DynamicBuf {
   DynamicBuf(const DynamicBuf& other) = delete;
   DynamicBuf& operator=(const DynamicBuf& other) = delete;
 
+  const vk::DescriptorBufferInfo* info() const {
+    return &device.info;
+  }
+
   std::vector<Buffer> staging;
   Buffer device;
   vma::Allocator vma;

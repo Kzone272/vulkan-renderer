@@ -24,7 +24,7 @@ struct DescLayout {
   void init(const VulkanState& vs);
   void alloc(const VulkanState& vs, int count);
   void updateUboBind(
-      uint32_t index, const std::vector<vk::DescriptorBufferInfo*>& infos,
+      uint32_t index, const std::vector<const vk::DescriptorBufferInfo*>& infos,
       std::vector<vk::WriteDescriptorSet>& writes);
   void updateSamplerBind(
       uint32_t index, vk::DescriptorImageInfo* info,

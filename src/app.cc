@@ -351,7 +351,7 @@ void App::update() {
     flattenObjectTree();
     updateMaterials();
     
-    gDebugDraws.finish();
+    gDebugDraws.finish(frame_state_.viewProj);
     updateDraws();
     renderer_->drawFrame(&frame_state_);
     frame_state_.frame_num++;
@@ -621,6 +621,7 @@ void App::flattenObjectTree() {
 
 void App::updateDraws() {
   frame_state_.transforms = world_.drawMs_;
+  frame_state_.draws2d = gDebugDraws.draws2d_;
 
   if (world_.drawsDirty_) {
     frame_state_.draws = world_.draws_;

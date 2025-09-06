@@ -30,7 +30,8 @@ void Pass::init(const VulkanState& vs) {
 }
 
 void Scene::init(
-    const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats) {
+    const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats,
+    const DynamicBuf& globalBuf) {
   mats_ = mats;
 
   pass.fbo = {
@@ -38,7 +39,7 @@ void Scene::init(
       .color_fmts =
           {vk::Format::eB8G8R8A8Srgb, vk::Format::eR32G32B32A32Sfloat},
       // Opaque Black, (Away Vector, FarZ)
-      .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 1.f}},
+      .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 0.f}},
       .samples = samples,
       .depth_fmt = vs.depth_format,
       .make_output_set = true,
@@ -87,8 +88,6 @@ void Scene::init(
 
   pass.init(vs);
 
-  global_buf = createDynamicBuffer(
-      vs, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer);
   object_buf = createDynamicBuffer(
       vs, kMaxObjects * sizeof(ObjectData),
       vk::BufferUsageFlagBits::eStorageBuffer);
@@ -96,38 +95,14 @@ void Scene::init(
       vs, kMaxObjects * sizeof(mat4), vk::BufferUsageFlagBits::eStorageBuffer);
 
   std::vector<vk::WriteDescriptorSet> writes;
-  global->updateUboBind(0, {&global_buf.device.info}, writes);
-  global->updateUboBind(1, {&object_buf.device.info}, writes);
-  global->updateUboBind(2, {&transform_buf.device.info}, writes);
+  global->updateUboBind(0, {globalBuf.info()}, writes);
+  global->updateUboBind(1, {object_buf.info()}, writes);
+  global->updateUboBind(2, {transform_buf.info()}, writes);
   global->updateUboBind(3, {mats_->bufferInfo()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
 void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
-  GlobalData data;
-  data.view = fs.view;
-  data.proj = fs.proj;
-  data.inv_proj = glm::inverse(fs.proj);
-  data.width = fs.width;
-  data.height = fs.height;
-  data.near = fs.near;
-  data.far = fs.far;
-
-  const size_t max_lights = std::size(data.lights);
-  // Add the first max_lights lights to the frame UBO, and set the rest to
-  // None.
-  for (size_t i = 0; i < max_lights; i++) {
-    if (i >= fs.lights.size()) {
-      data.lights[i].type = Light::Type::None;
-    } else {
-      data.lights[i] = fs.lights[i];
-    }
-  }
-  auto stages = vk::PipelineStageFlagBits::eVertexShader |
-                vk::PipelineStageFlagBits::eFragmentShader;
-  updateDynamicBuf(
-      ds, global_buf, std::span<GlobalData>(&data, 1), stages,
-      vk::AccessFlagBits::eUniformRead);
   updateDynamicBuf(
       ds, transform_buf, std::span(fs.transforms),
       vk::PipelineStageFlagBits::eVertexShader,
@@ -261,8 +236,7 @@ void Scene::render(
 
 void Edges::init(
     const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
-    DescLayout* sample_points,
-    const std::vector<vk::DescriptorBufferInfo*>& scene_globals) {
+    DescLayout* sample_points, const DynamicBuf& globalBuf) {
   this->use_msaa = use_msaa;
 
   // Pre-pass setup
@@ -322,8 +296,8 @@ void Edges::init(
       vs, sizeof(DebugData), vk::BufferUsageFlagBits::eUniformBuffer);
 
   std::vector<vk::WriteDescriptorSet> writes;
-  inputs->updateUboBind(0, scene_globals, writes);
-  inputs->updateUboBind(1, {&debug_buf.device.info}, writes);
+  inputs->updateUboBind(0, {globalBuf.info()}, writes);
+  inputs->updateUboBind(1, {debug_buf.info()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
@@ -482,7 +456,7 @@ void JumpFlood::next() {
   next_ = (last_ + 1) % passes_.size();
 }
 
-void Swap::init(const VulkanState& vs) {
+void Swap::init(const VulkanState& vs, const DynamicBuf& globalBuf) {
   pass.fbo = {
       .size = vs.swap_size,
       .swap = true,
@@ -545,7 +519,35 @@ void Swap::init(const VulkanState& vs) {
       .desc_layouts = {sampler, sampler},
   };
 
+
+  inputs2d_ = pass.makeDescLayout();
+  *inputs2d_ = {
+      .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
+      .stages =
+          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+  };
+
+  vk::PushConstantRange draw2dPush{
+      .stageFlags =
+          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+      .offset = 0,
+      .size = sizeof(Draw2d),
+  };
+  
+  pipeline2d_ = pass.makePipeline();
+  *pipeline2d_ = {
+      .vert_shader = vs.shaders.get("draw-2d.vert.spv"),
+      .frag_shader = vs.shaders.get("draw-2d.frag.spv"),
+      .desc_layouts = {inputs2d_},
+      .push_ranges = {draw2dPush},
+      .cull_mode = vk::CullModeFlagBits::eNone,
+      .enable_blending = true,
+  };
   pass.init(vs);
+
+  std::vector<vk::WriteDescriptorSet> writes;
+  inputs2d_->updateUboBind(0, {globalBuf.info()}, writes);
+  vs.device.updateDescriptorSets(writes, nullptr);
 }
 
 void Swap::startRender(const DrawState& ds) {
@@ -592,6 +594,22 @@ void Swap::drawJfSdf(
   ds.cmd.draw(3, 1, 0, 0);
 }
 
+void Swap::draw2dDraws(
+    const DrawState& ds, const std::vector<Draw2d>& draws2d) {
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline2d_->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *pipeline2d_->layout, 0,
+      inputs2d_->sets[0], nullptr);
+
+  for (auto& draw : draws2d) {
+    ds.cmd.pushConstants<Draw2d>(
+        *jf_draw->layout,
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        0, draw);
+    ds.cmd.draw(6, 1, 0, 0);
+  }
+}
+
 void Swap::drawUvSample(
     const DrawState& ds, vk::DescriptorSet uv_image, vk::DescriptorSet image) {
   ds.cmd.bindPipeline(
@@ -628,7 +646,7 @@ void Drawing::init(const VulkanState& vs) {
 
   // TODO: Generalize so this can be part of pass.init()
   std::vector<vk::WriteDescriptorSet> writes;
-  inputs->updateUboBind(0, {&debug_buf.device.info}, writes);
+  inputs->updateUboBind(0, {debug_buf.info()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 

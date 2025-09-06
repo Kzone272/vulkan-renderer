@@ -43,9 +43,13 @@ inline void fastMult(const mat4& left, const mat4& right, mat4& out) {
   glm_mat4_mul((glm_vec4*)&left, (glm_vec4*)&right, (glm_vec4*)&out);
 }
 
+inline vec2 toNdc(const mat4& viewProj, const vec3& pos) {
+  vec4 clipPos = viewProj * vec4(pos, 1);
+  return clipPos.xy() / clipPos.w;
+}
+
 inline vec2 toScreenSpace(const vec3& pos, const mat4& viewProj) {
-  vec4 clip = viewProj * vec4(pos, 1);
-  vec2 ndc = clip.xy() / clip.w;
+  vec2 ndc = toNdc(viewProj, pos);
   ndc *= 0.5;
   ndc += vec2(0.5);
   return ndc;

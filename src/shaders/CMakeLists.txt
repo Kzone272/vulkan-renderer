@@ -20,6 +20,8 @@ file(GLOB shader_files
   jf-sdf.frag
   voronoi-seed.frag
   uv-sample.frag
+  draw-2d.vert
+  draw-2d.frag
 )
 
 file(GLOB shader_deps *.glsl)

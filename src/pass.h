@@ -28,7 +28,6 @@ struct Pass {
 struct Scene {
   Materials* mats_ = nullptr;
   Pass pass;
-  DynamicBuf global_buf;
   DynamicBuf object_buf;
   DynamicBuf transform_buf;
   DynamicBuf material_buf;
@@ -46,7 +45,8 @@ struct Scene {
   std::vector<InstanceDraws> inst_draws;
 
   void init(
-      const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats);
+      const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats,
+      const DynamicBuf& globalBuf);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
@@ -74,9 +74,7 @@ struct Edges {
 
   void init(
       const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
-      DescLayout* sample_points,
-      // TODO: This is gross. This should probably be a Ubo owned by Edges.
-      const std::vector<vk::DescriptorBufferInfo*>& scene_globals);
+      DescLayout* sample_points, const DynamicBuf& globalBuf);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
@@ -122,13 +120,15 @@ struct Swap {
   Pipeline* depth_draw;
   Pipeline* jf_draw;
   Pipeline* uv_sample_draw;
+  DescLayout* inputs2d_;
+  Pipeline* pipeline2d_;
 
   struct JfSdfPush {
     float width = 1;
     uint32_t mode = 0;
   };
 
-  void init(const VulkanState& vs);
+  void init(const VulkanState& vs, const DynamicBuf& globalBuf);
   void resize(const VulkanState& vs) {
     pass.fbo.swap_format = vs.swap_format;
     pass.fbo.swap_views = vs.swap_views;
@@ -145,6 +145,8 @@ struct Swap {
   void drawJfSdf(
       const DrawState& ds, float width, uint32_t mode,
       vk::DescriptorSet image_set);
+  void draw2dDraws(
+      const DrawState& ds, const std::vector<Draw2d>& draws2d);
   void drawUvSample(
       const DrawState& ds, vk::DescriptorSet uv_image, vk::DescriptorSet image);
 };

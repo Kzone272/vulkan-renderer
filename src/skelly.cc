@@ -217,6 +217,11 @@ void Skelly::update(float delta_s) {
   mat4 rootMat = transform.matrix();
   world_->updateMatrices(skeletonRange_, skeleton_.getMatrices(rootMat));
   world_->updateMatrices(rigRange_, rig_.getMatrices(rootMat, pose_));
+
+  vec3 lHandPos = (rootMat * pose_.getRootMatrix(BipedRigId::Lhand))[3];
+  vec3 lShoPos = (rootMat * pose_.getRootMatrix(BipedRigId::Lsho))[3];
+  DbgLine(lShoPos, lHandPos, vec4(0,1,1,1));
+  DbgCircle(lHandPos, 2, vec4(1,1,1,1));
 }
 
 void Skelly::updateCycle(float delta_s) {

@@ -131,15 +131,18 @@ void Renderer::initVulkan() {
   // VulkanState should now be fully defined.
 
   mats_.init(vs_);
+  globalBuf_ = createDynamicBuffer(
+      vs_, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer);
+
   sample_query_.init(vs_, scene_samples_);
   drawing_.init(vs_);
   voronoi_.init(vs_);
-  scene_.init(vs_, scene_samples_, &mats_);
+  scene_.init(vs_, scene_samples_, &mats_, globalBuf_);
   edges_.init(
       vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
-      {&scene_.global_buf.device.info});
+      globalBuf_);
   jf_.init(vs_);
-  swap_.init(vs_);
+  swap_.init(vs_, globalBuf_);
   resolve_.init(vs_);
 }
 
@@ -195,6 +198,8 @@ void Renderer::drawFrame() {
   vk::CommandBufferBeginInfo begin_info{};
   std::ignore = ds_.cmd.begin(begin_info);
 
+  updateGlobalBuf();
+
   if (frame_state_->update_drawing) {
     drawing_.update(ds_, frame_state_->drawing);
   }
@@ -234,6 +239,35 @@ void Renderer::drawFrame() {
 
   // Reset DrawState in case something tries to use it outside of drawFrame().
   ds_ = {};
+}
+
+void Renderer::updateGlobalBuf() {
+  auto& fs = *frame_state_;
+
+  GlobalData data;
+  data.view = fs.view;
+  data.proj = fs.proj;
+  data.inv_proj = glm::inverse(fs.proj);
+  data.width = fs.width;
+  data.height = fs.height;
+  data.near = fs.near;
+  data.far = fs.far;
+
+  const size_t max_lights = std::size(data.lights);
+  // Add the first max_lights lights to the frame UBO, and set the rest to
+  // None.
+  for (size_t i = 0; i < max_lights; i++) {
+    if (i >= fs.lights.size()) {
+      data.lights[i].type = Light::Type::None;
+    } else {
+      data.lights[i] = fs.lights[i];
+    }
+  }
+  auto stages = vk::PipelineStageFlagBits::eVertexShader |
+                vk::PipelineStageFlagBits::eFragmentShader;
+  updateDynamicBuf(
+      ds_, globalBuf_, std::span<GlobalData>(&data, 1), stages,
+      vk::AccessFlagBits::eUniformRead);
 }
 
 void Renderer::createInstance() {
@@ -882,10 +916,14 @@ void Renderer::recordCommandBuffer() {
           jf_.lastOutputSet());
     }
 
+    if (frame_state_->draws2d.size()) {
+      swap_.draw2dDraws(ds_, frame_state_->draws2d);
+    }
+
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ds_.cmd);
-    ds_.cmd.endRenderPass();
   }
 
+  ds_.cmd.endRenderPass();
   std::ignore = ds_.cmd.end();
 }
 

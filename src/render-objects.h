@@ -137,6 +137,18 @@ enum class DebugView {
   Depth,
 };
 
+struct Draw2d {
+  enum class Type : uint32_t {
+    Line,
+    Circle,
+  };
+  vec2 pos1{0};
+  vec2 pos2{0};
+  vec4 color{1};
+  vec4 values{0};
+  Type type = Type::Line;
+};
+
 struct FrameState {
   uint64_t frame_num = 0;
   bool drawsUpdated = true;
@@ -166,6 +178,7 @@ struct FrameState {
   bool update_drawing = false;
   std::vector<Vertex2d> voronoi_cells;
   bool update_voronoi = false;
+  std::vector<Draw2d> draws2d;
 };
 
 struct Vertex {

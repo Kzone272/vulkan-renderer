@@ -104,6 +104,7 @@ class Renderer {
   void createDescriptorPool();
   void createImguiDescriptorPool();
 
+  void updateGlobalBuf();
   void recordCommandBuffer();
   void createSyncObjects();
   void recreateSwapchain();
@@ -155,6 +156,7 @@ class Renderer {
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
 
   Materials mats_;
+  DynamicBuf globalBuf_;
 
   Drawing drawing_;
   Voronoi voronoi_;
