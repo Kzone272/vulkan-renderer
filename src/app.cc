@@ -608,6 +608,7 @@ void App::updateDraws() {
   if (!frame_state_.drawsNeedUpdate) {
     return;
   }
+  std::println("updating draws frame:{}", frame_state_.frame_num);
 
   frame_state_.draws = world_.draws_;
   world_.drawsDirty_ = false;
@@ -661,10 +662,7 @@ void App::updateImgui() {
     ImGui::SliderFloat(
         "Edge Width", &frame_state_.edge_w, 0, 1000, "%.2f",
         ImGuiSliderFlags_Logarithmic);
-    ImGui::Checkbox("Stained Glass", &frame_state_.stained_glass);
-    ImGui::SliderFloat(
-        "Voronoi Tweak", &frame_state_.v_tweak, 0, 1000, "%.7f",
-        ImGuiSliderFlags_Logarithmic);
+    ImGui::Checkbox("Debug Draws", &gDebugDraws.enabled_);
     ImGui::EndTabItem();
   }
   if (ImGui::BeginTabItem("Objects")) {
@@ -714,6 +712,10 @@ void App::updateImgui() {
 
   if (ImGui::BeginTabItem("Edges")) {
     ImGuiDebugData(frame_state_.edges);
+    ImGui::Checkbox("Stained Glass", &frame_state_.stained_glass);
+    ImGui::SliderFloat(
+        "Voronoi Tweak", &frame_state_.v_tweak, 0, 1000, "%.7f",
+        ImGuiSliderFlags_Logarithmic);
     ImGui::EndTabItem();
   }
   if (ImGui::BeginTabItem("Drawing")) {

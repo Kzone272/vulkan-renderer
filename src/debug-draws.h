@@ -29,6 +29,7 @@ struct DebugDraws {
   Entities* world_ = nullptr;
   MaterialId mat1_ = kMaterialIdNone;
 
+  bool enabled_ = false;
   bool recording_ = false;
   size_t nextEntity_ = 0;
   std::vector<EntityId> entities_;

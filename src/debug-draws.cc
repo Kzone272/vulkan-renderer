@@ -29,6 +29,11 @@ void DebugDraws::finish(const mat4& viewProj) {
     draw.pos1 = toNdc(viewProj, worldPs.pos1);
     draw.pos2 = toNdc(viewProj, worldPs.pos2);
   }
+
+  for (auto i = nextEntity_; i < entities_.size(); i++) {
+    world_->deleteEntity(entities_[i]);
+  }
+  entities_.resize(nextEntity_);
 }
 
 EntityId DebugDraws::getEntity() {
@@ -47,6 +52,9 @@ EntityId DebugDraws::getEntity() {
 
 void DebugDraws::drawSphere(vec3 position, float radius) {
   ASSERT(recording_);
+  if (!enabled_) {
+    return;
+  }
 
   auto id = getEntity();
   world_->setModel(id, ModelId::BallControl);
@@ -57,6 +65,9 @@ void DebugDraws::drawSphere(vec3 position, float radius) {
 
 void DebugDraws::drawBox(vec3 position, vec3 size) {
   ASSERT(recording_);
+  if (!enabled_) {
+    return;
+  }
 
   auto id = getEntity();
   world_->setModel(id, ModelId::Cube);
@@ -76,6 +87,9 @@ float vhToNdc(float x) {
 
 void DebugDraws::drawLine(vec3 a, vec3 b, vec4 color, float strokeWidth) {
   ASSERT(recording_);
+  if (!enabled_) {
+    return;
+  }
 
   worldPositions_.emplace_back(draws2d_.size(), WorldPositions{a, b});
   drawLine(vec2(0), vec2(0), color, strokeWidth);
@@ -83,6 +97,9 @@ void DebugDraws::drawLine(vec3 a, vec3 b, vec4 color, float strokeWidth) {
 
 void DebugDraws::drawLine(vec2 a, vec2 b, vec4 color, float strokeWidth) {
   ASSERT(recording_);
+  if (!enabled_) {
+    return;
+  }
 
   draws2d_.push_back({
       .pos1 = vhToNdc(a),
@@ -96,6 +113,9 @@ void DebugDraws::drawLine(vec2 a, vec2 b, vec4 color, float strokeWidth) {
 void DebugDraws::drawCircle(
     vec3 center, float radius, vec4 color, float strokeWidth) {
   ASSERT(recording_);
+  if (!enabled_) {
+    return;
+  }
 
   worldPositions_.emplace_back(draws2d_.size(), WorldPositions{center});
   drawCircle(vec2(0), radius, color, strokeWidth);
@@ -104,6 +124,9 @@ void DebugDraws::drawCircle(
 void DebugDraws::drawCircle(
     vec2 center, float radius, vec4 color, float strokeWidth) {
   ASSERT(recording_);
+  if (!enabled_) {
+    return;
+  }
 
   draws2d_.push_back({
       .pos1 = vhToNdc(center),
