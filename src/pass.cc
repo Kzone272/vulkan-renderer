@@ -603,7 +603,7 @@ void Swap::draw2dDraws(
 
   for (auto& draw : draws2d) {
     ds.cmd.pushConstants<Draw2d>(
-        *jf_draw->layout,
+        *pipeline2d_->layout,
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
         0, draw);
     ds.cmd.draw(6, 1, 0, 0);

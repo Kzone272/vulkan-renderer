@@ -9,12 +9,43 @@
 #include "render-objects.h"
 #include "time-sampler.h"
 
-typedef uint32_t EntityId;
 typedef uint32_t EntityIndex;
 inline const uint32_t kNoEntry = -1;
 
-typedef uint32_t RangeId;
-inline const RangeId kRangeIdNone = -1;
+template <class T>
+struct IdType {
+  IdType() : value(kNoEntry) {
+  }
+  explicit IdType(uint32_t id) : value(id) {
+  }
+
+  operator uint32_t() {
+    return value;
+  }
+
+  bool operator==(const IdType<T>& other) const {
+    return value == other.value;
+  }
+  bool operator<(const IdType<T>& other) const {
+    return value < other.value;
+  }
+
+  uint32_t value = kNoEntry;
+};
+
+template<class T>
+struct std::hash<IdType<T>> {
+  size_t operator()(const IdType<T>& id) const {
+    return std::hash<uint32_t>()(id.value);
+  }
+};
+
+struct EntityTag{};
+using EntityId = IdType<EntityTag>;
+
+struct RangeTag{};
+using RangeId = IdType<RangeTag>;
+
 
 struct Component {
   virtual void newEntity(EntityId id) = 0;
@@ -39,7 +70,7 @@ struct UpdateComponent : public Component {
 };
 
 struct RangeInfo {
-  RangeId firstEntity;
+  EntityId firstEntity;
   uint32_t count;
 };
 
@@ -91,6 +122,7 @@ struct Entities {
   void setDrawMatrix(EntityId id, const mat4& matrix);
   const mat4& getDrawMatrix(EntityId id);
   void setParent(EntityId child, EntityId parent);
+  void setSkipTransform(EntityId id, bool value);
 
   void updateMats();
 
@@ -109,7 +141,7 @@ struct Entities {
   std::span<TData> getTransforms(RangeId id);
 
   std::map<EntityId, EntityIndex> entityIndices_;
-  EntityId nextId_ = 0;
+  uint32_t nextId_ = 0;
   EntityIndex nextIndex_ = 0;
   uint32_t count_ = 0;
 

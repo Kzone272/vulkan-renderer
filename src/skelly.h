@@ -263,8 +263,8 @@ class Skelly {
   BipedRig rig_ = {};
   Skeleton* rig_skl_ = nullptr;
 
-  RangeId skeletonRange_ = kRangeIdNone;
-  RangeId rigRange_ = kRangeIdNone;
+  RangeId skeletonRange_ = {};
+  RangeId rigRange_ = {};
 
   float cycle_t_ = 0;
   float prev_cycle_t_ = 0;

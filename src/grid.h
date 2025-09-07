@@ -27,7 +27,7 @@ struct Grid {
 
     for (int i = 0; i < size; i++) {
       for (int j = 0; j < size; j++) {
-        EntityId id = gridRange_ + i * size + j;
+        EntityId id{gridRange_ + i * size + j};
 
         ModelId model = ((i + j) % 2 == 0) ? ModelId::Cube : ModelId::Tetra;
         MaterialId material = (i % 2) == 0 ? mat1_ : mat2_;
@@ -80,8 +80,8 @@ struct Grid {
   }
 
   Entities* world_ = nullptr;
-  EntityId gridId_ = kNoEntry;
-  RangeId gridRange_ = kNoEntry;
+  EntityId gridId_ = {};
+  RangeId gridRange_ = {};
   MaterialId mat1_ = kMaterialIdNone;
   MaterialId mat2_ = kMaterialIdNone;
 

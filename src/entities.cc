@@ -9,7 +9,7 @@
 const uint32_t ALLOC_BATCH = 100;
 
 std::pair<EntityId, EntityIndex> Entities::newEntity() {
-  EntityId id = nextId_++;
+  EntityId id{nextId_++};
   EntityIndex index = nextIndex_++;
   count_++;
   entityIndices_.emplace(id, index);
@@ -228,6 +228,12 @@ void Entities::setParent(EntityId child, EntityId parent) {
   parents_[i] = getIndex(parent);
 }
 
+void Entities::setSkipTransform(EntityId id, bool value) {
+  auto i = getIndex(id);
+  ASSERT(valid_[i]);
+  skipTransform_[i] = value;
+}
+
 void Entities::updateMats() {
   auto count = ts_.size();
   for (size_t i = 0; i < count; i++) {
@@ -283,7 +289,7 @@ RangeId Entities::createRange(uint32_t count) {
   }
 
   ranges_.emplace(range.firstEntity, range);
-  return range.firstEntity;
+  return RangeId(range.firstEntity);
 }
 
 RangeInfo& Entities::getRange(RangeId id) {
@@ -300,7 +306,7 @@ void Entities::deleteRange(RangeId id) {
 
   auto& range = it->second;
   for (uint32_t i = 0; i < range.count; i++) {
-    deleteEntity(range.firstEntity + i);
+    deleteEntity(EntityId(range.firstEntity + i));
   }
   ranges_.erase(it);
 }

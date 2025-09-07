@@ -159,8 +159,8 @@ class App {
 
   Entities world_;
   std::unique_ptr<Grid> grid_;
-  EntityId floor_ = kNoEntry;
-  EntityId skellyId_ = kNoEntry;
+  EntityId floor_= {};
+  EntityId skellyId_ = {};
   Skelly skelly_ = {&world_};
 
   struct AppMaterials {

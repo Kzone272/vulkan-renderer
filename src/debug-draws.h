@@ -35,7 +35,7 @@ struct DebugDraws {
     vec3 pos1{0};
     vec3 pos2{0};
   };
-  std::vector<std::pair<uint32_t, WorldPositions>> worldPositions_;
+  std::vector<std::pair<size_t, WorldPositions>> worldPositions_;
 };
 
 extern DebugDraws gDebugDraws;
