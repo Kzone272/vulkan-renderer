@@ -108,7 +108,7 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
       vk::PipelineStageFlagBits::eVertexShader,
       vk::AccessFlagBits::eShaderRead);
 
-  if (!fs.drawsUpdated) {
+  if (!fs.drawsNeedUpdate) {
     return;
   }
 

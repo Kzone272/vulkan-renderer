@@ -151,7 +151,7 @@ struct Draw2d {
 
 struct FrameState {
   uint64_t frame_num = 0;
-  bool drawsUpdated = true;
+  bool drawsNeedUpdate = true;
   std::vector<DrawData> draws;
   std::vector<mat4> transforms;
   std::vector<Light> lights;

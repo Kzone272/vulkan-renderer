@@ -412,8 +412,10 @@ void App::checkFps(Time now) {
 }
 
 void App::resetFrameState() {
-  frame_state_.update_drawing = frame_state_.frame_num == 0;
-  frame_state_.update_voronoi = frame_state_.frame_num == 0;
+  bool firstFrame = frame_state_.frame_num == 0;
+  frame_state_.update_drawing = firstFrame;
+  frame_state_.update_voronoi = firstFrame;
+  frame_state_.drawsNeedUpdate = firstFrame;
 }
 
 float App::updateModelRotation() {
@@ -591,29 +593,8 @@ void App::updateProjectionMatrix() {
 void App::flattenObjectTree() {
   Time start = Clock::now();
 
-  // static const std::set<ModelId> empty_set = {};
-  // static const std::set<ModelId> control_models = {
-  //     ModelId::BoxControl,
-  //     ModelId::BallControl,
-  // };
-
-  // static const mat4 identity(1);
-  // auto& hidden = options_.show_controls ? empty_set : control_models;
-
   world_.compress();
   world_.updateMats();
-
-  // static const std::set<ModelId> gooch_models = {
-  //     ModelId::Cube,  ModelId::Bone, ModelId::BoxControl, ModelId::BallControl,
-  //     ModelId::Tetra, ModelId::Pony, ModelId::Viking,     ModelId::Sphere,
-  // };
-  // if (ui_.gooch) {
-  //   for (auto& draw : frame_state_.draws) {
-  //     if (auto it = gooch_models.contains(draw.model)) {
-  //       draw.material = mats_.gooch;
-  //     }
-  //   }
-  // }
 
   Time end = Clock::now();
   stats_.flatten.addTime(FloatMs(end - start).count());
@@ -623,14 +604,23 @@ void App::updateDraws() {
   frame_state_.transforms = world_.drawMs_;
   frame_state_.draws2d = gDebugDraws.draws2d_;
 
-  if (world_.drawsDirty_) {
-    frame_state_.draws = world_.draws_;
-    frame_state_.drawsUpdated = true;
-    world_.drawsDirty_ = false;
-  } else {
-    frame_state_.drawsUpdated = false;
+  frame_state_.drawsNeedUpdate |= world_.drawsDirty_;
+  if (!frame_state_.drawsNeedUpdate) {
+    return;
+  }
+
+  frame_state_.draws = world_.draws_;
+  world_.drawsDirty_ = false;
+
+  if (ui_.gooch) {
+    for (auto& draw : frame_state_.draws) {
+      if (draw.material != kMaterialIdNone) {
+        draw.material = mats_.gooch;
+      }
+    }
   }
 }
+
 
 void App::updateImgui() {
   renderer_->imguiNewFrame();
@@ -661,7 +651,9 @@ void App::updateImgui() {
     ImGui::Separator();
 
     ImGui::SliderInt("Debug View", (int*)&frame_state_.debug_view, 0, 2);
-    ImGui::Checkbox("Gooch", &ui_.gooch);
+    if (ImGui::Checkbox("Gooch", &ui_.gooch)) {
+      frame_state_.drawsNeedUpdate = true;
+    }
     if (ImGui::SliderInt("Floor", &ui_.floor, 0, (int)Floor::NumFloors - 1)) {
       world_.setMaterial(floor_, floor_mats_[ui_.floor]);
     }
