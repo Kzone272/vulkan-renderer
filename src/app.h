@@ -11,7 +11,6 @@
 #include "entities.h"
 #include "glm-include.h"
 #include "input.h"
-#include "object.h"
 #include "render-objects.h"
 #include "renderer.h"
 #include "skelly.h"
@@ -111,6 +110,13 @@ class App {
   // Last 1s of frame times.
   std::vector<float> frame_times_;
 
+  enum class CameraType {
+    Spin,
+    Trackball,
+    Fps,
+    Follow,
+  };
+
   struct Options {
     CameraType cam_type = CameraType::Follow;
     bool animate = true;
@@ -148,7 +154,28 @@ class App {
   } anim_;
   std::vector<vec2> cell_centers_;
 
-  Camera cam_;
+  struct Camera {
+    vec3 pos;
+    vec3 focus;
+    vec3 up;
+  };
+  struct Trackball {
+    float dist;
+    vec3 focus;
+    glm::quat rot;
+  };
+  struct FpsCamera {
+    vec3 pos{0};
+    float yaw = 0;
+    float pitch = 0;
+  };
+  struct FollowCamera {
+    float dist;
+    vec3 focus{0};
+    float yaw = 0;
+    float pitch = 0;
+  };
+  Camera spinCam_;
   Trackball trackball_;
   FpsCamera fps_cam_;
   FollowCamera follow_cam_;
@@ -159,7 +186,7 @@ class App {
 
   Entities world_;
   std::unique_ptr<Grid> grid_;
-  EntityId floor_= {};
+  EntityId floor_ = {};
   EntityId skellyId_ = {};
   Skelly skelly_ = {&world_};
 

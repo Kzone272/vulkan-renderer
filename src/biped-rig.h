@@ -1,7 +1,6 @@
 #pragma once
 
 #include "glm-include.h"
-#include "object.h"
 #include "pose.h"
 #include "render-objects.h"
 

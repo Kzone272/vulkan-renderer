@@ -1,7 +1,6 @@
 #include "pose.h"
 
 #include "biped-rig.h"
-#include "object.h"
 
 Pose Pose::blend(const Pose& p1, const Pose& p2, float a) {
   DASSERT(p1.skl == p2.skl);

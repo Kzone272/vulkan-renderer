@@ -4,9 +4,9 @@
 #include "entities.h"
 #include "glm-include.h"
 #include "input.h"
-#include "object.h"
 #include "render-objects.h"
 #include "second-order.h"
+#include "animation.h"
 
 struct MoveOptions {
   float max_speed = 200;

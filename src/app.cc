@@ -85,7 +85,7 @@ void App::initImgui() {
 void App::initFrameState() {
   updateProjectionMatrix();
 
-  cam_ = {
+  spinCam_ = {
       .pos{0, 300, -300 * options_.grid_size}, .focus{0, 0, 0}, .up{0, 1, 0}};
   trackball_ = {
       .dist = 300.f * static_cast<float>(options_.grid_size),
@@ -471,10 +471,10 @@ void App::updateCamera() {
 void App::updateSpinCamera() {
   float t = time_s_;
   float r = 2400 * cosf(t / 3.f) + 3000;
-  cam_.pos = vec3{r * cosf(t), 800, r * sinf(t)};
-  cam_.focus = vec3{0};
-  cam_.up = vec3(0, 1, 0);
-  frame_state_.view = glm::lookAt(cam_.pos, cam_.focus, cam_.up);
+  spinCam_.pos = vec3{r * cosf(t), 800, r * sinf(t)};
+  spinCam_.focus = vec3{0};
+  spinCam_.up = vec3(0, 1, 0);
+  frame_state_.view = glm::lookAt(spinCam_.pos, spinCam_.focus, spinCam_.up);
 }
 
 void App::updateTrackballCamera() {
