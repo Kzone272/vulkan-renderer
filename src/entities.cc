@@ -170,27 +170,35 @@ EntityId Entities::makeObject(
 
 void Entities::setModel(EntityId id, ModelId model) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
+
+  if (draws_[i].model == model) {
+    return;
+  }
   draws_[i].model = model;
   drawsDirty_ = true;
 }
 
 void Entities::setMaterial(EntityId id, MaterialId material) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
+
+  if (draws_[i].material == material) {
+    return;
+  }
   draws_[i].material = material;
   drawsDirty_ = true;
 }
 
 void Entities::setModelMatrix(EntityId id, const mat4& matrix) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   modelMs_[i] = matrix;
 }
 
 TData& Entities::getTransform(EntityId id) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   localDirty_[i] = true;
   rootDirty_[i] = true;
   return ts_[i];
@@ -198,13 +206,13 @@ TData& Entities::getTransform(EntityId id) {
 
 const vec3& Entities::getPos(EntityId id) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   return ts_[i].pos;
 }
 
 void Entities::setPos(EntityId id, const vec3& pos) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   ts_[i].pos = pos;
   localDirty_[i] = true;
   rootDirty_[i] = true;
@@ -218,13 +226,13 @@ void Entities::setDrawMatrix(EntityId id, const mat4& matrix) {
 
 const mat4& Entities::getDrawMatrix(EntityId id) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   return drawMs_[i];
 }
 
 void Entities::setParent(EntityId child, EntityId parent) {
   auto i = getIndex(child);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   parents_[i] = getIndex(parent);
 }
 
@@ -265,7 +273,7 @@ void Entities::updateMats() {
 
 void Entities::setUpdater(EntityId id, UpdateComponent::UpdateFn&& updater) {
   auto i = getIndex(id);
-  DASSERT(valid_[i]);
+  ASSERT(valid_[i]);
   update_.setUpdater(id, std::move(updater));
 }
 

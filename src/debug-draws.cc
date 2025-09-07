@@ -2,8 +2,8 @@
 
 #include <print>
 
-#include "entities.h"
 #include "asserts.h"
+#include "entities.h"
 #include "vec-maths.h"
 
 DebugDraws gDebugDraws{};
@@ -14,10 +14,7 @@ void DebugDraws::init(Entities* world, MaterialId mat1) {
 }
 
 void DebugDraws::start() {
-  for (auto ent : draws_) {
-    world_->deleteEntity(ent);
-  }
-  draws_.clear();
+  nextEntity_ = 0;
   draws2d_.clear();
   worldPositions_.clear();
 
@@ -34,25 +31,37 @@ void DebugDraws::finish(const mat4& viewProj) {
   }
 }
 
+EntityId DebugDraws::getEntity() {
+  EntityId id;
+  if (nextEntity_ < entities_.size()) {
+    id = entities_[nextEntity_];
+  } else {
+    id = world_->makeObject();
+    world_->setSkipTransform(id, true);
+    entities_.push_back(id);
+  }
+
+  nextEntity_++;
+  return id;
+}
+
 void DebugDraws::drawSphere(vec3 position, float radius) {
   ASSERT(recording_);
 
-  auto id = world_->makeObject(ModelId::BallControl, mat1_);
-  world_->setSkipTransform(id, true);
+  auto id = getEntity();
+  world_->setModel(id, ModelId::BallControl);
+  world_->setMaterial(id, mat1_);
   world_->setDrawMatrix(
       id, glm::translate(position) * glm::scale(vec3(radius)));
-
-  draws_.push_back(id);
 }
 
 void DebugDraws::drawBox(vec3 position, vec3 size) {
   ASSERT(recording_);
 
-  auto id = world_->makeObject(ModelId::Cube, mat1_);
-  world_->setSkipTransform(id, true);
+  auto id = getEntity();
+  world_->setModel(id, ModelId::Cube);
+  world_->setMaterial(id, mat1_);
   world_->setDrawMatrix(id, glm::translate(position) * glm::scale(size));
-
-  draws_.push_back(id);
 }
 
 constexpr float kVhToNdc = 1.f / 100 * 2;

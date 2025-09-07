@@ -2,9 +2,9 @@
 
 #include <vector>
 
+#include "entities.h"
 #include "glm-include.h"
 #include "render-objects.h"
-#include "entities.h"
 
 struct DebugDraws {
   DebugDraws() = default;
@@ -13,6 +13,7 @@ struct DebugDraws {
   void start();
   void finish(const mat4& viewProj);
 
+  EntityId getEntity();
   void drawSphere(vec3 position, float radius);
   void drawBox(vec3 position, vec3 size);
 
@@ -29,7 +30,8 @@ struct DebugDraws {
   MaterialId mat1_ = kMaterialIdNone;
 
   bool recording_ = false;
-  std::vector<EntityId> draws_;
+  size_t nextEntity_ = 0;
+  std::vector<EntityId> entities_;
   std::vector<Draw2d> draws2d_;
   struct WorldPositions {
     vec3 pos1{0};
@@ -40,13 +42,8 @@ struct DebugDraws {
 
 extern DebugDraws gDebugDraws;
 
-#define DbgSphere(position, radius) \
-  gDebugDraws.drawSphere(position, radius)
+#define DbgSphere gDebugDraws.drawSphere
+#define DbgBox gDebugDraws.drawBox
 
-#define DbgBox(position, size) \
-  gDebugDraws.drawBox(position, size)
-
-#define DbgCircle \
-  gDebugDraws.drawCircle
-#define DbgLine \
-  gDebugDraws.drawLine
+#define DbgCircle gDebugDraws.drawCircle
+#define DbgLine gDebugDraws.drawLine
