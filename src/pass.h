@@ -35,14 +35,22 @@ struct Scene {
   DescLayout* material;
   std::map<ScenePipeline, Pipeline*> pipelines_;
 
+  struct DrawCall {
+    MaterialId material = kMaterialIdNone;
+    ScenePipeline matPipeline = ScenePipeline::Basic;
+    vk::DescriptorSet matDesc = {};
+    ModelId model = ModelId::None;
+    uint32_t objInd = -1;
+  };
+
   struct InstanceDraws {
-    uint32_t first_instance = 0;
+    uint32_t firstInstance = 0;
     uint32_t instances = 0;
-    ScenePipeline pipeline = ScenePipeline::Basic;
-    vk::DescriptorSet material_desc = {};
+    ScenePipeline matPipeline = ScenePipeline::Basic;
+    vk::DescriptorSet matDesc = {};
     ModelId model = ModelId::None;
   };
-  std::vector<InstanceDraws> inst_draws;
+  std::vector<InstanceDraws> instDraws_;
 
   void init(
       const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats,
@@ -145,8 +153,7 @@ struct Swap {
   void drawJfSdf(
       const DrawState& ds, float width, uint32_t mode,
       vk::DescriptorSet image_set);
-  void draw2dDraws(
-      const DrawState& ds, const std::vector<Draw2d>& draws2d);
+  void draw2dDraws(const DrawState& ds, const std::vector<Draw2d>& draws2d);
   void drawUvSample(
       const DrawState& ds, vk::DescriptorSet uv_image, vk::DescriptorSet image);
 };

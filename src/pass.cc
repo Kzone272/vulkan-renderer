@@ -113,59 +113,57 @@ void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
   }
 
   auto& mats = *mats_;
-  // Sort by material, then by model.
-  std::sort(fs.draws.begin(), fs.draws.end(), [&mats](auto& left, auto& right) {
-    if (left.material == kMaterialIdNone) {
-      return false;
-    } else if (right.material == kMaterialIdNone) {
-      return true;
-    }
-    const auto& leftPipeline = mats.getPipeline(left.material);
-    const auto& rightPipeline = mats.getPipeline(right.material);
-    if (leftPipeline != rightPipeline) {
-      return leftPipeline < rightPipeline;
-    }
-    const auto& leftMat = mats.getDesc(left.material);
-    const auto& rightMat = mats.getDesc(right.material);
-    if (leftMat != rightMat) {
-      return leftMat < rightMat;
-    } else {
-      return left.model < right.model;
-    }
-  });
 
-  inst_draws.clear();
-  std::vector<ObjectData> objects;
-
+  // Gather valid draw calls.
+  std::vector<DrawCall> drawCalls;
+  drawCalls.reserve(fs.draws.size());
   for (size_t i = 0; i < fs.draws.size(); i++) {
     auto& draw = fs.draws[i];
     if (draw.material == kMaterialIdNone || draw.model == ModelId::None) {
       continue;
     }
 
-    auto draw_mat_pipeline = mats_->getPipeline(draw.material);
-    auto draw_mat_desc = mats_->getDesc(draw.material);
+    auto matPipeline = mats_->getPipeline(draw.material);
+    auto matDesc = mats_->getDesc(draw.material);
 
-    bool is_new = true;
-    if (inst_draws.size()) {
-      auto& last_draw = inst_draws.back();
-      if (last_draw.pipeline == draw_mat_pipeline &&
-          last_draw.material_desc == draw_mat_desc &&
-          last_draw.model == draw.model) {
-        last_draw.instances++;
-        is_new = false;
+    drawCalls.emplace_back(
+        draw.material, matPipeline, matDesc, draw.model, draw.objInd);
+  }
+
+  // Sort by material, then by model.
+  std::sort(drawCalls.begin(), drawCalls.end(), [](auto& left, auto& right) {
+    if (left.matPipeline != right.matPipeline) {
+      return left.matPipeline < right.matPipeline;
+    } else if (left.matDesc != right.matDesc) {
+      return left.matDesc < right.matDesc;
+    } else {
+      return left.model < right.model;
+    }
+  });
+
+  std::vector<ObjectData> objects(drawCalls.size());
+  for (size_t i = 0; i < drawCalls.size(); i++) {
+    objects[i].index = drawCalls[i].objInd;
+    objects[i].matIndex = drawCalls[i].material;
+  }
+
+  instDraws_.clear();
+  for (uint32_t i = 0; i < drawCalls.size(); i++) {
+    auto& draw = drawCalls[i];
+
+    bool isNew = true;
+    if (instDraws_.size()) {
+      auto& lastDraw = instDraws_.back();
+      if (lastDraw.matPipeline == draw.matPipeline &&
+          lastDraw.matDesc == draw.matDesc && lastDraw.model == draw.model) {
+        lastDraw.instances++;
+        isNew = false;
       }
     }
 
-    if (is_new) {
-      inst_draws.emplace_back(
-          static_cast<uint32_t>(objects.size()), 1, draw_mat_pipeline,
-          draw_mat_desc, draw.model);
+    if (isNew) {
+      instDraws_.emplace_back(i, 1, draw.matPipeline, draw.matDesc, draw.model);
     }
-
-    objects.emplace_back(
-        static_cast<uint32_t>(draw.objInd),
-        static_cast<uint32_t>(draw.material));
   }
 
   updateDynamicBuf(
@@ -185,8 +183,8 @@ void Scene::render(
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
 
-  for (auto& draw : inst_draws) {
-    auto* drawPipeline = pipelines_.at(draw.pipeline);
+  for (auto& draw : instDraws_) {
+    auto* drawPipeline = pipelines_.at(draw.matPipeline);
     if (currPipeline != drawPipeline) {
       currPipeline = drawPipeline;
       ds.cmd.bindPipeline(
@@ -200,9 +198,8 @@ void Scene::render(
           global->sets[0], nullptr);
     }
 
-    if (draw.pipeline == ScenePipeline::Basic &&
-        currDesc1 != draw.material_desc) {
-      currDesc1 = draw.material_desc;
+    if (draw.matPipeline == ScenePipeline::Basic && currDesc1 != draw.matDesc) {
+      currDesc1 = draw.matDesc;
       ds.cmd.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics, *currPipeline->layout, 1, currDesc1,
           nullptr);
@@ -224,10 +221,10 @@ void Scene::render(
 
     if (curr_model->index_count) {
       ds.cmd.drawIndexed(
-          curr_model->index_count, draw.instances, 0, 0, draw.first_instance);
+          curr_model->index_count, draw.instances, 0, 0, draw.firstInstance);
     } else {
       ds.cmd.draw(
-          curr_model->vertex_count, draw.instances, 0, draw.first_instance);
+          curr_model->vertex_count, draw.instances, 0, draw.firstInstance);
     }
   }
 
@@ -519,7 +516,6 @@ void Swap::init(const VulkanState& vs, const DynamicBuf& globalBuf) {
       .desc_layouts = {sampler, sampler},
   };
 
-
   inputs2d_ = pass.makeDescLayout();
   *inputs2d_ = {
       .binds = {{.type = vk::DescriptorType::eUniformBuffer}},
@@ -533,7 +529,7 @@ void Swap::init(const VulkanState& vs, const DynamicBuf& globalBuf) {
       .offset = 0,
       .size = sizeof(Draw2d),
   };
-  
+
   pipeline2d_ = pass.makePipeline();
   *pipeline2d_ = {
       .vert_shader = vs.shaders.get("draw-2d.vert.spv"),
