@@ -13,6 +13,7 @@ struct Model;
 struct DescLayout;
 struct Pipeline;
 struct Materials;
+struct Draws;
 
 struct Pass {
   Fbo fbo;
@@ -27,34 +28,17 @@ struct Pass {
 
 struct Scene {
   Materials* mats_ = nullptr;
+  Draws* draws_ = nullptr;
   Pass pass;
-  DynamicBuf object_buf;
-  DynamicBuf transform_buf;
-  DynamicBuf material_buf;
+  // DynamicBuf object_buf;
+  // DynamicBuf transform_buf;
   DescLayout* global;
   DescLayout* material;
   std::map<ScenePipeline, Pipeline*> pipelines_;
 
-  struct DrawCall {
-    MaterialId material = kMaterialIdNone;
-    ScenePipeline matPipeline = ScenePipeline::Basic;
-    vk::DescriptorSet matDesc = {};
-    ModelId model = ModelId::None;
-    uint32_t objInd = -1;
-  };
-
-  struct InstanceDraws {
-    uint32_t firstInstance = 0;
-    uint32_t instances = 0;
-    ScenePipeline matPipeline = ScenePipeline::Basic;
-    vk::DescriptorSet matDesc = {};
-    ModelId model = ModelId::None;
-  };
-  std::vector<InstanceDraws> instDraws_;
-
   void init(
       const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats,
-      const DynamicBuf& globalBuf);
+      Draws* draws, const DynamicBuf& globalBuf);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }

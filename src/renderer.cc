@@ -137,7 +137,8 @@ void Renderer::initVulkan() {
   sample_query_.init(vs_, scene_samples_);
   drawing_.init(vs_);
   voronoi_.init(vs_);
-  scene_.init(vs_, scene_samples_, &mats_, globalBuf_);
+  draws_.init(vs_, &mats_);
+  scene_.init(vs_, scene_samples_, &mats_, &draws_, globalBuf_);
   edges_.init(
       vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
       globalBuf_);
@@ -207,7 +208,7 @@ void Renderer::drawFrame() {
     voronoi_.update(ds_, frame_state_->voronoi_cells);
   }
   mats_.update(ds_);
-  scene_.update(vs_, ds_, *frame_state_);
+  draws_.update(ds_, *frame_state_);
   edges_.update(ds_, frame_state_->edges);
 
   recordCommandBuffer();

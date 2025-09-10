@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "buffers.h"
+#include "draws.h"
 #include "descriptors.h"
 #include "fbo.h"
 #include "images.h"
@@ -156,6 +157,7 @@ class Renderer {
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
 
   Materials mats_;
+  Draws draws_;
   DynamicBuf globalBuf_;
 
   Drawing drawing_;
