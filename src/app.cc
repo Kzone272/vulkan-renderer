@@ -15,12 +15,13 @@
 #include "animation.h"
 #include "asserts.h"
 #include "assets.h"
+#include "debug-draws.h"
 #include "grid.h"
 #include "imgui-helpers.h"
 #include "maths.h"
 #include "primitives.h"
+#include "renderer.h"
 #include "vec-maths.h"
-#include "debug-draws.h"
 
 App::App() = default;
 App::~App() = default;
@@ -350,7 +351,7 @@ void App::update() {
 
     flattenObjectTree();
     updateMaterials();
-    
+
     gDebugDraws.finish(frame_state_.viewProj);
     updateDraws();
     renderer_->drawFrame(&frame_state_);
@@ -621,7 +622,6 @@ void App::updateDraws() {
     }
   }
 }
-
 
 void App::updateImgui() {
   renderer_->imguiNewFrame();

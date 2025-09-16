@@ -12,7 +12,6 @@
 #include "glm-include.h"
 #include "input.h"
 #include "render-objects.h"
-#include "renderer.h"
 #include "skelly.h"
 #include "time-include.h"
 #include "time-sampler.h"
@@ -26,6 +25,7 @@ constexpr int HEIGHT = 720;
 
 extern std::map<ModelId, ModelInfo> kModelRegistry;
 
+class Renderer;
 struct Grid;
 
 class App {
