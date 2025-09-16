@@ -7,6 +7,7 @@
 // properties are set.
 struct VulkanState {
   const uint32_t kMaxFramesInFlight;
+  vk::SampleCountFlagBits sceneSamples;
   vk::PhysicalDevice physical_device;
   vk::Device device;
   vk::Queue gfx_q;

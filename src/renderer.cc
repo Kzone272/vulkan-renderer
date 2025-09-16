@@ -134,12 +134,13 @@ void Renderer::initVulkan() {
   globalBuf_ = createDynamicBuffer(
       vs_, sizeof(GlobalData), vk::BufferUsageFlagBits::eUniformBuffer);
 
-  sample_query_.init(vs_, scene_samples_);
+  sample_query_.init(vs_, vs_.sceneSamples);
   drawing_.init(vs_);
   voronoi_.init(vs_);
-  scene_.init(vs_, scene_samples_, &mats_, globalBuf_);
+  draws_.init(vs_, &mats_);
+  scene_.init(vs_, globalBuf_, mats_, &draws_);
   edges_.init(
-      vs_, scene_.outputSet(), scene_uses_msaa_, sample_query_.outputSet(),
+      vs_, scene_.outputSet(), sceneUsesMsaa_, sample_query_.outputSet(),
       globalBuf_);
   jf_.init(vs_);
   swap_.init(vs_, globalBuf_);
@@ -207,7 +208,7 @@ void Renderer::drawFrame() {
     voronoi_.update(ds_, frame_state_->voronoi_cells);
   }
   mats_.update(ds_);
-  scene_.update(vs_, ds_, *frame_state_);
+  draws_.update(ds_, *frame_state_);
   edges_.update(ds_, frame_state_->edges);
 
   recordCommandBuffer();
@@ -887,15 +888,15 @@ void Renderer::recordCommandBuffer() {
     jf_.render(ds_, frame_state_->edge_w, edges_.outputSet()->sets[0]);
   }
 
-  if (scene_uses_msaa_ && frame_state_->debug_view == DebugView::None) {
+  if (sceneUsesMsaa_ && frame_state_->debug_view == DebugView::None) {
     resolve_.render(ds_, scene_.outputSet()->sets[0]);
   }
 
   {
     swap_.startRender(ds_);
 
-    auto scene_output = scene_uses_msaa_ ? resolve_.outputSet()->sets[0]
-                                         : scene_.outputSet()->sets[0];
+    auto scene_output = sceneUsesMsaa_ ? resolve_.outputSet()->sets[0]
+                                       : scene_.outputSet()->sets[0];
 
     if (frame_state_->debug_view == DebugView::None) {
       if (frame_state_->stained_glass) {

@@ -1,6 +1,7 @@
 #include "pass.h"
 
 #include "descriptors.h"
+#include "draws.h"
 #include "materials.h"
 #include "pipelines.h"
 #include "render-state.h"
@@ -30,9 +31,9 @@ void Pass::init(const VulkanState& vs) {
 }
 
 void Scene::init(
-    const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats,
-    const DynamicBuf& globalBuf) {
-  mats_ = mats;
+    const VulkanState& vs, const DynamicBuf& globalBuf, Materials& mats,
+    Draws* draws) {
+  draws_ = draws;
 
   pass.fbo = {
       .size = vs.swap_size,
@@ -40,7 +41,7 @@ void Scene::init(
           {vk::Format::eB8G8R8A8Srgb, vk::Format::eR32G32B32A32Sfloat},
       // Opaque Black, (Away Vector, FarZ)
       .clear_colors = {{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 1.f, 0.f}},
-      .samples = samples,
+      .samples = vs.sceneSamples,
       .depth_fmt = vs.depth_format,
       .make_output_set = true,
       .output_sampler = vs.clamp_sampler,
@@ -70,7 +71,7 @@ void Scene::init(
   *basic = {
       .vert_shader = vs.shaders.get("scene-basic.vert.spv"),
       .frag_shader = vs.shaders.get("scene-basic.frag.spv"),
-      .desc_layouts = {global, mats_->layout()},
+      .desc_layouts = {global, mats.layout()},
       .vert_in = vertex_in,
       .cull_mode = vk::CullModeFlagBits::eNone,
   };
@@ -88,88 +89,12 @@ void Scene::init(
 
   pass.init(vs);
 
-  object_buf = createDynamicBuffer(
-      vs, kMaxObjects * sizeof(ObjectData),
-      vk::BufferUsageFlagBits::eStorageBuffer);
-  transform_buf = createDynamicBuffer(
-      vs, kMaxObjects * sizeof(mat4), vk::BufferUsageFlagBits::eStorageBuffer);
-
   std::vector<vk::WriteDescriptorSet> writes;
   global->updateUboBind(0, {globalBuf.info()}, writes);
-  global->updateUboBind(1, {object_buf.info()}, writes);
-  global->updateUboBind(2, {transform_buf.info()}, writes);
-  global->updateUboBind(3, {mats_->bufferInfo()}, writes);
+  global->updateUboBind(1, {draws_->objectBuf_.info()}, writes);
+  global->updateUboBind(2, {draws_->transformBuf_.info()}, writes);
+  global->updateUboBind(3, {mats.bufferInfo()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
-}
-
-void Scene::update(const VulkanState& vs, const DrawState& ds, FrameState& fs) {
-  updateDynamicBuf(
-      ds, transform_buf, std::span(fs.transforms),
-      vk::PipelineStageFlagBits::eVertexShader,
-      vk::AccessFlagBits::eShaderRead);
-
-  if (!fs.drawsNeedUpdate) {
-    return;
-  }
-
-  auto& mats = *mats_;
-
-  // Gather valid draw calls.
-  std::vector<DrawCall> drawCalls;
-  drawCalls.reserve(fs.draws.size());
-  for (size_t i = 0; i < fs.draws.size(); i++) {
-    auto& draw = fs.draws[i];
-    if (draw.material == kMaterialIdNone || draw.model == ModelId::None) {
-      continue;
-    }
-
-    auto matPipeline = mats_->getPipeline(draw.material);
-    auto matDesc = mats_->getDesc(draw.material);
-
-    drawCalls.emplace_back(
-        draw.material, matPipeline, matDesc, draw.model, draw.objInd);
-  }
-
-  // Sort by material, then by model.
-  std::sort(drawCalls.begin(), drawCalls.end(), [](auto& left, auto& right) {
-    if (left.matPipeline != right.matPipeline) {
-      return left.matPipeline < right.matPipeline;
-    } else if (left.matDesc != right.matDesc) {
-      return left.matDesc < right.matDesc;
-    } else {
-      return left.model < right.model;
-    }
-  });
-
-  std::vector<ObjectData> objects(drawCalls.size());
-  for (size_t i = 0; i < drawCalls.size(); i++) {
-    objects[i].index = drawCalls[i].objInd;
-    objects[i].matIndex = drawCalls[i].material;
-  }
-
-  instDraws_.clear();
-  for (uint32_t i = 0; i < drawCalls.size(); i++) {
-    auto& draw = drawCalls[i];
-
-    bool isNew = true;
-    if (instDraws_.size()) {
-      auto& lastDraw = instDraws_.back();
-      if (lastDraw.matPipeline == draw.matPipeline &&
-          lastDraw.matDesc == draw.matDesc && lastDraw.model == draw.model) {
-        lastDraw.instances++;
-        isNew = false;
-      }
-    }
-
-    if (isNew) {
-      instDraws_.emplace_back(i, 1, draw.matPipeline, draw.matDesc, draw.model);
-    }
-  }
-
-  updateDynamicBuf(
-      ds, object_buf, std::span(objects),
-      vk::PipelineStageFlagBits::eVertexShader,
-      vk::AccessFlagBits::eShaderRead);
 }
 
 void Scene::render(
@@ -183,7 +108,7 @@ void Scene::render(
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
 
-  for (auto& draw : instDraws_) {
+  for (auto& draw : draws_->instDraws_) {
     auto* drawPipeline = pipelines_.at(draw.matPipeline);
     if (currPipeline != drawPipeline) {
       currPipeline = drawPipeline;

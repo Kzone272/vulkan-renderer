@@ -6,6 +6,7 @@
 
 #include "buffers.h"
 #include "descriptors.h"
+#include "draws.h"
 #include "fbo.h"
 #include "images.h"
 #include "materials.h"
@@ -143,12 +144,14 @@ class Renderer {
   vk::UniqueSampler nearest_sampler_;
   vk::UniqueSampler clamp_sampler_;
   vk::SampleCountFlagBits max_samples_ = vk::SampleCountFlagBits::e1;
-  const vk::SampleCountFlagBits scene_samples_ = vk::SampleCountFlagBits::e1;
-  const bool scene_uses_msaa_ = scene_samples_ != vk::SampleCountFlagBits::e1;
 
   // The members in this struct should never change after handing it out, or
   // problems are likely to occur.
-  VulkanState vs_{.kMaxFramesInFlight = 2};
+  VulkanState vs_{
+      .kMaxFramesInFlight = 2,
+      .sceneSamples = vk::SampleCountFlagBits::e1,
+  };
+  const bool sceneUsesMsaa_ = vs_.sceneSamples != vk::SampleCountFlagBits::e1;
 
   FrameState* frame_state_ = nullptr;
   DrawState ds_{};
@@ -156,6 +159,7 @@ class Renderer {
   std::map<ModelId, std::unique_ptr<Model>> loaded_models_;
 
   Materials mats_;
+  Draws draws_;
   DynamicBuf globalBuf_;
 
   Drawing drawing_;

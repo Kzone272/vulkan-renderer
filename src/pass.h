@@ -13,6 +13,7 @@ struct Model;
 struct DescLayout;
 struct Pipeline;
 struct Materials;
+struct Draws;
 
 struct Pass {
   Fbo fbo;
@@ -26,42 +27,21 @@ struct Pass {
 };
 
 struct Scene {
-  Materials* mats_ = nullptr;
+  Draws* draws_ = nullptr;
   Pass pass;
-  DynamicBuf object_buf;
-  DynamicBuf transform_buf;
-  DynamicBuf material_buf;
   DescLayout* global;
   DescLayout* material;
   std::map<ScenePipeline, Pipeline*> pipelines_;
 
-  struct DrawCall {
-    MaterialId material = kMaterialIdNone;
-    ScenePipeline matPipeline = ScenePipeline::Basic;
-    vk::DescriptorSet matDesc = {};
-    ModelId model = ModelId::None;
-    uint32_t objInd = -1;
-  };
-
-  struct InstanceDraws {
-    uint32_t firstInstance = 0;
-    uint32_t instances = 0;
-    ScenePipeline matPipeline = ScenePipeline::Basic;
-    vk::DescriptorSet matDesc = {};
-    ModelId model = ModelId::None;
-  };
-  std::vector<InstanceDraws> instDraws_;
-
   void init(
-      const VulkanState& vs, vk::SampleCountFlagBits samples, Materials* mats,
-      const DynamicBuf& globalBuf);
+      const VulkanState& vs, const DynamicBuf& globalBuf, Materials& mats,
+      Draws* draws);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
   void resize(const VulkanState& vs) {
     pass.fbo.resize(vs, vs.swap_size);
   }
-  void update(const VulkanState& vs, const DrawState& ds, FrameState& fs);
   void render(
       const DrawState& ds,
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
