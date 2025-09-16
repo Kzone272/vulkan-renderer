@@ -47,6 +47,26 @@ struct Scene {
       const std::map<ModelId, std::unique_ptr<Model>>& loaded_models);
 };
 
+struct Shadow {
+  Draws* draws_ = nullptr;
+  Pass pass_;
+  DynamicBuf shadowBuf_;
+  DescLayout* shadowDesc_ = nullptr;
+  Pipeline* shadowPl_ = nullptr;
+
+  void init(const VulkanState& vs, const DynamicBuf& globalBuf, Draws* draws);
+  DescLayout* outputSet() {
+    return &pass_.fbo.output_set;
+  }
+  void resize(const VulkanState& vs) {
+    pass_.fbo.resize(vs, vs.swap_size);
+  }
+  void update(const DrawState& ds, const ShadowData& debug);
+  void render(
+      const DrawState& ds,
+      const std::map<ModelId, std::unique_ptr<Model>>& loadedModels);
+};
+
 struct Edges {
   Pass pass;
   DynamicBuf debug_buf;

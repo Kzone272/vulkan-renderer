@@ -139,6 +139,7 @@ void Renderer::initVulkan() {
   voronoi_.init(vs_);
   draws_.init(vs_, &mats_);
   scene_.init(vs_, globalBuf_, mats_, &draws_);
+  sunMap_.init(vs_, globalBuf_, &draws_);
   edges_.init(
       vs_, scene_.outputSet(), sceneUsesMsaa_, sample_query_.outputSet(),
       globalBuf_);
@@ -209,6 +210,7 @@ void Renderer::drawFrame() {
   }
   mats_.update(ds_);
   draws_.update(ds_, *frame_state_);
+  sunMap_.update(ds_, frame_state_->sun);
   edges_.update(ds_, frame_state_->edges);
 
   recordCommandBuffer();
@@ -875,6 +877,7 @@ void Renderer::recordCommandBuffer() {
   if (frame_state_->update_drawing) {
     drawing_.render(ds_);
   }
+  sunMap_.render(ds_, loaded_models_);
   scene_.render(ds_, loaded_models_);
 
   if (frame_state_->stained_glass) {

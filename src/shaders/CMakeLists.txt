@@ -22,6 +22,8 @@ file(GLOB shader_files
   uv-sample.frag
   draw-2d.vert
   draw-2d.frag
+  shadow.vert
+  shadow.frag
 )
 
 file(GLOB shader_deps *.glsl)

@@ -469,6 +469,15 @@ void App::updateCamera() {
     ASSERT(false);
   }
   frame_state_.viewProj = frame_state_.proj * frame_state_.view;
+
+  // TODO: Do a better job at making these matrices.
+  vec3 sunPos = follow_cam_.focus + 500.f * frame_state_.lights[0].vec.xyz();
+  mat4 sunView = glm::lookAt(sunPos, follow_cam_.focus, vec3(0, 1, 0));
+  float aspect = (float)width_ / (float)height_;
+  float span = 500;
+  mat4 sunProj =
+      glm::ortho(span * aspect, -span * aspect, span, -span, 0.f, 1000.f);
+  frame_state_.sun = { sunProj * sunView };
 }
 
 void App::updateSpinCamera() {

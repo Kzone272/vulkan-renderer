@@ -218,7 +218,8 @@ void Fbo::initRp(const VulkanState& vs) {
         .format = depth->format,
         .samples = depth->samples,
         .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .storeOp = storeDepth ? vk::AttachmentStoreOp::eStore
+                              : vk::AttachmentStoreOp::eDontCare,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
         .initialLayout = vk::ImageLayout::eUndefined,

@@ -156,6 +156,104 @@ void Scene::render(
   ds.cmd.endRenderPass();
 }
 
+void Shadow::init(
+    const VulkanState& vs, const DynamicBuf& globalBuf, Draws* draws) {
+  draws_ = draws;
+
+  pass_.fbo = {
+      .size = vs.swap_size,
+      .color_fmts = {},
+      .depth_fmt = vs.depth_format,
+      .storeDepth = true,
+  };
+
+  // Bound per frame.
+  shadowDesc_ = pass_.makeDescLayout();
+  *shadowDesc_ = {
+      .binds =
+          {
+              {.type = vk::DescriptorType::eUniformBuffer},
+              {.type = vk::DescriptorType::eStorageBuffer},
+              {.type = vk::DescriptorType::eStorageBuffer},
+          },
+      .stages = vk::ShaderStageFlagBits::eVertex,
+  };
+
+  vk::PipelineVertexInputStateCreateInfo vertex_in{};
+  auto vert_binding = getBindingDesc<Vertex>();
+  auto vert_attrs = getAttrDescs<Vertex>();
+  vertex_in.setVertexBindingDescriptions(vert_binding);
+  vertex_in.setVertexAttributeDescriptions(vert_attrs);
+
+  shadowPl_ = pass_.makePipeline();
+  *shadowPl_ = {
+      .vert_shader = vs.shaders.get("shadow.vert.spv"),
+      .frag_shader = vs.shaders.get("shadow.frag.spv"),
+      .desc_layouts = {shadowDesc_},
+      .vert_in = vertex_in,
+      .cull_mode = vk::CullModeFlagBits::eNone,
+  };
+
+  pass_.init(vs);
+
+  shadowBuf_ = createDynamicBuffer(
+      vs, sizeof(ShadowData), vk::BufferUsageFlagBits::eUniformBuffer);
+
+  std::vector<vk::WriteDescriptorSet> writes;
+  shadowDesc_->updateUboBind(0, {shadowBuf_.info()}, writes);
+  shadowDesc_->updateUboBind(1, {draws_->objectBuf_.info()}, writes);
+  shadowDesc_->updateUboBind(2, {draws_->transformBuf_.info()}, writes);
+  vs.device.updateDescriptorSets(writes, nullptr);
+}
+
+void Shadow::update(const DrawState& ds, const ShadowData& shadow) {
+  updateDynamicBuf(
+      ds, shadowBuf_, std::span<const ShadowData>(&shadow, 1),
+      vk::PipelineStageFlagBits::eVertexShader,
+      vk::AccessFlagBits::eUniformRead);
+}
+
+void Shadow::render(
+    const DrawState& ds,
+    const std::map<ModelId, std::unique_ptr<Model>>& loaded_models) {
+  pass_.fbo.beginRp(ds);
+
+  ModelId currModelId = ModelId::None;
+  Model* currModel = nullptr;
+
+  ds.cmd.bindPipeline(
+      vk::PipelineBindPoint::eGraphics, *shadowPl_->pipeline);
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *shadowPl_->layout, 0,
+      shadowDesc_->sets[0], nullptr);
+
+  for (auto& draw : draws_->instDraws_) {
+    if (currModelId != draw.model) {
+      currModelId = draw.model;
+      auto it = loaded_models.find(draw.model);
+      ASSERT(it != loaded_models.end());
+      currModel = it->second.get();
+
+      vk::DeviceSize offsets[] = {0};
+      ds.cmd.bindVertexBuffers(0, *currModel->vert_buf.buf, offsets);
+      if (currModel->index_count) {
+        ds.cmd.bindIndexBuffer(
+            *currModel->ind_buf.buf, 0, vk::IndexType::eUint32);
+      }
+    }
+
+    if (currModel->index_count) {
+      ds.cmd.drawIndexed(
+          currModel->index_count, draw.instances, 0, 0, draw.firstInstance);
+    } else {
+      ds.cmd.draw(
+          currModel->vertex_count, draw.instances, 0, draw.firstInstance);
+    }
+  }
+
+  ds.cmd.endRenderPass();
+}
+
 void Edges::init(
     const VulkanState& vs, DescLayout* scene_output, bool use_msaa,
     DescLayout* sample_points, const DynamicBuf& globalBuf) {

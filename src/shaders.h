@@ -28,6 +28,8 @@ const std::set<std::string> kShaders{
     "uv-sample.frag.spv",
     "draw-2d.vert.spv",
     "draw-2d.frag.spv",
+    "shadow.vert.spv",
+    "shadow.frag.spv",
     // clang-format on
 };
 

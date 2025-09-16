@@ -31,10 +31,6 @@ struct GlobalData {
   alignas(16) Light lights[8];
 };
 
-struct PushData {
-  mat4 model;
-};
-
 union BoolsInt {
   struct {
     bool b1 = false;
@@ -149,6 +145,10 @@ struct Draw2d {
   Type type = Type::Line;
 };
 
+struct ShadowData {
+  mat4 viewProj;
+};
+
 struct FrameState {
   uint64_t frame_num = 0;
   bool drawsNeedUpdate = true;
@@ -179,6 +179,7 @@ struct FrameState {
   std::vector<Vertex2d> voronoi_cells;
   bool update_voronoi = false;
   std::vector<Draw2d> draws2d;
+  ShadowData sun;
 };
 
 struct Vertex {

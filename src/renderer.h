@@ -165,6 +165,7 @@ class Renderer {
   Drawing drawing_;
   Voronoi voronoi_;
   Scene scene_;
+  Shadow sunMap_;
   Edges edges_;
   JumpFlood jf_;
   Swap swap_;
