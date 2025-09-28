@@ -89,9 +89,13 @@ void Fbo::initImages(const VulkanState& vs) {
         .format = *depth_fmt,
         .samples = samples,
     });
+    vk::ImageUsageFlags depthUsage =
+        vk::ImageUsageFlagBits::eDepthStencilAttachment;
+    if (sampleDepth) {
+      depthUsage |= vk::ImageUsageFlagBits::eSampled;
+    }
     createImage(
-        vs, *depth, vk::ImageTiling::eOptimal,
-        vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        vs, *depth, vk::ImageTiling::eOptimal, depthUsage,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
         vk::ImageAspectFlagBits::eDepth, {});
   }
@@ -218,12 +222,14 @@ void Fbo::initRp(const VulkanState& vs) {
         .format = depth->format,
         .samples = depth->samples,
         .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = storeDepth ? vk::AttachmentStoreOp::eStore
-                              : vk::AttachmentStoreOp::eDontCare,
+        .storeOp = sampleDepth ? vk::AttachmentStoreOp::eStore
+                               : vk::AttachmentStoreOp::eDontCare,
         .stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
         .stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
         .initialLayout = vk::ImageLayout::eUndefined,
-        .finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+        .finalLayout = sampleDepth
+                           ? vk::ImageLayout::eShaderReadOnlyOptimal
+                           : vk::ImageLayout::eDepthStencilAttachmentOptimal,
     });
     clears.push_back({{0.f, 0}});
   }

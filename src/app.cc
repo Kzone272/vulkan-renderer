@@ -157,7 +157,9 @@ void App::loadMaterials() {
   mats_.cube_data = {
       .color1{0, 0.06, 1},
       .color2{0.88, 0, 1},
-      .data3{0, 0, 1, 0},  // left -> right
+      .color3{0.011f, 0.000f, 0.358f, 1.000f},
+      .color4{0.245f, 0.000f, 0.000f, 1.000f},
+      .data1{0, 0, 1, 0},  // left -> right
   };
   mats_.cube = renderer_->useMaterial(
       {.data = mats_.cube_data, .pipeline = ScenePipeline::Gradient});
@@ -165,7 +167,9 @@ void App::loadMaterials() {
   mats_.gradient_floor_data = {
       .color1{0.912, 1, 0},
       .color2{0, 0.314, 0.212},
-      .data3{0, 0, 1, 1},  // top left -> bottom right
+      .color3{0.511f, 0.789f, 0.000f, 1.000f},
+      .color4{0.000f, 0.121f, 0.216f, 1.000f},
+      .data1{0, 0, 1, 1},  // top left -> bottom right
   };
   mats_.gradient_floor = renderer_->useMaterial(
       {.data = mats_.gradient_floor_data, .pipeline = ScenePipeline::Gradient});
@@ -175,7 +179,9 @@ void App::loadMaterials() {
   mats_.botData = {
       .color1{0.335, 0.877, 0.862},
       .color2{0.056, 0.103, 0.284},
-      .data3{0, 0, 0, 1},  // placeholder
+      .color3{0.000f, 0.471f, 1.000f, 1.000f},
+      .color4{0.030f, 0.017f, 0.162f, 1.000f},
+      .data1{0, 0, 0, 1},  // placeholder
   };
   mats_.bot = renderer_->useMaterial(
       {.data = mats_.botData, .pipeline = ScenePipeline::Gradient});
@@ -450,7 +456,7 @@ void App::updateMaterials() {
   DbgSphere(start, 5);
   DbgBox(end, vec3(5));
 
-  mats_.botData.data3 = vec4(
+  mats_.botData.data1 = vec4(
       toScreenSpace(start, frame_state_.viewProj),
       toScreenSpace(end, frame_state_.viewProj));
   renderer_->updateMaterial(mats_.bot, mats_.botData);
@@ -473,11 +479,12 @@ void App::updateCamera() {
   // TODO: Do a better job at making these matrices.
   vec3 sunPos = follow_cam_.focus + 500.f * frame_state_.lights[0].vec.xyz();
   mat4 sunView = glm::lookAt(sunPos, follow_cam_.focus, vec3(0, 1, 0));
-  float aspect = (float)width_ / (float)height_;
+  // Width / Height ratio of shadow map texture.
+  float aspect = 1;
   float span = 500;
   mat4 sunProj =
       glm::ortho(span * aspect, -span * aspect, span, -span, 0.f, 1000.f);
-  frame_state_.sun = { sunProj * sunView };
+  frame_state_.sun = {sunProj * sunView};
 }
 
 void App::updateSpinCamera() {
@@ -695,6 +702,11 @@ void App::updateImgui() {
     if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
       loadPrimitives();
     }
+    if (ImGui::SliderFloat3(
+            "Sun Dir", (float*)&frame_state_.lights[0].vec, -1, 1)) {
+      frame_state_.lights[0].vec =
+          vec4(glm::normalize(frame_state_.lights[0].vec.xyz()), 0);
+    }
     ImGui::EndTabItem();
   }
 
@@ -763,6 +775,8 @@ void App::updateImgui() {
 bool ImGuiMaterial(MaterialData& data, std::string label) {
   auto label1 = std::format("{}-1##2f", label);
   auto label2 = std::format("{}-2##2f", label);
+  auto label3 = std::format("{}-3##2f", label);
+  auto label4 = std::format("{}-4##2f", label);
   auto typeLabel = std::format("{}-Type", label);
 
   const char* types[] = {"Phong", "Gooch", "Toon"};
@@ -772,6 +786,10 @@ bool ImGuiMaterial(MaterialData& data, std::string label) {
       label1.c_str(), (float*)&data.color1, ImGuiColorEditFlags_Float);
   update |= ImGui::ColorEdit3(
       label2.c_str(), (float*)&data.color2, ImGuiColorEditFlags_Float);
+  update |= ImGui::ColorEdit3(
+      label3.c_str(), (float*)&data.color3, ImGuiColorEditFlags_Float);
+  update |= ImGui::ColorEdit3(
+      label4.c_str(), (float*)&data.color4, ImGuiColorEditFlags_Float);
 
   return update;
 }

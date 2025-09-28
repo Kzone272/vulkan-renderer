@@ -10,6 +10,8 @@ layout(set = 0, binding = 0) uniform GlobalBlock {
 layout(set = 0, binding = 3) readonly buffer MaterialBlock {
   MaterialData materials[];
 };
+layout(set = 0, binding = 4) uniform sampler shadowSampler;
+layout(set = 0, binding = 5) uniform texture2D shadowTex;
 
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
 
@@ -18,10 +20,12 @@ layout(location = 1) in vec3 fragColor;
 layout(location = 2) in vec2 fragUv;
 layout(location = 3) in vec3 fragPos;
 layout(location = 4) flat in uint matIndex;
+layout(location = 5) in vec4 shadowPos;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormalDepth;
 
+#include "shadow.glsl"
 
 float dirLight(vec3 lightVec, vec3 norm) {
   vec3 l = -normalize(vec3(global.view * vec4(lightVec, 0)));
@@ -50,6 +54,8 @@ void main() {
         * fragColor
         * material.color1;
 
+    float sunShadow = shadowPct();
+
     // Global illumination
     // TODO: Make this a light type.
     vec3 lambert = vec3(0.2);
@@ -61,6 +67,9 @@ void main() {
         intensity = dirLight(light.vec.xyz, vnorm);
       } else if (light.type == kPointLightType) {
         intensity = pointLight(light.vec.xyz, light.color.w, vnorm);
+      }
+      if (i == 0) {
+        intensity *= sunShadow;
       }
 
       lambert += intensity * light.color.rgb;

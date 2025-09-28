@@ -15,6 +15,7 @@ struct GlobalData {
   mat4 view;
   mat4 proj;
   mat4 inv_proj;
+  mat4 shadowViewProj;
   uint width;
   uint height;
   float near;
@@ -32,7 +33,9 @@ struct MaterialData {
   float pad1;
   vec3 color2;
   float pad2;
-  vec4 data3;
+  vec4 color3;
+  vec4 color4;
+  vec4 data1;
   uint pad3;
   uint pad4;
   uint pad5;

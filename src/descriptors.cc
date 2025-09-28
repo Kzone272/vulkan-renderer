@@ -116,18 +116,21 @@ void DescLayout::updateUboBind(
   }
 }
 
-void DescLayout::updateSamplerBind(
+void DescLayout::updateImageBind(
     uint32_t index, vk::DescriptorImageInfo* info,
     std::vector<vk::WriteDescriptorSet>& writes) {
   auto& bind = binds[index];
-  DASSERT(bind.type == vk::DescriptorType::eCombinedImageSampler);
+  DASSERT(
+      bind.type == vk::DescriptorType::eCombinedImageSampler ||
+      bind.type == vk::DescriptorType::eSampledImage ||
+      bind.type == vk::DescriptorType::eSampler);
 
   for (auto& set : sets) {
     writes.push_back(samplerWrite(set, bind, info));
   }
 }
 
-void DescLayout::updateSamplersBind(
+void DescLayout::updateImageBinds(
     uint32_t index, const std::vector<vk::DescriptorImageInfo>& infos,
     std::vector<vk::WriteDescriptorSet>& writes) {
   auto& bind = binds[index];

@@ -65,8 +65,6 @@ target_compile_features(main PRIVATE cxx_std_23)
 # Disable C++ modules because it breaks precompiled headers
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 0)
 
-add_dependencies(main shaders)
-
 target_include_directories(main PRIVATE
   ${PROJECT_SOURCE_DIR}/deps
   ${PROJECT_SOURCE_DIR}/deps/VulkanMemoryAllocator/include
@@ -110,3 +108,4 @@ add_custom_command(TARGET main POST_BUILD
 add_dependencies(main dlls)
 
 add_subdirectory(shaders)
+add_dependencies(main shadersTarget)

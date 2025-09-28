@@ -32,7 +32,7 @@ void Pass::init(const VulkanState& vs) {
 
 void Scene::init(
     const VulkanState& vs, const DynamicBuf& globalBuf, Materials& mats,
-    Draws* draws) {
+    vk::DescriptorImageInfo* shadowDepthInfo, Draws* draws) {
   draws_ = draws;
 
   pass.fbo = {
@@ -56,6 +56,8 @@ void Scene::init(
               {.type = vk::DescriptorType::eStorageBuffer},
               {.type = vk::DescriptorType::eStorageBuffer},
               {.type = vk::DescriptorType::eStorageBuffer},
+              {.type = vk::DescriptorType::eSampler},
+              {.type = vk::DescriptorType::eSampledImage},
           },
       .stages =
           vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
@@ -94,6 +96,11 @@ void Scene::init(
   global->updateUboBind(1, {draws_->objectBuf_.info()}, writes);
   global->updateUboBind(2, {draws_->transformBuf_.info()}, writes);
   global->updateUboBind(3, {mats.bufferInfo()}, writes);
+  vk::DescriptorImageInfo samplerInfo{
+      .sampler = vs.nearest_sampler,
+  };
+  global->updateImageBind(4, {&samplerInfo}, writes);
+  global->updateImageBind(5, {shadowDepthInfo}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
 }
 
@@ -161,10 +168,10 @@ void Shadow::init(
   draws_ = draws;
 
   pass_.fbo = {
-      .size = vs.swap_size,
+      .size = {1024, 1024},
       .color_fmts = {},
       .depth_fmt = vs.depth_format,
-      .storeDepth = true,
+      .sampleDepth = true,
   };
 
   // Bound per frame.
@@ -196,21 +203,11 @@ void Shadow::init(
 
   pass_.init(vs);
 
-  shadowBuf_ = createDynamicBuffer(
-      vs, sizeof(ShadowData), vk::BufferUsageFlagBits::eUniformBuffer);
-
   std::vector<vk::WriteDescriptorSet> writes;
-  shadowDesc_->updateUboBind(0, {shadowBuf_.info()}, writes);
+  shadowDesc_->updateUboBind(0, {globalBuf.info()}, writes);
   shadowDesc_->updateUboBind(1, {draws_->objectBuf_.info()}, writes);
   shadowDesc_->updateUboBind(2, {draws_->transformBuf_.info()}, writes);
   vs.device.updateDescriptorSets(writes, nullptr);
-}
-
-void Shadow::update(const DrawState& ds, const ShadowData& shadow) {
-  updateDynamicBuf(
-      ds, shadowBuf_, std::span<const ShadowData>(&shadow, 1),
-      vk::PipelineStageFlagBits::eVertexShader,
-      vk::AccessFlagBits::eUniformRead);
 }
 
 void Shadow::render(
@@ -221,8 +218,7 @@ void Shadow::render(
   ModelId currModelId = ModelId::None;
   Model* currModel = nullptr;
 
-  ds.cmd.bindPipeline(
-      vk::PipelineBindPoint::eGraphics, *shadowPl_->pipeline);
+  ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPl_->pipeline);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *shadowPl_->layout, 0,
       shadowDesc_->sets[0], nullptr);

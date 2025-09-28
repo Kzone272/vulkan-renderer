@@ -24,6 +24,7 @@ struct GlobalData {
   alignas(16) mat4 view;
   alignas(16) mat4 proj;
   alignas(16) mat4 inv_proj;
+  alignas(16) mat4 shadowViewProj;
   uint32_t width;
   uint32_t height;
   float near;
@@ -76,7 +77,9 @@ struct MaterialData {
   };
   vec3 color1 = {1, 1, 1};  // This takes up the size of a vec4
   vec3 color2 = {0, 0, 0};  // This takes up the size of a vec4
-  vec4 data3 = {0, 0, 0, 0};
+  vec4 color3 = {0.5, 0.5, 0.5, 1};  // This takes up the size of a vec4
+  vec4 color4 = {0, 0, 0, 0};  // This takes up the size of a vec4
+  vec4 data1 = {0, 0, 0, 0};
   uint32_t pad3 = 0;
   uint32_t pad4 = 0;
   uint32_t pad5 = 0;

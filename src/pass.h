@@ -35,7 +35,7 @@ struct Scene {
 
   void init(
       const VulkanState& vs, const DynamicBuf& globalBuf, Materials& mats,
-      Draws* draws);
+      vk::DescriptorImageInfo* shadowDepthInfo, Draws* draws);
   DescLayout* outputSet() {
     return &pass.fbo.output_set;
   }
@@ -50,18 +50,16 @@ struct Scene {
 struct Shadow {
   Draws* draws_ = nullptr;
   Pass pass_;
-  DynamicBuf shadowBuf_;
   DescLayout* shadowDesc_ = nullptr;
   Pipeline* shadowPl_ = nullptr;
 
   void init(const VulkanState& vs, const DynamicBuf& globalBuf, Draws* draws);
-  DescLayout* outputSet() {
-    return &pass_.fbo.output_set;
+  vk::DescriptorImageInfo* depthInfo() {
+    return &pass_.fbo.depth->info;
   }
   void resize(const VulkanState& vs) {
     pass_.fbo.resize(vs, vs.swap_size);
   }
-  void update(const DrawState& ds, const ShadowData& debug);
   void render(
       const DrawState& ds,
       const std::map<ModelId, std::unique_ptr<Model>>& loadedModels);

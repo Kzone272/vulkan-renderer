@@ -26,10 +26,10 @@ struct DescLayout {
   void updateUboBind(
       uint32_t index, const std::vector<const vk::DescriptorBufferInfo*>& infos,
       std::vector<vk::WriteDescriptorSet>& writes);
-  void updateSamplerBind(
+  void updateImageBind(
       uint32_t index, vk::DescriptorImageInfo* info,
       std::vector<vk::WriteDescriptorSet>& writes);
-  void updateSamplersBind(
+  void updateImageBinds(
       uint32_t index, const std::vector<vk::DescriptorImageInfo>& infos,
       std::vector<vk::WriteDescriptorSet>& writes);
 };

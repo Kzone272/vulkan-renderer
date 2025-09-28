@@ -138,8 +138,8 @@ void Renderer::initVulkan() {
   drawing_.init(vs_);
   voronoi_.init(vs_);
   draws_.init(vs_, &mats_);
-  scene_.init(vs_, globalBuf_, mats_, &draws_);
   sunMap_.init(vs_, globalBuf_, &draws_);
+  scene_.init(vs_, globalBuf_, mats_, sunMap_.depthInfo(), &draws_);
   edges_.init(
       vs_, scene_.outputSet(), sceneUsesMsaa_, sample_query_.outputSet(),
       globalBuf_);
@@ -210,7 +210,6 @@ void Renderer::drawFrame() {
   }
   mats_.update(ds_);
   draws_.update(ds_, *frame_state_);
-  sunMap_.update(ds_, frame_state_->sun);
   edges_.update(ds_, frame_state_->edges);
 
   recordCommandBuffer();
@@ -251,6 +250,7 @@ void Renderer::updateGlobalBuf() {
   data.view = fs.view;
   data.proj = fs.proj;
   data.inv_proj = glm::inverse(fs.proj);
+  data.shadowViewProj = fs.sun.viewProj;
   data.width = fs.width;
   data.height = fs.height;
   data.near = fs.near;
@@ -739,11 +739,11 @@ void Renderer::createSamplers() {
   linear_sampler_ = device_->createSamplerUnique(ci).value;
   vs_.linear_sampler = *linear_sampler_;
 
-  auto clamp_ci = ci;
-  clamp_ci.addressModeU = vk::SamplerAddressMode::eClampToEdge;
-  clamp_ci.addressModeV = vk::SamplerAddressMode::eClampToEdge;
-  clamp_ci.addressModeW = vk::SamplerAddressMode::eClampToEdge;
-  clamp_sampler_ = device_->createSamplerUnique(clamp_ci).value;
+  auto clampCi = ci;
+  clampCi.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+  clampCi.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+  clampCi.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+  clamp_sampler_ = device_->createSamplerUnique(clampCi).value;
   vs_.clamp_sampler = *clamp_sampler_;
 
   auto nearest_ci = ci;
@@ -807,16 +807,21 @@ void Renderer::stageBuffer(
 
 void Renderer::createDescriptorPool() {
   // Arbitrary. 100 seems fine for now.
-  const uint32_t kMaxSamplers = 100;
   const uint32_t kMaxUbos = 100;
   const uint32_t kMaxStorageBufs = 100;
+  const uint32_t kMaxCombinedSamplers = 100;
+  const uint32_t kMaxSamplers = 100;
+  const uint32_t kMaxSampledImages = 100;
 
   std::vector<vk::DescriptorPoolSize> pool_sizes{
       {.type = vk::DescriptorType::eUniformBuffer, .descriptorCount = kMaxUbos},
       {.type = vk::DescriptorType::eStorageBuffer,
        .descriptorCount = kMaxStorageBufs},
       {.type = vk::DescriptorType::eCombinedImageSampler,
-       .descriptorCount = kMaxSamplers},
+       .descriptorCount = kMaxCombinedSamplers},
+      {.type = vk::DescriptorType::eSampler, .descriptorCount = kMaxSamplers},
+      {.type = vk::DescriptorType::eSampledImage,
+       .descriptorCount = kMaxSampledImages},
   };
 
   vk::DescriptorPoolCreateInfo pool_ci{

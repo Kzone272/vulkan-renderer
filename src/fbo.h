@@ -19,7 +19,7 @@ struct Fbo {
   vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
   bool resolve = false;
   std::optional<vk::Format> depth_fmt;
-  bool storeDepth = false;
+  bool sampleDepth = false;
   bool make_output_set = false;
   vk::Sampler output_sampler = {};
   bool swap = false;
