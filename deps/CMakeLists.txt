@@ -1,5 +1,5 @@
-project(Deps)
 cmake_minimum_required(VERSION 3.25)
+project(Deps)
 
 include(ExternalProject)
 
@@ -32,4 +32,10 @@ ExternalProject_Add(tinyobjloader
   SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tinyobjloader
   CMAKE_ARGS ${CMAKE_ARGS}
   BINARY_DIR tinyobjloader
+)
+
+ExternalProject_Add(googletest
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/googletest
+  CMAKE_ARGS ${CMAKE_ARGS}
+  BINARY_DIR googletest
 )

@@ -21,6 +21,7 @@ find_package(SDL2 2.28.0 CONFIG REQUIRED)
 find_package(SDL2_image 2.6.3 CONFIG REQUIRED)
 find_package(Vulkan 1.3 REQUIRED)
 find_package(tinyobjloader 2.0.0 CONFIG REQUIRED)
+find_package(Gtest 1.17.0 CONFIG REQUIRED)
 
 set (IMGUI_DIR "${PROJECT_SOURCE_DIR}/deps/imgui")
 file(GLOB imgui_cpps
@@ -45,3 +46,6 @@ target_link_libraries(imgui PRIVATE
 )
 
 add_subdirectory(src)
+
+enable_testing()
+add_subdirectory(tests)

@@ -19,3 +19,6 @@
 [submodule "deps/VulkanMemoryAllocator-Hpp"]
 	path = deps/VulkanMemoryAllocator-Hpp
 	url = git@github.com:YaaZ/VulkanMemoryAllocator-Hpp.git
+[submodule "deps/googletest"]
+	path = deps/googletest
+	url = https://github.com/google/googletest.git
