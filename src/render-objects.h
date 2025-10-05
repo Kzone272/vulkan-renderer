@@ -23,13 +23,15 @@ struct Light {
 struct GlobalData {
   alignas(16) mat4 view;
   alignas(16) mat4 proj;
-  alignas(16) mat4 inv_proj;
+  alignas(16) mat4 invProj;
   alignas(16) mat4 shadowViewProj;
+  vec4 colorUp{0.162f, 0.778f, 1.000f, 1.000f};
+  vec4 colorDown{0.000f, 0.176f, 1.000f, 1.000f};
   uint32_t width;
   uint32_t height;
   float near;
   float far;
-  alignas(16) Light lights[8];
+  alignas(16) std::array<Light, 8> lights;
 };
 
 union BoolsInt {
@@ -75,10 +77,10 @@ struct MaterialData {
     Gooch,
     Toon,
   };
-  vec3 color1 = {1, 1, 1};  // This takes up the size of a vec4
-  vec3 color2 = {0, 0, 0};  // This takes up the size of a vec4
+  vec3 color1 = {1, 1, 1};           // This takes up the size of a vec4
+  vec3 color2 = {0, 0, 0};           // This takes up the size of a vec4
   vec4 color3 = {0.5, 0.5, 0.5, 1};  // This takes up the size of a vec4
-  vec4 color4 = {0, 0, 0, 0};  // This takes up the size of a vec4
+  vec4 color4 = {0, 0, 0, 0};        // This takes up the size of a vec4
   vec4 data1 = {0, 0, 0, 0};
   uint32_t pad3 = 0;
   uint32_t pad4 = 0;
@@ -148,24 +150,12 @@ struct Draw2d {
   Type type = Type::Line;
 };
 
-struct ShadowData {
-  mat4 viewProj;
-};
-
 struct FrameState {
   uint64_t frame_num = 0;
   bool drawsNeedUpdate = true;
   std::vector<DrawData> draws;
   std::vector<mat4> transforms;
-  std::vector<Light> lights;
-  mat4 model;
-  mat4 view;
-  mat4 proj;
-  mat4 viewProj;
-  uint32_t width;
-  uint32_t height;
-  float near;
-  float far;
+  GlobalData scene{};
   DebugData drawing{
       .f1 = 0.5,
   };
@@ -182,7 +172,6 @@ struct FrameState {
   std::vector<Vertex2d> voronoi_cells;
   bool update_voronoi = false;
   std::vector<Draw2d> draws2d;
-  ShadowData sun;
 };
 
 struct Vertex {

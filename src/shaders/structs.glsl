@@ -14,8 +14,10 @@ const uint kPointLightType = 2;
 struct GlobalData {
   mat4 view;
   mat4 proj;
-  mat4 inv_proj;
+  mat4 invProj;
   mat4 shadowViewProj;
+  vec4 colorUp;
+  vec4 colorDown;
   uint width;
   uint height;
   float near;

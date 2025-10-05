@@ -15,6 +15,8 @@ struct Pipeline {
   vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
   bool enable_blending = false;
   bool sample_shading = false;
+  bool depthTest = true;
+  bool depthWrite = true;
   // Outputs
   vk::UniquePipeline pipeline;
   vk::UniquePipelineLayout layout;

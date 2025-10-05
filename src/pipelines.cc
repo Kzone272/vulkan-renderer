@@ -76,8 +76,8 @@ void initPipeline(vk::Device device, const Fbo& fbo, Pipeline& pl) {
   color_blending.setAttachments(blend_atts);
 
   vk::PipelineDepthStencilStateCreateInfo depth_ci{
-      .depthTestEnable = VK_TRUE,
-      .depthWriteEnable = VK_TRUE,
+      .depthTestEnable = pl.depthTest ? VK_TRUE : VK_FALSE,
+      .depthWriteEnable = pl.depthWrite ? VK_TRUE : VK_FALSE,
       .depthCompareOp = vk::CompareOp::eGreater,
       .stencilTestEnable = VK_FALSE,
   };

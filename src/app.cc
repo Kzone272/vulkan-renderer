@@ -241,43 +241,47 @@ void App::loadPrimitives() {
 }
 
 void App::setupLights() {
-  frame_state_.lights.clear();
+  auto& lights = frame_state_.scene.lights;
+  for (size_t i = 0; i < lights.size(); i++) {
+    lights[i].type = Light::Type::None;
+  }
+
   // Mostly downward sun
-  frame_state_.lights.push_back({
+  lights[0] = {
       .vec = vec4(0.3, -1, 0, 0),
       .color = vec4(1),
       .type = Light::Type::Directional,
-  });
+  };
   // Corner torch
-  frame_state_.lights.push_back({
+  lights[1] = {
       .vec = vec4(385, 200, 475, 1),
       .color = vec4(1, 1, 0, 400),
       .type = Light::Type::Point,
-  });
+  };
   // Front torch
-  frame_state_.lights.push_back({
+  lights[2] = {
       .vec = vec4(385, 200, 110, 1),
       .color = vec4(1, 1, 0, 400),
       .type = Light::Type::Point,
-  });
+  };
   // Cauldron
-  frame_state_.lights.push_back({
+  lights[3] = {
       .vec = vec4(270, 20, 300, 1),
       .color = vec4(2, 1.2, 0, 500),
       .type = Light::Type::Point,
-  });
+  };
   // Right tail light
-  frame_state_.lights.push_back({
+  lights[4] = {
       .vec = vec4(-225, 40, -180, 1),
       .color = vec4(4, 0, 0, 500),
       .type = Light::Type::Point,
-  });
+  };
   // Left tail light
-  frame_state_.lights.push_back({
+  lights[5] = {
       .vec = vec4(-370, 40, -180, 1),
       .color = vec4(4, 0, 0, 500),
       .type = Light::Type::Point,
-  });
+  };
 }
 
 void App::mainLoop() {
@@ -358,7 +362,7 @@ void App::update() {
     flattenObjectTree();
     updateMaterials();
 
-    gDebugDraws.finish(frame_state_.viewProj);
+    gDebugDraws.finish(viewProj_);
     updateDraws();
     renderer_->drawFrame(&frame_state_);
     frame_state_.frame_num++;
@@ -456,9 +460,8 @@ void App::updateMaterials() {
   DbgSphere(start, 5);
   DbgBox(end, vec3(5));
 
-  mats_.botData.data1 = vec4(
-      toScreenSpace(start, frame_state_.viewProj),
-      toScreenSpace(end, frame_state_.viewProj));
+  mats_.botData.data1 =
+      vec4(toScreenSpace(start, viewProj_), toScreenSpace(end, viewProj_));
   renderer_->updateMaterial(mats_.bot, mats_.botData);
 }
 
@@ -474,17 +477,18 @@ void App::updateCamera() {
   } else {
     ASSERT(false);
   }
-  frame_state_.viewProj = frame_state_.proj * frame_state_.view;
+  viewProj_ = frame_state_.scene.proj * frame_state_.scene.view;
 
   // TODO: Do a better job at making these matrices.
-  vec3 sunPos = follow_cam_.focus + 500.f * frame_state_.lights[0].vec.xyz();
+  vec3 sunPos =
+      follow_cam_.focus + 500.f * frame_state_.scene.lights[0].vec.xyz();
   mat4 sunView = glm::lookAt(sunPos, follow_cam_.focus, vec3(0, 1, 0));
   // Width / Height ratio of shadow map texture.
   float aspect = 1;
   float span = 500;
   mat4 sunProj =
       glm::ortho(span * aspect, -span * aspect, span, -span, 0.f, 1000.f);
-  frame_state_.sun = {sunProj * sunView};
+  frame_state_.scene.shadowViewProj = sunProj * sunView;
 }
 
 void App::updateSpinCamera() {
@@ -493,7 +497,8 @@ void App::updateSpinCamera() {
   spinCam_.pos = vec3{r * cosf(t), 800, r * sinf(t)};
   spinCam_.focus = vec3{0};
   spinCam_.up = vec3(0, 1, 0);
-  frame_state_.view = glm::lookAt(spinCam_.pos, spinCam_.focus, spinCam_.up);
+  frame_state_.scene.view =
+      glm::lookAt(spinCam_.pos, spinCam_.focus, spinCam_.up);
 }
 
 void App::updateTrackballCamera() {
@@ -501,7 +506,7 @@ void App::updateTrackballCamera() {
     float focus_scale = 0.001f * trackball_.dist;
     vec3 move = {
         input_.mouse.xrel * focus_scale, -input_.mouse.yrel * focus_scale, 0};
-    move = glm::inverse(frame_state_.view) * vec4(move, 0);
+    move = glm::inverse(frame_state_.scene.view) * vec4(move, 0);
     trackball_.focus += move;
   }
 
@@ -518,9 +523,9 @@ void App::updateTrackballCamera() {
 
   updateDist(trackball_.dist);
 
-  frame_state_.view = glm::translate(vec3(0, 0, trackball_.dist)) *
-                      glm::toMat4(trackball_.rot) *
-                      glm::translate(trackball_.focus);
+  frame_state_.scene.view = glm::translate(vec3(0, 0, trackball_.dist)) *
+                            glm::toMat4(trackball_.rot) *
+                            glm::translate(trackball_.focus);
 }
 
 vec3 App::getTrackballVec(ivec2 mouse) {
@@ -554,7 +559,7 @@ void App::updateFpsCamera() {
         vec3(glm::inverse(rot) * move_scale * vec4(dir.x, 0, dir.y, 0));
   }
 
-  frame_state_.view = rot * glm::translate(-fps_cam_.pos);
+  frame_state_.scene.view = rot * glm::translate(-fps_cam_.pos);
 }
 
 void App::updateYawPitch(float& yaw, float& pitch) {
@@ -584,8 +589,8 @@ void App::updateFollowCamera() {
   mat4 rot = glm::eulerAngleXY(
       glm::radians(follow_cam_.pitch), glm::radians(follow_cam_.yaw));
 
-  frame_state_.view = glm::translate(vec3(0, 0, follow_cam_.dist)) * rot *
-                      glm::translate(-follow_cam_.focus);
+  frame_state_.scene.view = glm::translate(vec3(0, 0, follow_cam_.dist)) * rot *
+                            glm::translate(-follow_cam_.focus);
 }
 
 void App::handleInput() {
@@ -598,13 +603,15 @@ void App::handleInput() {
 }
 
 void App::updateProjectionMatrix() {
-  float near = 20.f;
-  frame_state_.proj = perspectiveInfRevZ(
+  constexpr float near = 20.f;
+  frame_state_.scene.proj = perspectiveInfRevZ(
       glm::radians(45.0f), (float)width_ / (float)height_, near);
-  frame_state_.width = width_;
-  frame_state_.height = height_;
-  frame_state_.near = near;
-  frame_state_.far = std::numeric_limits<float>::infinity();
+  frame_state_.scene.invProj = glm::inverse(frame_state_.scene.proj);
+
+  frame_state_.scene.width = width_;
+  frame_state_.scene.height = height_;
+  frame_state_.scene.near = near;
+  frame_state_.scene.far = std::numeric_limits<float>::infinity();
 }
 
 void App::flattenObjectTree() {
@@ -696,17 +703,27 @@ void App::updateImgui() {
       grid_->makeGrid(options_.grid_size);
     }
 
-    if (ImGui::Checkbox("In", &options_.tetra_in)) {
-      loadPrimitives();
+    ImGui::ColorEdit3(
+        "BG Up", (float*)&frame_state_.scene.colorUp,
+        ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit3(
+        "BG Down", (float*)&frame_state_.scene.colorDown,
+        ImGuiColorEditFlags_Float);
+
+    if (ImGui::SliderFloat3(
+            "Sun Dir", (float*)&frame_state_.scene.lights[0].vec, -1, 1)) {
+      frame_state_.scene.lights[0].vec =
+          vec4(glm::normalize(frame_state_.scene.lights[0].vec.xyz()), 0);
     }
+
     if (ImGui::SliderInt("Steps", &options_.tetra_steps, 0, 8)) {
       loadPrimitives();
     }
-    if (ImGui::SliderFloat3(
-            "Sun Dir", (float*)&frame_state_.lights[0].vec, -1, 1)) {
-      frame_state_.lights[0].vec =
-          vec4(glm::normalize(frame_state_.lights[0].vec.xyz()), 0);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("In", &options_.tetra_in)) {
+      loadPrimitives();
     }
+
     ImGui::EndTabItem();
   }
 

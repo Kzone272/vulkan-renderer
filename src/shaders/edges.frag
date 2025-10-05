@@ -59,7 +59,7 @@ void main() {
       norms[ind] = samp;
       uvs[ind] = (vec2(iUv) + subsamps[j]);
       worlds[ind] = getViewPos(
-          getClipPos(fragUv + nbs[i] / size, samp.w), global.inv_proj).xyz;
+          getClipPos(fragUv + nbs[i] / size, samp.w), global.invProj).xyz;
     }
   }
 

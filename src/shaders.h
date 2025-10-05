@@ -30,6 +30,8 @@ const std::set<std::string> kShaders{
     "draw-2d.frag.spv",
     "shadow.vert.spv",
     "shadow.frag.spv",
+    "cubemap.vert.spv",
+    "cube-gradient.frag.spv",
     // clang-format on
 };
 

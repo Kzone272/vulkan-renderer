@@ -182,6 +182,7 @@ class App {
 
   InputState input_;
   FrameState frame_state_;
+  mat4 viewProj_;
   std::unique_ptr<Renderer> renderer_;
 
   Entities world_;

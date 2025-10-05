@@ -244,32 +244,10 @@ void Renderer::drawFrame() {
 }
 
 void Renderer::updateGlobalBuf() {
-  auto& fs = *frame_state_;
-
-  GlobalData data;
-  data.view = fs.view;
-  data.proj = fs.proj;
-  data.inv_proj = glm::inverse(fs.proj);
-  data.shadowViewProj = fs.sun.viewProj;
-  data.width = fs.width;
-  data.height = fs.height;
-  data.near = fs.near;
-  data.far = fs.far;
-
-  const size_t max_lights = std::size(data.lights);
-  // Add the first max_lights lights to the frame UBO, and set the rest to
-  // None.
-  for (size_t i = 0; i < max_lights; i++) {
-    if (i >= fs.lights.size()) {
-      data.lights[i].type = Light::Type::None;
-    } else {
-      data.lights[i] = fs.lights[i];
-    }
-  }
   auto stages = vk::PipelineStageFlagBits::eVertexShader |
                 vk::PipelineStageFlagBits::eFragmentShader;
   updateDynamicBuf(
-      ds_, globalBuf_, std::span<GlobalData>(&data, 1), stages,
+      ds_, globalBuf_, std::span<GlobalData>(&frame_state_->scene, 1), stages,
       vk::AccessFlagBits::eUniformRead);
 }
 
@@ -916,7 +894,7 @@ void Renderer::recordCommandBuffer() {
       swap_.drawNormals(ds_, scene_.outputSet()->sets[1]);
     } else if (frame_state_->debug_view == DebugView::Depth) {
       swap_.drawDepth(
-          ds_, scene_.outputSet()->sets[1], glm::inverse(frame_state_->proj));
+          ds_, scene_.outputSet()->sets[1], frame_state_->scene.invProj);
     }
 
     if (frame_state_->draw_edges && !frame_state_->stained_glass) {

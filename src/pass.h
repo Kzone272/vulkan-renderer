@@ -32,6 +32,7 @@ struct Scene {
   DescLayout* global;
   DescLayout* material;
   std::map<ScenePipeline, Pipeline*> pipelines_;
+  Pipeline* cubeGradient_ = nullptr;
 
   void init(
       const VulkanState& vs, const DynamicBuf& globalBuf, Materials& mats,
@@ -146,7 +147,7 @@ struct Swap {
   void drawImage(const DrawState& ds, vk::DescriptorSet image_set);
   void drawNormals(const DrawState& ds, vk::DescriptorSet image_set);
   void drawDepth(
-      const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj);
+      const DrawState& ds, vk::DescriptorSet image_set, const mat4& invProj);
   // Jump Flood Signed Distance Field
   void drawJfSdf(
       const DrawState& ds, float width, uint32_t mode,

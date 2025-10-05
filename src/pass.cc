@@ -89,6 +89,17 @@ void Scene::init(
   };
   pipelines_.emplace(ScenePipeline::Gradient, gradient);
 
+  cubeGradient_ = pass.makePipeline();
+  *cubeGradient_ = {
+      .vert_shader = vs.shaders.get("cubemap.vert.spv"),
+      .frag_shader = vs.shaders.get("cube-gradient.frag.spv"),
+      .desc_layouts = {global},
+      .vert_in = {},
+      .cull_mode = vk::CullModeFlagBits::eBack,
+      .depthTest = false,
+      .depthWrite = false,
+  };
+
   pass.init(vs);
 
   std::vector<vk::WriteDescriptorSet> writes;
@@ -109,8 +120,20 @@ void Scene::render(
     const std::map<ModelId, std::unique_ptr<Model>>& loaded_models) {
   pass.fbo.beginRp(ds);
 
+  // Bind global desc set.
+  ds.cmd.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, *cubeGradient_->layout, 0,
+      global->sets[0], nullptr);
+
+  {
+    // Draw gradient background.
+    ds.cmd.bindPipeline(
+        vk::PipelineBindPoint::eGraphics, *cubeGradient_->pipeline);
+    const static uint32_t kCubeVertices = 36;
+    ds.cmd.draw(kCubeVertices, 1, 0, 0);
+  }
+
   Pipeline* currPipeline = nullptr;
-  vk::DescriptorSet currDesc0 = {};
   vk::DescriptorSet currDesc1 = {};
   ModelId curr_model_id = ModelId::None;
   Model* curr_model = nullptr;
@@ -121,13 +144,6 @@ void Scene::render(
       currPipeline = drawPipeline;
       ds.cmd.bindPipeline(
           vk::PipelineBindPoint::eGraphics, *currPipeline->pipeline);
-    }
-
-    if (!currDesc0) {
-      currDesc0 = global->sets[0];
-      ds.cmd.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics, *currPipeline->layout, 0,
-          global->sets[0], nullptr);
     }
 
     if (draw.matPipeline == ScenePipeline::Basic && currDesc1 != draw.matDesc) {
@@ -586,10 +602,10 @@ void Swap::drawNormals(const DrawState& ds, vk::DescriptorSet image_set) {
 }
 
 void Swap::drawDepth(
-    const DrawState& ds, vk::DescriptorSet image_set, const mat4& inv_proj) {
+    const DrawState& ds, vk::DescriptorSet image_set, const mat4& invProj) {
   ds.cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *depth_draw->pipeline);
   ds.cmd.pushConstants<mat4>(
-      *depth_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, inv_proj);
+      *depth_draw->layout, vk::ShaderStageFlagBits::eFragment, 0, invProj);
   ds.cmd.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, *depth_draw->layout, 0, image_set,
       nullptr);

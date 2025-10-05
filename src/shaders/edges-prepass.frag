@@ -25,13 +25,13 @@ void main() {
   vec2 uvW = fragUv + vec2(-pixel.x, 0); // West
 
   vec4 sampM = texture(normDepthSampler, uvM);
-  vec3 worldM = getViewPos(getClipPos(uvM, sampM.w), global.inv_proj).xyz;
+  vec3 worldM = getViewPos(getClipPos(uvM, sampM.w), global.invProj).xyz;
 
   vec4 sampN = texture(normDepthSampler, uvN);
-  vec3 worldN = getViewPos(getClipPos(uvN, sampN.w), global.inv_proj).xyz;
+  vec3 worldN = getViewPos(getClipPos(uvN, sampN.w), global.invProj).xyz;
 
   vec4 sampW = texture(normDepthSampler, uvW);
-  vec3 worldW = getViewPos(getClipPos(uvW, sampW.w), global.inv_proj).xyz;
+  vec3 worldW = getViewPos(getClipPos(uvW, sampW.w), global.invProj).xyz;
 
   const float depth_thresh = debug.f3;
   const float angle_thresh = abs(cos(radians(debug.f4)));

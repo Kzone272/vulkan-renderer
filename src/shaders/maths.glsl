@@ -8,9 +8,9 @@ float greyscale(vec3 color) {
   return dot(color, vec3(.21, .72, .07));
 }
 
-vec4 getViewPos(vec3 cpos, mat4 inv_proj) {
+vec4 getViewPos(vec3 cpos, mat4 invProj) {
   vec4 ndc = vec4(cpos, 1);
-  vec4 vpos = inv_proj * ndc;
+  vec4 vpos = invProj * ndc;
   vpos /= vpos.w;
   return vpos;
 }

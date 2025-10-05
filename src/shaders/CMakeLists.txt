@@ -24,6 +24,8 @@ file(GLOB shader_files
   draw-2d.frag
   shadow.vert
   shadow.frag
+  cubemap.vert
+  cube-gradient.frag
 )
 
 file(GLOB shader_deps *.glsl)
