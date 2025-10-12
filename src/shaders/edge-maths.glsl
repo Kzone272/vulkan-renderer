@@ -3,6 +3,12 @@
 bool edgeBetween(
     vec3 aNorm, vec3 aPos, vec3 bNorm, vec3 bPos,
     float depth_thresh, float angle_thresh) {
+  bool aBad = any(isinf(aPos)) || any(isnan(aPos));
+  bool bBad = any(isinf(bPos)) || any(isnan(bPos));
+  if (aBad != bBad) {
+    return true;
+  }
+
   float cosang = dot(aNorm, bNorm);
   float plane_d = abs(dot(aNorm, bPos - aPos));
 
