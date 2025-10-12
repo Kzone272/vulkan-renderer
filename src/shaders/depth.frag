@@ -4,7 +4,7 @@
 
 layout(location = 0) in vec2 fragUv;
 
-layout(set = 0, binding = 0) uniform sampler2DMS image;
+layout(set = 0, binding = 0) uniform sampler2D image;
 
 layout(push_constant) uniform PushBlock {
   mat4 invProj;
@@ -13,7 +13,7 @@ layout(push_constant) uniform PushBlock {
 layout(location = 0) out vec4 outColor;
 
 void main() {
-  vec4 normDepth = texelFetch(image, ivec2(textureSize(image) * fragUv), 0);
+  vec4 normDepth = texture(image, fragUv);
   vec3 clipPos = getClipPos(fragUv, normDepth.w);
   vec4 vpos = getViewPos(clipPos, invProj);
 
